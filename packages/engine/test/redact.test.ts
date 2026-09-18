@@ -62,4 +62,33 @@ describe('redaction', () => {
     const view = redactForPlayer(state, 'b');
     expect((view as any).powerGrants).toBeUndefined();
   });
+
+  it('the SET_COMPLETED window never leaks a concealed rank to a mantis-holding opponent', () => {
+    const squids = cards('squid', 4);
+    const state = makeState({ playerIds: ['a', 'b'], hands: { a: squids, b: [] }, powerVisibility: 'ascuns' });
+    state.powerGrants.push({
+      id: 'g1',
+      ownerId: 'b',
+      rank: 'mantisShrimp',
+      sourceSetId: 'preexisting',
+      used: false,
+      bound: true,
+      isClownfishCopy: false,
+    });
+    const { state: s1 } = reduce(state, {
+      type: 'LAY_SET',
+      playerId: 'a',
+      rank: 'squid',
+      cardIds: squids.map((c) => c.id),
+    });
+    expect(s1.pendingWindow?.type).toBe('SET_COMPLETED');
+    // the engine's own authoritative context does carry the rank internally...
+    expect(s1.pendingWindow?.context.rank).toBe('squid');
+    // ...but the redacted view handed to the mantis holder must not.
+    const opponentView = redactForPlayer(s1, 'b');
+    expect(opponentView.pendingWindow?.context.rank).toBeUndefined();
+    // the owner, laying their own set, is allowed to see it.
+    const ownerView = redactForPlayer(s1, 'a');
+    expect(ownerView.pendingWindow?.context.rank).toBe('squid');
+  });
 });

@@ -188,6 +188,43 @@ thousands of simulated games, needed a resolution:
 ## Deployment
 
 - Single Railway service serves the built client as static files from the same
-  Node/Express+ws process that runs the game server, so one HTTPS URL covers both
-  the page and the WebSocket — simplest way to satisfy "single public HTTPS URL"
+  Node+`ws` process that runs the game server, so one HTTPS URL covers both the
+  page and the WebSocket — simplest way to satisfy "single public HTTPS URL"
   without provisioning a second Railway service or a CDN.
+- **Server and engine run from TypeScript source via `tsx`, in production too,
+  not just in dev.** The alternative — `tsc`-compiling `server` (and by
+  extension `engine`/`shared`, since workspace packages point `main` at their
+  `.ts` source for the dev experience) — means either maintaining two different
+  module resolution stories for dev vs. prod, or compiling every workspace
+  package to `dist` and repointing `main`/`exports` at build time. `tsx` costs
+  a small, constant startup overhead and one extra runtime dependency; it buys
+  a single, simple "the source is the deployable" story with no build-time
+  path rewriting to get wrong. Only the client — which must ship as static
+  assets a browser can load — gets a real build step (`vite build`).
+
+## Server-side redaction gaps found while building the client
+
+Wiring a real UI against the redacted view surfaced one gap the engine's own
+tests hadn't covered, since `pendingWindow.context` is otherwise always safe to
+send verbatim (a request's rank is spoken aloud in the physical game, so it's
+never sensitive):
+
+- **The `SET_COMPLETED` window's context named the newly-completed set's rank
+  directly**, unredacted, to every player eligible to declare Mantis Shrimp —
+  including a squid set's rank, an absolute violation of rule 4's secrecy
+  guarantee if a mantis holder happened to exist. Fixed in `redact.ts`: the
+  `rank` field is now stripped from that one window's context whenever the
+  underlying set is concealed from the viewer (not face up, and they're not its
+  owner), matching the same concealment rule `laidSets` already uses. Covered by
+  a regression test asserting a mantis-holding opponent's redacted window omits
+  the rank a squid-laying player's own view still includes.
+
+## Build order (M2/M3 merged)
+
+The spec's M2 asks for "an ugly but complete HTML UI" and defers real UI to M3.
+Building two UIs back to back — one throwaway, one real — for the same feature
+set would have cost more than it saved, so this project builds one React client
+directly, styled with clear placeholder cards and layout (per the spec's own
+placeholder instruction) rather than deliberately ugly markup. It satisfies both
+milestones' actual requirements ("playable end to end" and "explains itself")
+in a single pass.

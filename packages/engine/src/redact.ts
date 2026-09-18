@@ -47,8 +47,31 @@ export interface RedactedView {
   laidSets: RedactedLaidSet[];
   ownPowerGrants: RedactedOwnPower[];
   pendingWindow: { type: string; youAreEligible: boolean; context: Record<string, unknown> } | null;
-  config: { powerVisibility: PowerVisibilityMode };
+  config: { powerVisibility: PowerVisibilityMode; windowTimeoutMs: number };
   winners: string[];
+}
+
+/**
+ * Every window context is otherwise public (the rank in a REQUEST/RESPONSE/TRANSFER/
+ * TURN_END window is the rank someone just asked for out loud). SET_COMPLETED is the
+ * one exception: its context names the rank of the power set that was just laid, which
+ * for a concealed set (squid always, or any hidden power set in Mode Ascuns before its
+ * first use) must not leak to Mantis Shrimp holders just because a window opened.
+ */
+function redactWindowContext(
+  state: GameState,
+  windowType: string,
+  context: Record<string, unknown>,
+  viewerId: string,
+): Record<string, unknown> {
+  if (windowType !== 'SET_COMPLETED') return context;
+  const setId = context.setId as string | undefined;
+  const set = setId ? state.laidSets.find((s) => s.id === setId) : undefined;
+  if (!set) return context;
+  const concealed = !set.faceUp && set.ownerId !== viewerId;
+  if (!concealed) return context;
+  const { rank: _omit, ...rest } = context;
+  return rest;
 }
 
 export function redactForPlayer(state: GameState, viewerId: string): RedactedView {
@@ -87,7 +110,7 @@ export function redactForPlayer(state: GameState, viewerId: string): RedactedVie
     ? {
         type: state.pendingWindow.type,
         youAreEligible: state.pendingWindow.eligiblePlayerIds.includes(viewerId),
-        context: state.pendingWindow.context,
+        context: redactWindowContext(state, state.pendingWindow.type, state.pendingWindow.context, viewerId),
       }
     : null;
 
@@ -103,7 +126,7 @@ export function redactForPlayer(state: GameState, viewerId: string): RedactedVie
     laidSets,
     ownPowerGrants,
     pendingWindow,
-    config: { powerVisibility: state.config.powerVisibility },
+    config: { powerVisibility: state.config.powerVisibility, windowTimeoutMs: state.config.windowTimeoutMs },
     winners: state.winners,
   };
 }
