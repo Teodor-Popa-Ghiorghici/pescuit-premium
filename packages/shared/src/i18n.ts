@@ -1,0 +1,224 @@
+// All player-facing strings, in one place, Romanian (default) and English.
+// Server and client both import this so log lines and UI chrome always agree.
+
+export type Locale = 'ro' | 'en';
+export const DEFAULT_LOCALE: Locale = 'ro';
+export const LOCALES: Locale[] = ['ro', 'en'];
+
+export const RANK_NAMES: Record<string, { ro: string; en: string }> = {
+  squid: { ro: 'Sepie', en: 'Squid' },
+  shark: { ro: 'Rechin', en: 'Shark' },
+  tortoise: { ro: 'Țestoasă', en: 'Tortoise' },
+  jellyfish: { ro: 'Meduză', en: 'Jellyfish' },
+  lanternfish: { ro: 'Peștele-felinar', en: 'Lanternfish' },
+  stickleback: { ro: 'Ghidrin', en: 'Stickleback' },
+  mantisShrimp: { ro: 'Crevete-mantis', en: 'Mantis Shrimp' },
+  whale: { ro: 'Balenă', en: 'Whale' },
+  clownfish: { ro: 'Peștele-clovn', en: 'Clownfish' },
+  herring: { ro: 'Hering', en: 'Herring' },
+  mackerel: { ro: 'Macrou', en: 'Mackerel' },
+  anchovy: { ro: 'Hamsie', en: 'Anchovy' },
+  sardine: { ro: 'Sardină', en: 'Sardine' },
+  carp: { ro: 'Crap', en: 'Carp' },
+  trout: { ro: 'Păstrăv', en: 'Trout' },
+  perch: { ro: 'Biban', en: 'Perch' },
+  catfish: { ro: 'Somn', en: 'Catfish' },
+  eggs: { ro: 'Icre', en: 'Eggs' },
+};
+
+export function rankName(rank: string, locale: Locale): string {
+  return RANK_NAMES[rank]?.[locale] ?? rank;
+}
+
+type Dict = Record<string, string>;
+
+const ro: Dict = {
+  'app.title': 'Pescuiește Extins',
+  'lobby.createRoom': 'Creează o cameră',
+  'lobby.joinRoom': 'Intră într-o cameră',
+  'lobby.roomCode': 'Cod cameră',
+  'lobby.yourName': 'Numele tău',
+  'lobby.players': 'Jucători',
+  'lobby.powerVisibility': 'Vizibilitatea puterilor',
+  'lobby.powerVisibility.ascuns': 'Ascuns (implicit)',
+  'lobby.powerVisibility.deschis': 'Deschis',
+  'lobby.start': 'Începe jocul',
+  'lobby.waitingForPlayers': 'Se așteaptă jucători... (minim 3)',
+  'lobby.shareLink': 'Trimite acest link prietenilor tăi',
+  'lobby.copy': 'Copiază',
+  'lobby.copied': 'Copiat!',
+  'lobby.language': 'Limbă',
+  'lobby.rules': 'Reguli',
+  'lobby.errorRoomNotFound': 'Camera nu a fost găsită.',
+  'lobby.errorNameRequired': 'Introdu un nume.',
+
+  'game.yourHand': 'Mâna ta',
+  'game.pool': 'Balta',
+  'game.cardsLeft': '{count} cărți rămase',
+  'game.score': 'Scor',
+  'game.stunned': 'Amețit',
+  'game.protected': 'Protejat',
+  'game.yourTurn': 'Rândul tău',
+  'game.turnOf': 'Rândul lui {name}',
+  'game.askPrompt': 'Cere o carte',
+  'game.askWho': 'De la cine ceri?',
+  'game.askWhat': 'Ce rang ceri?',
+  'game.askButton': 'Cere',
+  'game.laySet': 'Pune un set jos',
+  'game.layButton': 'Pune jos',
+  'game.usePower': 'Folosește puterea',
+  'game.skip': 'Renunță',
+  'game.eventLog': 'Jurnal',
+  'game.disconnected': 'Deconectat',
+  'game.reconnecting': 'Se reconectează...',
+  'game.spectating': 'Urmărești jocul',
+  'game.gameOver': 'Joc terminat',
+  'game.winner': 'Câștigător: {name}',
+  'game.winners': 'Câștigători: {names}',
+  'game.finalScores': 'Scoruri finale',
+  'game.newGame': 'Joc nou',
+
+  'window.turnStart': 'Poți folosi o putere activă acum.',
+  'window.requestDeclared': 'Poți reflecta cererea cu Peștele-felinar.',
+  'window.responsePending': 'Poți minți cu Sepia.',
+  'window.transferPending': 'Poți proteja cu Țestoasa.',
+  'window.setCompleted': 'Poți distruge cu Crevetele-mantis.',
+  'window.turnEnd': 'Poți sări în față cu Rechinul.',
+  'window.countdown': '{seconds}s',
+  'window.declare': 'Folosește',
+  'window.decline': 'Nu folosesc',
+
+  'power.jellyfish.target': 'Amețește pe cine?',
+  'power.stickleback.target': 'Fură de la cine?',
+  'power.stickleback.rank': 'Ce rang furi?',
+  'power.whale.pair': 'Alege doi jucători alăturați',
+  'power.squid.deny': 'Neagă (ai cartea)',
+  'power.squid.claim': 'Pretinde fals (nu ai cartea)',
+  'power.tortoise.rank': 'Protejează rangul',
+
+  'log.requestMade': '{asker} cere de la {target}: {rank}.',
+  'log.requestSucceeded': '{target} predă {count} carte(cărți) de {rank}. {asker} joacă din nou.',
+  'log.requestFailed': '„Pescuiește!" {asker} trage din baltă.',
+  'log.handRefilled': '{player} trage {count} cărți din baltă.',
+  'log.setLaid': '{player} pune jos un set de {rank} pentru 1 punct.',
+  'log.setDestroyed': 'Puterea a fost distrusă de Crevetele-mantis! Punctul rămâne.',
+  'log.powerGranted': '{player} câștigă puterea {rank}.',
+  'log.powerGrantedHidden': '{player} a completat un set de putere (ascuns).',
+  'log.powerUsed': '{player} folosește puterea {rank}.',
+  'log.sharkJump': '{player} sare cu Rechinul și ia {count} cărți de la {from}!',
+  'log.lanternfishReflect': '{player} reflectă cererea cu Peștele-felinar și ia {count} cărți de {rank} de la {from}.',
+  'log.tortoiseBlock': '{player} protejează {rank} cu Țestoasa — transferul e anulat.',
+  'log.jellyfishStun': '{player} amețește pe {target} cu Meduza.',
+  'log.sticklebackSteal': '{player} fură {count} cărți de {rank} de la {target} cu Ghidrinul.',
+  'log.sticklebackWasted': '{player} încearcă Ghidrinul pe {target} pentru {rank} — nimic acolo.',
+  'log.whaleShuffle': '{player} amestecă mâinile lui {targetA} și {targetB} cu Balena.',
+  'log.bonusTurn': '{player} joacă din nou.',
+  'log.turnSkippedStunned': '{player} e amețit și sare peste rând.',
+  'log.gameEnded': 'Joc terminat.',
+
+  'rules.title': 'Reguli',
+  'lang.ro': 'Română',
+  'lang.en': 'Engleză',
+};
+
+const en: Dict = {
+  'app.title': 'Pescuiește Extins',
+  'lobby.createRoom': 'Create a room',
+  'lobby.joinRoom': 'Join a room',
+  'lobby.roomCode': 'Room code',
+  'lobby.yourName': 'Your name',
+  'lobby.players': 'Players',
+  'lobby.powerVisibility': 'Power visibility',
+  'lobby.powerVisibility.ascuns': 'Hidden (default)',
+  'lobby.powerVisibility.deschis': 'Open',
+  'lobby.start': 'Start game',
+  'lobby.waitingForPlayers': 'Waiting for players... (3 minimum)',
+  'lobby.shareLink': 'Share this link with your friends',
+  'lobby.copy': 'Copy',
+  'lobby.copied': 'Copied!',
+  'lobby.language': 'Language',
+  'lobby.rules': 'Rules',
+  'lobby.errorRoomNotFound': 'Room not found.',
+  'lobby.errorNameRequired': 'Enter a name.',
+
+  'game.yourHand': 'Your hand',
+  'game.pool': 'Pool',
+  'game.cardsLeft': '{count} cards left',
+  'game.score': 'Score',
+  'game.stunned': 'Stunned',
+  'game.protected': 'Protected',
+  'game.yourTurn': 'Your turn',
+  'game.turnOf': "{name}'s turn",
+  'game.askPrompt': 'Ask for a card',
+  'game.askWho': 'Ask whom?',
+  'game.askWhat': 'Ask for which rank?',
+  'game.askButton': 'Ask',
+  'game.laySet': 'Lay a set',
+  'game.layButton': 'Lay down',
+  'game.usePower': 'Use power',
+  'game.skip': 'Skip',
+  'game.eventLog': 'Log',
+  'game.disconnected': 'Disconnected',
+  'game.reconnecting': 'Reconnecting...',
+  'game.spectating': 'Spectating',
+  'game.gameOver': 'Game over',
+  'game.winner': 'Winner: {name}',
+  'game.winners': 'Winners: {names}',
+  'game.finalScores': 'Final scores',
+  'game.newGame': 'New game',
+
+  'window.turnStart': 'You may use an active power now.',
+  'window.requestDeclared': 'You may reflect with Lanternfish.',
+  'window.responsePending': 'You may lie with Squid.',
+  'window.transferPending': 'You may protect with Tortoise.',
+  'window.setCompleted': 'You may destroy with Mantis Shrimp.',
+  'window.turnEnd': 'You may jump in with Shark.',
+  'window.countdown': '{seconds}s',
+  'window.declare': 'Use',
+  'window.decline': "Don't use",
+
+  'power.jellyfish.target': 'Stun whom?',
+  'power.stickleback.target': 'Steal from whom?',
+  'power.stickleback.rank': 'Which rank?',
+  'power.whale.pair': 'Choose two adjacent players',
+  'power.squid.deny': "Deny (you have it)",
+  'power.squid.claim': "Falsely claim (you don't have it)",
+  'power.tortoise.rank': 'Protect which rank',
+
+  'log.requestMade': '{asker} asks {target} for {rank}.',
+  'log.requestSucceeded': '{target} hands over {count} {rank}(s). {asker} goes again.',
+  'log.requestFailed': '"Pescuiește!" {asker} draws from the pool.',
+  'log.handRefilled': '{player} draws {count} card(s) from the pool.',
+  'log.setLaid': '{player} lays down a set of {rank} for 1 point.',
+  'log.setDestroyed': "The power was destroyed by Mantis Shrimp! The point stays.",
+  'log.powerGranted': '{player} gains the {rank} power.',
+  'log.powerGrantedHidden': '{player} completed a hidden power set.',
+  'log.powerUsed': '{player} uses their {rank} power.',
+  'log.sharkJump': "{player}'s shark jumps in and takes {count} cards from {from}!",
+  'log.lanternfishReflect': "{player}'s lanternfish reflects the request, taking {count} {rank}(s) from {from}.",
+  'log.tortoiseBlock': "{player} protects {rank} with Tortoise — the transfer is cancelled.",
+  'log.jellyfishStun': "{player} stuns {target} with Jellyfish.",
+  'log.sticklebackSteal': "{player} steals {count} {rank}(s) from {target} with Stickleback.",
+  'log.sticklebackWasted': "{player} tries Stickleback on {target} for {rank} — nothing there.",
+  'log.whaleShuffle': "{player} reshuffles {targetA} and {targetB}'s hands with Whale.",
+  'log.bonusTurn': '{player} takes a bonus turn.',
+  'log.turnSkippedStunned': '{player} is stunned and skips their turn.',
+  'log.gameEnded': 'Game over.',
+
+  'rules.title': 'Rules',
+  'lang.ro': 'Romanian',
+  'lang.en': 'English',
+};
+
+const dictionaries: Record<Locale, Dict> = { ro, en };
+
+export function t(locale: Locale, key: string, params?: Record<string, string | number>): string {
+  const dict = dictionaries[locale] ?? dictionaries[DEFAULT_LOCALE];
+  let str = dict[key] ?? dictionaries[DEFAULT_LOCALE][key] ?? key;
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      str = str.replaceAll(`{${k}}`, String(v));
+    }
+  }
+  return str;
+}
