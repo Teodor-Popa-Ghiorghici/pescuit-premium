@@ -55,6 +55,20 @@ export function InterruptPrompt() {
   const applicableRanks = WINDOW_RANKS[window_.type] ?? [];
   const myGrants = (view.ownPowerGrants ?? []).filter((g) => !g.used && applicableRanks.includes(g.rank as PowerRank));
 
+  if (window_.type === 'RESPONSE_PENDING') {
+    return (
+      <ResponsePendingPrompt
+        description={description}
+        secondsLeft={secondsLeft}
+        rankAsked={ctx.rank ?? ''}
+        hand={view.hand}
+        squidGrant={myGrants.find((g) => g.rank === 'squid')}
+        playerId={playerId!}
+        onDeclare={sendAction}
+      />
+    );
+  }
+
   return (
     <div className="interrupt-prompt">
       <div className="interrupt-prompt__header">
@@ -66,6 +80,65 @@ export function InterruptPrompt() {
       <button className="btn btn--ghost" onClick={() => sendAction({ type: 'SKIP_WINDOW' } as unknown as Action)}>
         {t('window.decline')}
       </button>
+    </div>
+  );
+}
+
+/**
+ * The target of a REQUEST always sees this, squid or not: the player being asked is
+ * the one who says "Pescuiește!" (or hands the cards over), never the engine on their
+ * behalf. See DECISIONS.md ("Every response is a window, not just squid's").
+ */
+function ResponsePendingPrompt({
+  description,
+  secondsLeft,
+  rankAsked,
+  hand,
+  squidGrant,
+  playerId,
+  onDeclare,
+}: {
+  description: string;
+  secondsLeft: number | null;
+  rankAsked: string;
+  hand: { rank: string }[];
+  squidGrant: { id: string; rank: string } | undefined;
+  playerId: string;
+  onDeclare: (a: Action) => void;
+}) {
+  const { t, rank } = useT();
+  const iHaveIt = hand.some((c) => c.rank === rankAsked);
+
+  return (
+    <div className="interrupt-prompt interrupt-prompt--response">
+      <div className="interrupt-prompt__header">
+        <strong>{description}</strong>
+        {secondsLeft !== null && <span className="interrupt-prompt__timer">{secondsLeft}s</span>}
+      </div>
+      <button
+        className="btn btn--primary btn--go-fish"
+        onClick={() => onDeclare({ type: 'SKIP_WINDOW' } as unknown as Action)}
+      >
+        {iHaveIt ? t('window.hereYouGo') : t('window.goFish')}
+      </button>
+      {squidGrant && (
+        <div className="declare-form declare-form--squid">
+          <span className="muted">{t('power.squid.lieHint')}</span>
+          <button
+            className="btn btn--ghost"
+            onClick={() =>
+              onDeclare({
+                type: 'DECLARE_SQUID',
+                playerId,
+                grantId: squidGrant.id,
+                lie: iHaveIt ? 'deny' : 'claim',
+              })
+            }
+          >
+            {t('window.declare')} {rank('squid')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -131,7 +204,6 @@ function DeclareForm({
   const [targetId, setTargetId] = useState('');
   const [stickRank, setStickRank] = useState<NormalRank>(NORMAL_RANKS[0]);
   const [tortoiseRank, setTortoiseRank] = useState(context.rank ?? '');
-  const [squidLie, setSquidLie] = useState<'deny' | 'claim'>('deny');
   const [whaleB, setWhaleB] = useState('');
 
   if (grants.length === 0) return null;
@@ -144,25 +216,6 @@ function DeclareForm({
       <button className="btn btn--primary" onClick={() => onDeclare({ type: 'DECLARE_LANTERNFISH', playerId: myPlayerId, grantId: grant.id })}>
         {t('window.declare')} {rank('lanternfish')}
       </button>
-    );
-  }
-
-  if (windowType === 'RESPONSE_PENDING') {
-    const grant = grants.find((g) => g.rank === 'squid');
-    if (!grant) return null;
-    return (
-      <div className="declare-form">
-        <select value={squidLie} onChange={(e) => setSquidLie(e.target.value as 'deny' | 'claim')}>
-          <option value="deny">{t('power.squid.deny')}</option>
-          <option value="claim">{t('power.squid.claim')}</option>
-        </select>
-        <button
-          className="btn btn--primary"
-          onClick={() => onDeclare({ type: 'DECLARE_SQUID', playerId: myPlayerId, grantId: grant.id, lie: squidLie })}
-        >
-          {t('window.declare')} {rank('squid')}
-        </button>
-      </div>
     );
   }
 

@@ -166,6 +166,50 @@ thousands of simulated games, needed a resolution:
   clear no further progress is possible (two full rounds' worth), rather than
   looping indefinitely. This was found and fixed by the M1 bot simulation itself —
   exactly the kind of bug that exit criterion exists to catch.
+- **The mid-turn refill above can itself leave the player stuck.** If the pool's
+  last few cards happen to be eggs, the refill "succeeds" (cards were drawn) but
+  the player is still holding nothing askable. The mid-turn check now re-runs the
+  same "no real cards and nothing to lay" test *after* the refill and passes the
+  turn onward if it's still true, exactly mirroring what `beginTurn()` already does
+  at turn start. Also found by simulation, once bot games ran long enough to drain
+  the pool down to a lone egg on exactly the wrong turn.
+- **A Whale reshuffle can deal the same stranding** to whichever player is
+  continuing their own turn (most commonly the Whale's own user, since a real
+  player's likeliest target pairing includes themselves): bad luck of the shuffle
+  can leave them with only eggs. The fix is the same refill-then-pass check,
+  factored out as `ensureCanContinueTurn()` and run after both a mid-turn lay and
+  a Whale shuffle. Also found by simulation — this one took several thousand
+  random games to surface, since it needs a Whale grant, an adjacent-seat shuffle
+  including the current player, and an unlucky draw all at once.
+
+## Every response is a window, not just squid's
+
+`RESPONSE_PENDING` originally opened only when the target held an unused squid
+grant; otherwise the engine resolved the ask instantly and pushed the outcome
+straight to the event log, with no action from the target at all. Building the
+real client surfaced a UX problem this design choice caused: the target's screen
+would show "Pescuiește!" (or the cards changing hands) before the target had
+done anything, which reads as the game answering on the target's behalf rather
+than the target actually responding — a real loss of interactivity compared to
+the physical game, where the person being asked is always the one who says it.
+
+Fixed by always opening the window for the target, squid or not: a connected
+player answers within the usual window timeout by submitting `SKIP_WINDOW`
+(their honest response — "here you go" or "Pescuiește!", the client picks the
+label from the target's own hand) or, only if eligible, `DECLARE_SQUID` (a lie);
+a disconnected or slow player is defaulted to `SKIP_WINDOW` by the driver's
+existing timeout, identically to every other window. No protocol or action type
+needed to change — `SKIP_WINDOW` already meant "resolve this window without
+declaring a power," which is exactly a truthful response. Bots needed no change
+either, since `decideWindowAction`'s `RESPONSE_PENDING` case already fell back to
+`SKIP_WINDOW` whenever the bot held no squid grant.
+
+This also incidentally closes a secrecy gap: previously, a `RESPONSE_PENDING`
+window opening *at all* implied the target held an unused squid grant (in Mode
+Ascuns, where grants are otherwise invisible to opponents), a timing tell rule
+4's "never revealed... by any change in timing" was already meant to forbid.
+Every response now takes the same shape regardless, so the mere presence of the
+window leaks nothing.
 
 ## Game end & scoring
 

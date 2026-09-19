@@ -1,3 +1,4 @@
+import type { Action, Rank } from '@pescuit/engine';
 import { LOCALES } from '@pescuit/shared';
 import { useState } from 'react';
 import { useT } from '../i18n/useT.js';
@@ -11,8 +12,10 @@ import { RulesPanel } from './RulesPanel.js';
 
 export function GameTable() {
   const { t, locale } = useT();
-  const { view, playerId, setLocale, leaveRoom, status } = useGame();
+  const { view, playerId, setLocale, leaveRoom, status, sendAction } = useGame();
   const [showRules, setShowRules] = useState(false);
+  const [hoverTargetId, setHoverTargetId] = useState<string | null>(null);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
 
   if (!view) {
     return (
@@ -23,6 +26,15 @@ export function GameTable() {
   }
 
   const isGameOver = view.status === 'ENDED';
+  const canAsk = view.currentPlayerId === playerId && view.pendingWindow === null;
+  const askableRanks = [...new Set(view.hand.filter((c) => c.rank !== 'eggs').map((c) => c.rank))] as Rank[];
+  const activeTargetId = hoverTargetId ?? selectedTargetId;
+
+  function askPlayer(targetId: string, rank: Rank) {
+    sendAction({ type: 'REQUEST', playerId: playerId!, targetId, rank } as Action);
+    setSelectedTargetId(null);
+    setHoverTargetId(null);
+  }
 
   return (
     <div className="game-screen">
@@ -52,12 +64,28 @@ export function GameTable() {
       </header>
 
       <div className="player-row">
-        {view.players.map((p) => (
-          <div key={p.id} className="player-row__item">
-            <PlayerBadge player={p} isYou={p.id === playerId} isCurrent={p.id === view.currentPlayerId} />
-            <LaidSets ownerId={p.id} />
-          </div>
-        ))}
+        {view.players.map((p) => {
+          const isYou = p.id === playerId;
+          const askable = canAsk && !isYou && !p.stunned;
+          const active = askable && activeTargetId === p.id;
+          return (
+            <div key={p.id} className="player-row__item">
+              <PlayerBadge
+                player={p}
+                isYou={isYou}
+                isCurrent={p.id === view.currentPlayerId}
+                askable={askable}
+                active={active}
+                askableRanks={askableRanks}
+                onEnter={() => askable && setHoverTargetId(p.id)}
+                onLeave={() => setHoverTargetId((h) => (h === p.id ? null : h))}
+                onSelect={() => setSelectedTargetId((t) => (t === p.id ? null : p.id))}
+                onPickRank={(rank) => askPlayer(p.id, rank)}
+              />
+              <LaidSets ownerId={p.id} />
+            </div>
+          );
+        })}
       </div>
 
       <InterruptPrompt />

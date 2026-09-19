@@ -9,8 +9,12 @@ describe('windows', () => {
       playerIds: ['a', 'b'],
       hands: { a: [card('herring')], b: cards('herring', 1) },
     });
-    const { state: s1 } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
-    // no lanternfish/squid/tortoise/shark exist anywhere -> the whole chain resolves with no window ever open
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    // no squid held by b: the RESPONSE_PENDING window still opens (b must say "Pescuiește!"
+    // themselves), but no lanternfish/tortoise/shark exist anywhere, so once b responds
+    // truthfully the rest of the chain resolves with no further window ever open.
+    expect(sReq.pendingWindow?.type).toBe('RESPONSE_PENDING');
+    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' });
     expect(s1.pendingWindow).toBeNull();
   });
 
@@ -21,7 +25,10 @@ describe('windows', () => {
     });
     const tGrant = grantPower(state, 'b', 'tortoise');
     const sGrant = grantPower(state, 'c', 'shark');
-    const { state: s1 } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    expect(sReq.pendingWindow?.type).toBe('RESPONSE_PENDING');
+    // b holds no squid, so they respond truthfully via SKIP_WINDOW before TRANSFER_PENDING opens.
+    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' });
     expect(s1.pendingWindow?.type).toBe('TRANSFER_PENDING');
     // shark cannot act while the transfer window (not yet the turn-end window) is open
     expect(() => reduce(s1, { type: 'DECLARE_SHARK', playerId: 'c', grantId: sGrant })).toThrow(IllegalActionError);
@@ -33,8 +40,9 @@ describe('windows', () => {
       hands: { a: [card('herring')], b: cards('herring', 2) },
     });
     const tGrant = grantPower(state, 'b', 'tortoise');
-    const { state: s1 } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
-    const { state: s2 } = reduce(s1, { type: 'SKIP_WINDOW' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' }); // b's truthful RESPONSE_PENDING answer
+    const { state: s2 } = reduce(s1, { type: 'SKIP_WINDOW' }); // b's TRANSFER_PENDING skip
     expect(s2.pendingWindow).toBeNull();
     expect(() => reduce(s2, { type: 'DECLARE_TORTOISE', playerId: 'b', grantId: tGrant, rank: 'herring' })).toThrow(
       IllegalActionError,
