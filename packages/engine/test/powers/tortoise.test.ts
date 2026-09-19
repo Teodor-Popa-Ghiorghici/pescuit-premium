@@ -12,7 +12,9 @@ describe('tortoise', () => {
       currentPlayerIndex: 1, // a's turn
     });
     const grantId = grantPower(state, 'b', 'tortoise');
-    const { state: s1 } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    // b holds no squid: responds truthfully via SKIP_WINDOW before TRANSFER_PENDING opens.
+    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' });
     expect(s1.pendingWindow?.type).toBe('TRANSFER_PENDING');
     const { state: s2, events } = reduce(s1, {
       type: 'DECLARE_TORTOISE',
@@ -37,8 +39,11 @@ describe('tortoise', () => {
       hands: { a: [card('herring')], b: cards('herring', 2), c: [card('herring')] },
     });
     state.tortoiseProtections.push({ id: 'tp1', ownerId: 'b', rank: 'herring', expiresAtNextTurnOf: 'b' });
-    const { state: s1, events } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
-    // no window needed, auto-blocked
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    // b holds no squid: still must answer RESPONSE_PENDING truthfully...
+    expect(sReq.pendingWindow?.type).toBe('RESPONSE_PENDING');
+    const { state: s1, events } = reduce(sReq, { type: 'SKIP_WINDOW' });
+    // ...but the standing protection then blocks automatically, no TRANSFER_PENDING window needed
     expect(s1.pendingWindow).toBeNull();
     expect(findPlayer(s1, 'b').hand.filter((c) => c.rank === 'herring')).toHaveLength(2);
     expect(events.some((e) => e.type === 'TORTOISE_BLOCK')).toBe(true);
@@ -52,7 +57,8 @@ describe('tortoise', () => {
     });
     state.tortoiseProtections.push({ id: 'tp1', ownerId: 'b', rank: 'herring', expiresAtNextTurnOf: 'b' });
     // a asks b for mackerel (b has none) -> fails -> turn passes to b -> b's turn begins -> protection clears
-    const { state: s1 } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'mackerel' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'mackerel' });
+    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' }); // b truthfully says "Pescuiește!"
     expect(s1.currentPlayerIndex).toBe(1);
     expect(s1.tortoiseProtections).toHaveLength(0);
   });

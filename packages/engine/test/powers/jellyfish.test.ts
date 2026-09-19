@@ -40,7 +40,10 @@ describe('jellyfish', () => {
     });
     findPlayer(state, 'b').stunned = true;
     // a fails an ask against c (c has no mackerel) -> turn should pass to b, but b is stunned -> skip to c
-    const { state: s1, events } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'c', rank: 'mackerel' });
+    const { state: sReq, events: eReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'c', rank: 'mackerel' });
+    // c holds no squid: responds truthfully via SKIP_WINDOW.
+    const { state: s1, events: eSkip } = reduce(sReq, { type: 'SKIP_WINDOW' });
+    const events = [...eReq, ...eSkip];
     expect(events.some((e) => e.type === 'TURN_SKIPPED_STUNNED' && e.playerId === 'b')).toBe(true);
     expect(findPlayer(s1, 'b').stunned).toBe(false); // stun cleared once skipped
     expect(s1.currentPlayerIndex).toBe(2); // c's turn

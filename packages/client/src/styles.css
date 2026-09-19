@@ -292,6 +292,58 @@ input {
   opacity: 0.55;
 }
 
+.player-badge.is-askable {
+  cursor: pointer;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.player-badge.is-askable:hover,
+.player-badge.is-askable:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+}
+
+.player-badge.is-ask-active {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 1);
+}
+
+.player-badge__ask-ranks {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.15);
+  cursor: default;
+}
+
+.player-badge__ask-hint {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.player-badge__ask-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rank-chip {
+  border: 1px solid var(--accent);
+  background: white;
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rank-chip:hover {
+  background: var(--accent);
+  color: white;
+}
+
 .player-badge__name {
   font-weight: 700;
   display: flex;
@@ -438,15 +490,8 @@ input {
   font-size: 0.85rem;
 }
 
-.ask-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.ask-form select {
-  flex: 1;
-  min-width: 120px;
+.hand-panel__ask-hint {
+  font-size: 0.85rem;
 }
 
 .card {
@@ -541,6 +586,15 @@ input {
 .declare-form--stack {
   flex-direction: column;
   align-items: stretch;
+}
+
+.declare-form--squid {
+  justify-content: space-between;
+}
+
+.btn--go-fish {
+  align-self: flex-start;
+  font-size: 1.05rem;
 }
 
 .declare-form__row {

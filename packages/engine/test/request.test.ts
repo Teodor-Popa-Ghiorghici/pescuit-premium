@@ -54,7 +54,10 @@ describe('request resolution', () => {
       playerIds: ['a', 'b'],
       hands: { a: [card('herring')], b: cards('herring', 2) },
     });
-    const { state: s1, events } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    // b holds no squid: they respond truthfully by submitting SKIP_WINDOW (their "here you go").
+    expect(sReq.pendingWindow?.type).toBe('RESPONSE_PENDING');
+    const { state: s1, events } = reduce(sReq, { type: 'SKIP_WINDOW' });
     expect(findPlayer(s1, 'a').hand.filter((c) => c.rank === 'herring')).toHaveLength(3);
     expect(findPlayer(s1, 'b').hand.filter((c) => c.rank === 'herring')).toHaveLength(0);
     expect(events.some((e) => e.type === 'REQUEST_SUCCEEDED')).toBe(true);
@@ -70,7 +73,8 @@ describe('request resolution', () => {
       hands: { a: [card('herring')], b: [card('mackerel')] },
       pool: [card('carp')],
     });
-    const { state: s1, events } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: s1, events } = reduce(sReq, { type: 'SKIP_WINDOW' });
     expect(events.some((e) => e.type === 'REQUEST_FAILED')).toBe(true);
     expect(events.some((e) => e.type === 'DREW_FROM_POOL' && e.playerId === 'a')).toBe(true);
     expect(findPlayer(s1, 'a').hand.some((c) => c.rank === 'carp')).toBe(true);
@@ -85,7 +89,8 @@ describe('request resolution', () => {
       hands: { a: [card('herring')], b: [card('mackerel')] },
       pool: [],
     });
-    const { state: s1, events } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { events } = reduce(sReq, { type: 'SKIP_WINDOW' });
     expect(events.some((e) => e.type === 'DREW_FROM_POOL')).toBe(false);
   });
 
@@ -104,7 +109,8 @@ describe('request resolution', () => {
       pool: cards('carp', 5),
     });
     // a asks b for herring: b has none, ask fails, turn passes to b who has an empty hand.
-    const { state: s1, events } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: s1, events } = reduce(sReq, { type: 'SKIP_WINDOW' });
     expect(s1.currentPlayerIndex).toBe(1);
     expect(events.some((e) => e.type === 'HAND_REFILLED' && e.playerId === 'b' && e.count === 3)).toBe(true);
     expect(findPlayer(s1, 'b').hand.length).toBe(3);
@@ -116,7 +122,8 @@ describe('request resolution', () => {
       hands: { a: [card('herring')], b: [] },
       pool: cards('carp', 3),
     });
-    const { state: s1, events } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: s1, events } = reduce(sReq, { type: 'SKIP_WINDOW' });
     // a's failed ask draws 1 first (pool 3 -> 2), then b refills up to 3 but only 2 remain.
     expect(events.some((e) => e.type === 'HAND_REFILLED' && e.count === 2)).toBe(true);
     expect(findPlayer(s1, 'b').hand.length).toBe(2);

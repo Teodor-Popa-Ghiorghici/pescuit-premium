@@ -10,7 +10,9 @@ describe('shark', () => {
       hands: { a: [card('herring')], b: cards('herring', 2), c: [] },
     });
     const grantId = grantPower(state, 'c', 'shark');
-    const { state: s1 } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    // b holds no squid: responds truthfully via SKIP_WINDOW before TURN_END opens for the shark.
+    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' });
     expect(s1.pendingWindow?.type).toBe('TURN_END');
     const { state: s2, events } = reduce(s1, { type: 'DECLARE_SHARK', playerId: 'c', grantId });
     // shark takes only the cards that were just requested (b's 2), not a's original card
@@ -31,7 +33,8 @@ describe('shark', () => {
       hands: { a: [card('herring')], b: cards('herring', 1) },
     });
     const grantId = grantPower(state, 'a', 'shark');
-    const { state: s1 } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' }); // b's truthful RESPONSE_PENDING answer
     expect(() => reduce(s1, { type: 'DECLARE_SHARK', playerId: 'a', grantId })).toThrow();
   });
 
@@ -42,7 +45,8 @@ describe('shark', () => {
     });
     const g1 = grantPower(state, 'c', 'shark');
     const g2 = grantPower(state, 'd', 'shark');
-    const { state: s1 } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' }); // b's truthful RESPONSE_PENDING answer
     const { state: s2 } = reduce(s1, { type: 'DECLARE_SHARK', playerId: 'c', grantId: g1 });
     // window is closed now; d cannot also jump
     expect(s2.pendingWindow).toBeNull();
@@ -56,7 +60,9 @@ describe('shark', () => {
       hands: { a: [card('herring')], b: [card('mackerel')], c: [] },
     });
     grantPower(state, 'c', 'shark');
-    const { state: s1 } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+    expect(sReq.pendingWindow?.type).toBe('RESPONSE_PENDING');
+    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' }); // b truthfully says "Pescuiește!"
     expect(s1.pendingWindow).toBeNull();
   });
 });

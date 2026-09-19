@@ -380,16 +380,16 @@ function afterRequestDeclared(ctx: Ctx, reflected: boolean) {
 
   const trueHasCards = hasRealCard(target, request.rank);
   ctx.s.resume = { kind: 'RESPONSE_PENDING', request, trueHasCards };
-  const squidGrants = grantsForPlayer(ctx, target.id, 'squid');
-  if (squidGrants.length > 0) {
-    openWindow(ctx, 'RESPONSE_PENDING', [target.id], {
-      askerId: asker.id,
-      targetId: target.id,
-      rank: request.rank,
-    });
-  } else {
-    afterResponsePending(ctx, null);
-  }
+  // Always open the window, even when the target holds no squid and so has no real
+  // choice: the target is the one who must say "Pescuiește!" (or hand the cards over),
+  // not the engine on their behalf. See DECISIONS.md. A connected player answers by
+  // submitting SKIP_WINDOW (truthful response); the 12s driver timeout covers a
+  // disconnected or slow one exactly like every other window.
+  openWindow(ctx, 'RESPONSE_PENDING', [target.id], {
+    askerId: asker.id,
+    targetId: target.id,
+    rank: request.rank,
+  });
 }
 
 function handleDeclareSquid(ctx: Ctx, action: Extract<Action, { type: 'DECLARE_SQUID' }>) {
@@ -700,6 +700,10 @@ function handleUseWhale(ctx: Ctx, action: Extract<Action, { type: 'USE_WHALE' }>
   push(ctx, { type: 'WHALE_SHUFFLE', playerId: action.playerId, targetAId: a.id, targetBId: b.id });
   ctx.s.staleRequestStreak = 0;
   settleAwaitRequest(ctx, action.playerId);
+  // The reshuffle can leave the player continuing their own turn holding only eggs (bad
+  // luck of the draw, found by simulation) with no legal request and nothing to lay --
+  // exactly the same stranding afterLayResolved() guards against.
+  ensureCanContinueTurn(ctx, action.playerId);
 }
 
 function handleSkipWindow(ctx: Ctx, action: Extract<Action, { type: 'SKIP_WINDOW' }>) {
@@ -831,12 +835,14 @@ function resolveSetCompleted(ctx: Ctx, destroyed: boolean, grant?: PowerGrant) {
 
 /**
  * Rule 2.8 says a player draws up to 3 at the *start* of their turn if their hand is
- * empty. Laying a set can also empty a player's hand mid-turn; without a top-up here
- * they'd be stuck (no cards to request with, no explicit "pass" action exists), so we
- * apply the same refill immediately when that happens to the player currently on the
- * clock. See DECISIONS.md.
+ * empty. Laying a set (or a Whale reshuffle) can also empty -- or egg-strand -- a
+ * player's hand mid-turn; without a top-up here they'd be stuck (no cards to request
+ * with, no explicit "pass" action exists), so we apply the same refill-then-pass check
+ * beginTurn() runs at the top of every turn, immediately, to whichever player is
+ * currently continuing their own AWAIT_REQUEST turn. See DECISIONS.md. No-op if play has
+ * already moved on (a window opened, or it's no longer playerId's turn to act).
  */
-function afterLayResolved(ctx: Ctx, playerId: string) {
+function ensureCanContinueTurn(ctx: Ctx, playerId: string) {
   const current = ctx.s.players[ctx.s.currentPlayerIndex];
   if (!current || current.id !== playerId) return;
   if (ctx.s.resume.kind !== 'AWAIT_REQUEST') return;
@@ -848,16 +854,23 @@ function afterLayResolved(ctx: Ctx, playerId: string) {
     for (let i = 0; i < count; i++) current.hand.push(ctx.s.pool.pop()!);
     push(ctx, { type: 'HAND_REFILLED', playerId: current.id, count });
     ctx.s.staleRequestStreak = 0;
-    return;
   }
 
   if (checkGameEnd(ctx)) {
     finalizeGame(ctx);
     return;
   }
-  // No cards, no pool: this player has no legal request. Pass the turn onward.
-  advancePlayerIndex(ctx);
-  beginTurn(ctx);
+  // No cards (the refill above can be all eggs when that's all the dwindling pool has
+  // left -- found by simulation), no pool: this player has no legal request. Pass the
+  // turn onward, exactly like the equivalent turn-start check in beginTurn().
+  if (hasNoRealCards(current) && findLayableSetsForPlayer(ctx, current.id).length === 0) {
+    advancePlayerIndex(ctx);
+    beginTurn(ctx);
+  }
+}
+
+function afterLayResolved(ctx: Ctx, playerId: string) {
+  ensureCanContinueTurn(ctx, playerId);
 }
 
 function grantPowerFromSet(ctx: Ctx, setId: string) {

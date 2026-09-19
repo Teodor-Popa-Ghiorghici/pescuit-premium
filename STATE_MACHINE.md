@@ -47,7 +47,7 @@ one `reduce(state, action)` call.
                           │no                     │                          │
                           ▼                       │                          │
                 ┌───────────────────────┐         │                          │
-                │ RESPONSE_PENDING window│ (squid?)│                          │
+                │ RESPONSE_PENDING window│ (always)│                          │
                 └───────────┬─────────────┘        │                          │
                             └───────────┬───────────┘                         │
                                         ▼                                     │
@@ -85,11 +85,31 @@ returning control to wherever the main spine was resting — it never disturbs
 
 1. `AWAIT_REQUEST` → `REQUEST(a→b, herring)`.
 2. No lanternfish held by b → `REQUEST_DECLARED` window skipped automatically.
-3. No squid held by b → `RESPONSE_PENDING` skipped automatically.
+3. `RESPONSE_PENDING` always opens for b, squid or not (see "Every response is a
+   window" below) — b answers with `SKIP_WINDOW` (truthfully) or `DECLARE_SQUID`
+   (a lie, only if b holds an unused squid).
 4. b truly holds no herring → outcome `fail`, nothing to transfer →
    `TRANSFER_PENDING` skipped automatically (nothing to protect).
 5. Nothing moved → `TURN_END` skipped automatically (shark has nothing to take).
 6. a draws one card from the pool (if any). Turn passes to the next player.
+
+### Every response is a window, not just squid's
+
+`RESPONSE_PENDING` used to open only when the target held an unused squid grant;
+otherwise the engine resolved the ask instantly, on nobody's say-so. That made the
+target's own client show a fait accompli — the log would already read "Pescuiește!"
+before the target had done anything, which felt like the game playing itself instead
+of a person across the table refusing your ask. The window now **always** opens for
+the target, whether or not they hold squid: a connected player answers within the
+usual `windowTimeoutMs` by submitting `SKIP_WINDOW` (their honest "here you go" or
+"Pescuiește!") or, if eligible, `DECLARE_SQUID` (a lie); a disconnected or slow one
+is defaulted to `SKIP_WINDOW` by the driver's timeout, exactly like any other window.
+Bots already handled this generically (`decideWindowAction`'s `RESPONSE_PENDING`
+case falls back to `SKIP_WINDOW` when they hold no grant), so no bot-layer change was
+needed. This also removes a pre-existing timing tell in Mode Ascuns: previously, a
+window opening at all on this step implied the target held an unused squid grant;
+now every response takes the same shape regardless, win, lose, or lie. See
+DECISIONS.md.
 
 ### Ask with bonus turn (success)
 
@@ -156,6 +176,12 @@ Whale has no reactive counterpart in the spec. Protected cards for both target
 players are set aside first; everything else is combined, shuffled with the
 engine's seeded RNG, and dealt back preserving each player's original *unprotected*
 card count, then the protected cards are added back untouched.
+
+If the reshuffle deals the player continuing their own turn a hand of nothing but
+eggs (bad luck of the draw — found by simulation), they'd otherwise be stuck with
+no legal request and nothing to lay. The same refill-then-pass check `beginTurn()`
+runs at the top of every turn runs again immediately afterward (shared with the
+mid-turn lay case below, as `ensureCanContinueTurn()`).
 
 ### Set completion mid-turn
 
