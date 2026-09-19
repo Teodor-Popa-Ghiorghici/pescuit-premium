@@ -1,7 +1,49 @@
 import type { GameEvent } from '@pescuit/engine';
 import { useMemo, useRef, useEffect } from 'react';
+import { Seal } from '../art/seals.js';
 import { useT } from '../i18n/useT.js';
 import { useGame } from '../state/store.js';
+
+/** Which seal stands at the head of a line. Every event that a power caused is
+ *  marked with that power's sigil; the rest fall back to the rank in play. */
+function sealFor(e: GameEvent): string | null {
+  switch (e.type) {
+    case 'REQUEST_MADE':
+    case 'REQUEST_SUCCEEDED':
+    case 'REQUEST_FAILED':
+      return e.rank;
+    case 'SET_LAID':
+      return e.rank;
+    case 'POWER_GRANTED':
+      return e.unbound ? 'clownfish' : e.rank;
+    case 'POWER_USED':
+      return e.rank;
+    case 'SHARK_JUMP':
+      return 'shark';
+    case 'LANTERNFISH_REFLECT':
+      return 'lanternfish';
+    case 'TORTOISE_BLOCK':
+      return 'tortoise';
+    case 'JELLYFISH_STUN':
+    case 'TURN_SKIPPED_STUNNED':
+      return 'jellyfish';
+    case 'STICKLEBACK_STEAL':
+    case 'STICKLEBACK_WASTED':
+      return 'stickleback';
+    case 'WHALE_SHUFFLE':
+      return 'whale';
+    case 'SET_DESTROYED':
+      return 'mantisShrimp';
+    case 'HAND_REFILLED':
+      return 'eggs';
+    case 'BONUS_TURN':
+    case 'TURN_STARTED':
+    case 'GAME_ENDED':
+      return 'turn';
+    default:
+      return null;
+  }
+}
 
 function entryFor(
   e: GameEvent,
@@ -67,6 +109,7 @@ function entryFor(
   }
 }
 
+/** Jurnal — printed on recessed stock, each line headed by the seal of what caused it. */
 export function EventLog() {
   const { t, rank } = useT();
   const { events, view } = useGame();
@@ -83,9 +126,9 @@ export function EventLog() {
         .map((e, i) => {
           const entry = entryFor(e, nameOf, rank);
           if (!entry) return null;
-          return { id: i, text: t(entry.key, entry.params) };
+          return { id: i, text: t(entry.key, entry.params), seal: sealFor(e) };
         })
-        .filter((x): x is { id: number; text: string } => x !== null),
+        .filter((x): x is { id: number; text: string; seal: string | null } => x !== null),
     [events, t, rank, nameOf],
   );
 
@@ -99,7 +142,8 @@ export function EventLog() {
       <div className="event-log__lines">
         {lines.map((l) => (
           <div key={l.id} className="event-log__line">
-            {l.text}
+            {l.seal ? <Seal rank={l.seal} size={16} color="currentColor" /> : <span style={{ width: 16, flex: 'none' }} />}
+            <span>{l.text}</span>
           </div>
         ))}
         <div ref={endRef} />

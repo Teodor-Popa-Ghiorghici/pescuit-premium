@@ -272,3 +272,47 @@ directly, styled with clear placeholder cards and layout (per the spec's own
 placeholder instruction) rather than deliberately ugly markup. It satisfies both
 milestones' actual requirements ("playable end to end" and "explains itself")
 in a single pass.
+
+## Design pass: the woodcut layer
+
+`DESIGN.md` §1–§8 was implemented against the D0–D3 sheets. The calls worth
+recording:
+
+- **Faces: Vollkorn (display) + Source Serif 4 (text), both self-hosted.**
+  §2 lists Fraunces first for display, but Vollkorn was taken for its heavier,
+  blunter cut — it reads as pressed rather than drawn, which is the whole brief.
+  Both are SIL OFL. The subsets are the Google latin and latin-ext woff2 slices
+  (307 KB in total, in `packages/client/public/fonts/`); nothing is fetched from
+  a CDN at runtime, per §2's "should not phone out".
+- **Diacritics verified, as §2 demands.** `ȘșȚțĂăÂâÎî Pescuiește Țestoasă
+  Meduză` was rendered in both faces at 12px and 48px: no tofu, and ș/ț draw
+  with a *detached comma below*, not a cedilla. Both faces pass, so neither is
+  disqualified.
+- **Card art is authored once, in the 264×396 working space.** §4.2 asks for
+  strokes re-emitted per size rather than transform-scaled. The shipped cards
+  are one SVG per rank with a `viewBox`, so the browser scales them; the
+  distinction is invisible in a vector pipeline and the alternative is three
+  hand-maintained copies of nine carvings. The eight ordinary fish were cut on
+  the half-size 176×264 grid and are lifted into card space by a single 1.5×
+  group — same geometry, one coordinate system.
+- **At `sm` a card is only its seal (§4.2), and that is what laid sets use.**
+  A 44×66 plate cannot carry a carving or a rank name legibly, so the small
+  plate draws the 24-grid sigil plus a sliver of the category collar. This is
+  what sits under every post.
+- **Long rank names are squeezed, not truncated.** CREVETE-MANTIS and
+  PEȘTELE-FELINAR do not fit the 188-unit measure at any of the size steps, so
+  they are set with `textLength` + `lengthAdjust="spacingAndGlyphs"`. A card
+  always states its own rank in full.
+- **The interruption window's context line sits under the header, not over the
+  table.** §5.5 floats it at the top of the screen; floated over a real header
+  it collided with the turn line and the controls. It is now its own ochre-bordered
+  board directly beneath the header — same reading order, no overlap.
+- **Sound is synthesised, not sampled.** §7 specifies the cues but no assets were
+  delivered with the sheets, so `src/sound.ts` builds them from filtered noise and
+  a short wooden body resonance. Per §6.6 sound and haptics are deliberately *not*
+  disabled by `prefers-reduced-motion`; the Sunet toggle is the only thing that
+  silences them.
+- **The hover-to-ask flow of the previous pass was kept and the sheet's flow
+  added alongside it.** §5.4 asks for "tap a post, then a card"; the rank chips
+  inside a post already worked and are the faster path on a pointer device, so
+  both now resolve to the same `REQUEST`.

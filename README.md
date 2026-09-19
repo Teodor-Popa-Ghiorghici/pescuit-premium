@@ -102,6 +102,12 @@ the process locally would.
   fully bilingual.
 - Spectator mode and a solo practice mode against the M1 bots (both listed under
   M5 in the original spec) are not implemented yet.
-- Card animations and sound are not implemented; the client uses clear,
-  color-coded placeholder cards (per the spec's own instruction to do so until
-  real design assets arrive).
+- Sound is synthesised in the browser (short filtered noise bursts for the
+  stamp, the totem's knock, a splintering set) rather than played from recorded
+  assets, and there is a Sunet toggle in the table header to turn it off. No
+  audio files ship with the build.
+- The motion layer covers the stamp, the totem's travel between posts, the
+  burning-down window clock and the rising interrupt plank. The longer
+  per-event choreography of `DESIGN.md` §6.3 — cards flying between hands, the
+  whale's interleaved reshuffle, the shark reversing mid-flight — is not
+  animated; those events update the table and the log directly.
