@@ -182,7 +182,7 @@ function GameOverOverlay({ onNewGame }: { onNewGame: () => void }) {
   const ranked = view.players.slice().sort((a, b) => b.score - a.score);
 
   return (
-    <div className="modal-overlay">
+    <div className="modal-overlay modal-overlay--solid">
       <div className="gameover">
         <h2 className="gameover__title">{t('game.gameOver')}</h2>
         <div className="gameover__posts">

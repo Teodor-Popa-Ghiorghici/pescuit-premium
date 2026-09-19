@@ -1245,6 +1245,11 @@ select {
   margin: 0;
 }
 
+/* §5.7 is a screen, not a dialog: the table it replaces should not read through it */
+.modal-overlay--solid {
+  background: var(--apa);
+}
+
 /* game over: the winner's post stands taller and keeps the totem */
 .gameover {
   display: flex;
