@@ -2,9 +2,9 @@
 
 An online multiplayer card game for 3–6 players — a "Go Fish" variant with power
 cards, bluffing, and interrupts — playable by sharing a room link. See `RULES.md`
-for the full rulebook, `STATE_MACHINE.md` for the engine's turn design, and
+for the full rulebook, `STATE_MACHINE.md` for the engine's turn design,
 `DECISIONS.md` for every design call made against the (intentionally ambiguous)
-spec.
+spec, and `DESIGN.md` for the visual, audio and feel specification.
 
 ## Project layout
 
