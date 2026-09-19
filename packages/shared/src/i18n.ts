@@ -115,6 +115,25 @@ const ro: Dict = {
   'log.turnSkippedStunned': '{player} e amețit și sare peste rând.',
   'log.gameEnded': 'Joc terminat.',
 
+  'lobby.host': 'gazdă',
+  'lobby.free': 'liber',
+  'lobby.powerVisibility.ascuns.desc':
+    'Seturile de putere se pun cu fața în jos. Nimeni nu știe ce ai până nu folosești.',
+  'lobby.powerVisibility.deschis.desc': 'Toată lumea vede ce putere a câștigat fiecare, imediat.',
+
+  'game.inPool': 'în baltă',
+  'game.handHint': 'Atinge un stâlp, apoi o carte din mâna ta.',
+  'game.ask': 'Cere',
+  'game.askingFor': 'Ceri {rank} de la {name}',
+  'game.tableContinues': 'masa continuă în spate',
+  'game.windowOpen': 'fereastră deschisă',
+  'game.sound': 'Sunet',
+  'game.soundOff': 'Fără sunet',
+  'game.winnerTag': 'câștigător',
+  'game.you': 'tu',
+  'game.eggBonus': '+{count} icre',
+  'game.eggBonusOne': '+1 icră',
+
   'rules.title': 'Reguli',
   'lang.ro': 'Română',
   'lang.en': 'Engleză',
@@ -202,6 +221,25 @@ const en: Dict = {
   'log.bonusTurn': '{player} takes a bonus turn.',
   'log.turnSkippedStunned': '{player} is stunned and skips their turn.',
   'log.gameEnded': 'Game over.',
+
+  'lobby.host': 'host',
+  'lobby.free': 'free',
+  'lobby.powerVisibility.ascuns.desc':
+    'Power sets are laid face down. Nobody knows what you hold until you use it.',
+  'lobby.powerVisibility.deschis.desc': 'Everyone sees which power each player gained, immediately.',
+
+  'game.inPool': 'in the pool',
+  'game.handHint': 'Tap a post, then a card from your hand.',
+  'game.ask': 'Ask',
+  'game.askingFor': 'Asking {name} for {rank}',
+  'game.tableContinues': 'the table carries on behind',
+  'game.windowOpen': 'window open',
+  'game.sound': 'Sound',
+  'game.soundOff': 'Muted',
+  'game.winnerTag': 'winner',
+  'game.you': 'you',
+  'game.eggBonus': '+{count} eggs',
+  'game.eggBonusOne': '+1 egg',
 
   'rules.title': 'Rules',
   'lang.ro': 'Romanian',

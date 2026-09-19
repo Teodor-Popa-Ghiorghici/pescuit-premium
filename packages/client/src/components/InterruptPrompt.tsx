@@ -1,8 +1,11 @@
-import type { Action, NormalRank, PowerRank } from '@pescuit/engine';
+import type { Action, NormalRank, PowerRank, Rank } from '@pescuit/engine';
 import { NORMAL_RANKS } from '@pescuit/engine';
 import { useEffect, useState } from 'react';
+import { NotchClock } from '../art/table.js';
 import { useT } from '../i18n/useT.js';
+import { play } from '../sound.js';
 import { useGame } from '../state/store.js';
+import { Card } from './Card.js';
 
 const WINDOW_RANKS: Record<string, PowerRank[]> = {
   TURN_START: ['jellyfish', 'stickleback', 'whale'],
@@ -13,41 +16,54 @@ const WINDOW_RANKS: Record<string, PowerRank[]> = {
   TURN_END: ['shark'],
 };
 
+/**
+ * §5.5 — a window you can act in takes over the frame of the screen, not its
+ * contents: an inset ochre border burns on steps(3,end) and a plank rises from the
+ * bottom edge. The table stays visible behind it, because it is still running.
+ * A window you cannot act in is one thin board and a quiet clock.
+ */
 export function InterruptPrompt() {
   const { t, rank } = useT();
   const { view, sendAction, playerId } = useGame();
   const window_ = view?.pendingWindow;
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 
+  const totalMs = view?.config.windowTimeoutMs ?? 12000;
   const windowKey = window_ ? `${window_.type}:${JSON.stringify(window_.context)}` : null;
+  const eligible = !!window_?.youAreEligible;
+
   useEffect(() => {
-    if (!window_) {
+    if (!windowKey) {
       setSecondsLeft(null);
       return;
     }
-    const totalMs = view?.config.windowTimeoutMs ?? 12000;
     const start = Date.now();
     setSecondsLeft(Math.ceil(totalMs / 1000));
     const id = setInterval(() => {
-      const left = Math.max(0, Math.ceil((totalMs - (Date.now() - start)) / 1000));
-      setSecondsLeft(left);
+      setSecondsLeft(Math.max(0, Math.ceil((totalMs - (Date.now() - start)) / 1000)));
     }, 250);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowKey]);
+  }, [windowKey, totalMs]);
+
+  // The window opening is one of the four beats of §6.5 — it gets a sound, once.
+  useEffect(() => {
+    if (windowKey && eligible) play('chime');
+  }, [windowKey, eligible]);
 
   if (!window_ || !view) return null;
 
   const nameOf = (id: string) => view.players.find((p) => p.id === id)?.name ?? id;
   const ctx = window_.context as Record<string, string | undefined>;
+  const who = describeWindow(window_.type, ctx, nameOf, rank);
+  const total = Math.ceil(totalMs / 1000);
 
-  const description = describeWindow(window_.type, ctx, nameOf, rank, t);
-
-  if (!window_.youAreEligible) {
+  if (!eligible) {
     return (
       <div className="interrupt-banner">
-        <span>{description}</span>
-        {secondsLeft !== null && <span className="interrupt-banner__timer">{t('window.countdown', { seconds: secondsLeft })}</span>}
+        <span>
+          {who} — {t('game.windowOpen')}
+        </span>
+        {secondsLeft !== null && <NotchClock secondsLeft={secondsLeft} total={total} compact />}
       </div>
     );
   }
@@ -55,33 +71,58 @@ export function InterruptPrompt() {
   const applicableRanks = WINDOW_RANKS[window_.type] ?? [];
   const myGrants = (view.ownPowerGrants ?? []).filter((g) => !g.used && applicableRanks.includes(g.rank as PowerRank));
 
-  if (window_.type === 'RESPONSE_PENDING') {
-    return (
+  const clock = secondsLeft !== null ? <NotchClock secondsLeft={secondsLeft} total={total} /> : null;
+
+  const body =
+    window_.type === 'RESPONSE_PENDING' ? (
       <ResponsePendingPrompt
-        description={description}
-        secondsLeft={secondsLeft}
+        who={who}
         rankAsked={ctx.rank ?? ''}
         hand={view.hand}
         squidGrant={myGrants.find((g) => g.rank === 'squid')}
         playerId={playerId!}
+        clock={clock}
         onDeclare={sendAction}
       />
+    ) : (
+      <>
+        <div className="interrupt-prompt__say">
+          <div className="interrupt-prompt__headline">{t(windowHintKey(window_.type))}</div>
+          <div className="interrupt-prompt__sub">{who}</div>
+        </div>
+        <div className="interrupt-prompt__controls">
+          {clock}
+          <div className="interrupt-prompt__actions">
+            <DeclareForm windowType={window_.type} context={ctx} grants={myGrants} myPlayerId={playerId!} onDeclare={sendAction} />
+            <button className="btn btn--ghost" onClick={() => sendAction({ type: 'SKIP_WINDOW' } as unknown as Action)}>
+              {t('window.decline')}
+            </button>
+          </div>
+        </div>
+      </>
     );
-  }
 
   return (
-    <div className="interrupt-prompt">
-      <div className="interrupt-prompt__header">
-        <strong>{description}</strong>
-        {secondsLeft !== null && <span className="interrupt-prompt__timer">{secondsLeft}s</span>}
+    <>
+      <div className="window-frame" aria-hidden="true" />
+      <div className="interrupt-prompt__context">
+        <div className="interrupt-prompt__who">{who}</div>
+        <div className="interrupt-prompt__aside">{t('game.tableContinues')}</div>
       </div>
-      <p className="muted">{t(windowHintKey(window_.type))}</p>
-      <DeclareForm windowType={window_.type} context={ctx} grants={myGrants} myPlayerId={playerId!} onDeclare={sendAction} />
-      <button className="btn btn--ghost" onClick={() => sendAction({ type: 'SKIP_WINDOW' } as unknown as Action)}>
-        {t('window.decline')}
-      </button>
-    </div>
+      <div className="interrupt-prompt" role="dialog" aria-live="assertive">
+        <WindowCard grants={myGrants} fallback={(ctx.rank ?? null) as Rank | null} />
+        <div className="interrupt-prompt__body">{body}</div>
+      </div>
+    </>
   );
+}
+
+/** The plank carries the card it is about: the power you may spend, or failing that
+ *  the rank being fought over. */
+function WindowCard({ grants, fallback }: { grants: { rank: string }[]; fallback: Rank | null }) {
+  const shown = (grants[0]?.rank ?? fallback) as Rank | null;
+  if (!shown) return null;
+  return <Card rank={shown} size="md" />;
 }
 
 /**
@@ -90,40 +131,44 @@ export function InterruptPrompt() {
  * behalf. See DECISIONS.md ("Every response is a window, not just squid's").
  */
 function ResponsePendingPrompt({
-  description,
-  secondsLeft,
+  who,
   rankAsked,
   hand,
   squidGrant,
   playerId,
+  clock,
   onDeclare,
 }: {
-  description: string;
-  secondsLeft: number | null;
+  who: string;
   rankAsked: string;
   hand: { rank: string }[];
   squidGrant: { id: string; rank: string } | undefined;
   playerId: string;
+  clock: React.ReactNode;
   onDeclare: (a: Action) => void;
 }) {
   const { t, rank } = useT();
   const iHaveIt = hand.some((c) => c.rank === rankAsked);
 
   return (
-    <div className="interrupt-prompt interrupt-prompt--response">
-      <div className="interrupt-prompt__header">
-        <strong>{description}</strong>
-        {secondsLeft !== null && <span className="interrupt-prompt__timer">{secondsLeft}s</span>}
+    <>
+      <div className="interrupt-prompt__say">
+        <div className="interrupt-prompt__headline">{who}</div>
+        <div className="interrupt-prompt__sub">{t('window.responsePending')}</div>
       </div>
-      <button
-        className="btn btn--primary btn--go-fish"
-        onClick={() => onDeclare({ type: 'SKIP_WINDOW' } as unknown as Action)}
-      >
-        {iHaveIt ? t('window.hereYouGo') : t('window.goFish')}
-      </button>
-      {squidGrant && (
-        <div className="declare-form declare-form--squid">
-          <span className="muted">{t('power.squid.lieHint')}</span>
+      <div className="interrupt-prompt__controls">
+        {clock}
+        <div className="interrupt-prompt__actions">
+        <button
+          className="btn btn--go"
+          onClick={() => {
+            play('stamp');
+            onDeclare({ type: 'SKIP_WINDOW' } as unknown as Action);
+          }}
+        >
+          {iHaveIt ? t('window.hereYouGo') : t('window.goFish')}
+        </button>
+        {squidGrant && (
           <button
             className="btn btn--ghost"
             onClick={() =>
@@ -134,12 +179,14 @@ function ResponsePendingPrompt({
                 lie: iHaveIt ? 'deny' : 'claim',
               })
             }
+            title={t('power.squid.lieHint')}
           >
             {t('window.declare')} {rank('squid')}
           </button>
+        )}
         </div>
-      )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -167,16 +214,15 @@ function describeWindow(
   ctx: Record<string, string | undefined>,
   nameOf: (id: string) => string,
   rankLabel: (r: string) => string,
-  t: (k: string, p?: Record<string, string | number>) => string,
 ): string {
   switch (type) {
     case 'TURN_START':
-      return `${nameOf(ctx.playerId ?? '')}: ${t('window.turnStart')}`;
+      return nameOf(ctx.playerId ?? '');
     case 'REQUEST_DECLARED':
     case 'RESPONSE_PENDING':
-      return `${nameOf(ctx.askerId ?? '')} -> ${nameOf(ctx.targetId ?? '')}: ${rankLabel(ctx.rank ?? '')}?`;
+      return `${nameOf(ctx.askerId ?? '')} → ${nameOf(ctx.targetId ?? '')}: ${rankLabel(ctx.rank ?? '')}?`;
     case 'TRANSFER_PENDING':
-      return `${nameOf(ctx.askerId ?? '')} -> ${nameOf(ctx.targetId ?? '')}: ${rankLabel(ctx.rank ?? '')}`;
+      return `${nameOf(ctx.askerId ?? '')} → ${nameOf(ctx.targetId ?? '')}: ${rankLabel(ctx.rank ?? '')}`;
     case 'SET_COMPLETED':
       return `${nameOf(ctx.ownerId ?? '')} ${ctx.rank ? `(${rankLabel(ctx.rank)})` : ''}`;
     case 'TURN_END':
@@ -203,17 +249,25 @@ function DeclareForm({
   const { view } = useGame();
   const [targetId, setTargetId] = useState('');
   const [stickRank, setStickRank] = useState<NormalRank>(NORMAL_RANKS[0]);
-  const [tortoiseRank, setTortoiseRank] = useState(context.rank ?? '');
+  const [tortoiseRank] = useState(context.rank ?? '');
   const [whaleB, setWhaleB] = useState('');
 
   if (grants.length === 0) return null;
   const others = (view?.players ?? []).filter((p) => p.id !== myPlayerId);
 
+  function declare(action: Action) {
+    play('stamp');
+    onDeclare(action);
+  }
+
   if (windowType === 'REQUEST_DECLARED') {
     const grant = grants.find((g) => g.rank === 'lanternfish');
     if (!grant) return null;
     return (
-      <button className="btn btn--primary" onClick={() => onDeclare({ type: 'DECLARE_LANTERNFISH', playerId: myPlayerId, grantId: grant.id })}>
+      <button
+        className="btn btn--go"
+        onClick={() => declare({ type: 'DECLARE_LANTERNFISH', playerId: myPlayerId, grantId: grant.id })}
+      >
         {t('window.declare')} {rank('lanternfish')}
       </button>
     );
@@ -224,8 +278,15 @@ function DeclareForm({
     if (!grant) return null;
     return (
       <button
-        className="btn btn--primary"
-        onClick={() => onDeclare({ type: 'DECLARE_TORTOISE', playerId: myPlayerId, grantId: grant.id, rank: (context.rank ?? tortoiseRank) as any })}
+        className="btn btn--go"
+        onClick={() =>
+          declare({
+            type: 'DECLARE_TORTOISE',
+            playerId: myPlayerId,
+            grantId: grant.id,
+            rank: (context.rank ?? tortoiseRank) as Rank,
+          })
+        }
       >
         {t('window.declare')} {rank('tortoise')}
       </button>
@@ -236,7 +297,10 @@ function DeclareForm({
     const grant = grants.find((g) => g.rank === 'mantisShrimp');
     if (!grant) return null;
     return (
-      <button className="btn btn--primary" onClick={() => onDeclare({ type: 'DECLARE_MANTIS', playerId: myPlayerId, grantId: grant.id })}>
+      <button
+        className="btn btn--go"
+        onClick={() => declare({ type: 'DECLARE_MANTIS', playerId: myPlayerId, grantId: grant.id })}
+      >
         {t('window.declare')} {rank('mantisShrimp')}
       </button>
     );
@@ -246,7 +310,7 @@ function DeclareForm({
     const grant = grants.find((g) => g.rank === 'shark');
     if (!grant) return null;
     return (
-      <button className="btn btn--primary" onClick={() => onDeclare({ type: 'DECLARE_SHARK', playerId: myPlayerId, grantId: grant.id })}>
+      <button className="btn btn--go" onClick={() => declare({ type: 'DECLARE_SHARK', playerId: myPlayerId, grantId: grant.id })}>
         {t('window.declare')} {rank('shark')}
       </button>
     );
@@ -268,9 +332,9 @@ function DeclareForm({
                   ))}
                 </select>
                 <button
-                  className="btn btn--primary"
+                  className="btn btn--go"
                   disabled={!targetId}
-                  onClick={() => onDeclare({ type: 'USE_JELLYFISH', playerId: myPlayerId, grantId: g.id, targetId })}
+                  onClick={() => declare({ type: 'USE_JELLYFISH', playerId: myPlayerId, grantId: g.id, targetId })}
                 >
                   {t('window.declare')} {rank('jellyfish')}
                 </button>
@@ -288,7 +352,7 @@ function DeclareForm({
                     </option>
                   ))}
                 </select>
-                <select value={stickRank} onChange={(e) => setStickRank(e.target.value as (typeof NORMAL_RANKS)[number])}>
+                <select value={stickRank} onChange={(e) => setStickRank(e.target.value as NormalRank)}>
                   {NORMAL_RANKS.map((r) => (
                     <option key={r} value={r}>
                       {rank(r)}
@@ -296,10 +360,10 @@ function DeclareForm({
                   ))}
                 </select>
                 <button
-                  className="btn btn--primary"
+                  className="btn btn--go"
                   disabled={!targetId}
                   onClick={() =>
-                    onDeclare({ type: 'USE_STICKLEBACK', playerId: myPlayerId, grantId: g.id, targetId, rank: stickRank })
+                    declare({ type: 'USE_STICKLEBACK', playerId: myPlayerId, grantId: g.id, targetId, rank: stickRank })
                   }
                 >
                   {t('window.declare')} {rank('stickleback')}
@@ -310,7 +374,7 @@ function DeclareForm({
           if (g.rank === 'whale') {
             return (
               <div key={g.id} className="declare-form__row">
-                <span>{t('power.whale.pair')}:</span>
+                <span className="interrupt-prompt__sub">{t('power.whale.pair')}:</span>
                 <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
                   <option value="">A</option>
                   {(view?.players ?? []).map((p) => (
@@ -328,10 +392,10 @@ function DeclareForm({
                   ))}
                 </select>
                 <button
-                  className="btn btn--primary"
+                  className="btn btn--go"
                   disabled={!targetId || !whaleB || targetId === whaleB}
                   onClick={() =>
-                    onDeclare({
+                    declare({
                       type: 'USE_WHALE',
                       playerId: myPlayerId,
                       grantId: g.id,
