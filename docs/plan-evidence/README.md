@@ -17,7 +17,8 @@ the local server (`npm run build && npm run start`).
 | `drive.cjs` | drives a 3-player game (desktop + phone contexts) and captures screenshots |
 | `six.cjs` | seats 6 players and measures where the hand lands on a 390×844 phone |
 | `eventcount.ts` | runs 800 seeded bot games and reports when the client's 300-event cap is reached (A8) |
+| `eventfreq.ts` | mean occurrences of every event type per game (3 and 6 players) — the repetition budget for the cue bible |
 
 Run the browser scripts with Playwright installed and the server on `:8080`
-(`CHROMIUM_PATH` optionally points at a local Chromium); run `eventcount.ts` from
-this directory with `npx tsx eventcount.ts`.
+(`CHROMIUM_PATH` optionally points at a local Chromium); run `eventcount.ts` and
+`eventfreq.ts` from this directory with `npx tsx <script>`.
