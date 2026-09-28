@@ -4,7 +4,7 @@
 const { chromium } = require('playwright');
 const path = require('path');
 
-const OUT = path.join(__dirname, '..');
+const OUT = process.env.OUT_DIR ?? path.join(__dirname, '..');
 const BASE = 'http://localhost:5199/';
 const FRAMES = [
   { name: 'mock-phone-your-turn-390x664', frame: 'your-turn', w: 390, h: 664 },
