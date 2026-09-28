@@ -683,6 +683,41 @@ body {
   white-space: nowrap;
 }
 
+/* ------------------------------------------------ the tally of sets in the pond */
+.tally {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tally__notches {
+  display: flex;
+  gap: 2px;
+}
+
+.tally__notch {
+  width: 5px;
+  height: 10px;
+  background-color: var(--lemn);
+  background-image: var(--tex-wood);
+  border: 1px solid var(--lemn-inchis);
+}
+
+.tally__notch.is-gone {
+  background: transparent;
+  opacity: 0.45;
+}
+
+.tally__notch.is-last {
+  background: var(--ocru);
+}
+
+.tally__label {
+  font-size: 11px;
+  color: var(--hartie-2);
+  white-space: nowrap;
+}
+
 /* --------------------------------------------------------- the closing gate */
 .gate {
   display: flex;
@@ -895,6 +930,35 @@ body {
 .dk-log__line.is-recent {
   color: var(--ink);
   font-weight: 600;
+}
+
+/* below 1100 px the log folds into a drawer behind a tab, and the table takes the width */
+.dk-log-tab {
+  display: none;
+}
+@media (max-width: 1099px) {
+  .dk-main {
+    grid-template-columns: minmax(0, 1fr) 36px;
+  }
+  .dk-log {
+    display: none;
+  }
+  .dk-log-tab {
+    display: block;
+    writing-mode: vertical-rl;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background-color: var(--hartie-2);
+    background-image: var(--tex-paper);
+    border: var(--line-mid) solid var(--ink);
+    padding: 12px 0;
+    align-self: start;
+    cursor: pointer;
+  }
 }
 
 /* short screens: three compact columns so the sheet fits the pond's row */

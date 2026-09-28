@@ -18,28 +18,33 @@ Captured from a live game against the local server (`npm run build && npm run st
 ## Mocks of the proposed layout (§5.2–§5.3)
 
 Rendered by `mock/` from the client's real card art, seals, totem, notch clock,
-fonts and tokens; textures are feTurbulence stand-ins. `mock/shoot.cjs` asserts,
-for every layout frame:
+fonts and tokens; textures are feTurbulence stand-ins. Every frame shows a legal
+moment of play. `mock/shoot.cjs` asserts, for every layout frame:
 
 - the top bar sits at the top edge;
 - the opponent strip, the dock, the hand and any plank are inside the viewport;
 - the ask sheet lies between the strip and the dock;
-- nothing scrolls sideways, and on desktop the page does not scroll.
+- nothing scrolls sideways, and on desktop the page does not scroll;
+- nothing is covered: the centre of every opponent chip, desktop post, sheet row
+  and plank button, and the index corner of every hand group, must land on that
+  element (`elementFromPoint`). Every post must sit inside the table, and every
+  hand group inside its panel.
 
-All ten layout frames pass; the chip sheet is a reference, not a layout.
+All ten layout frames pass; the chip sheet is a reference, not a layout. The
+hit-tests catch v3's 1024×768 frame, whose fifth post ran under the log.
 
 | File | Frame |
 |---|---|
-| `mock-phone-your-turn-390x664.png` | your turn, six players, iOS Safari with toolbars |
+| `mock-phone-your-turn-390x664.png` | your turn, six players, iOS Safari with toolbars; the tally of sets still possible under the basin |
 | `mock-phone-your-turn-360x640.png` | the same on Android Chrome |
 | `mock-phone-your-turn-375x548.png` | the same on iPhone SE Safari |
-| `mock-phone-ask-sheet-390x664.png` | the ask sheet in the pond's row: full names, protection, power pips |
+| `mock-phone-ask-sheet-390x664.png` | the mid-screen ask sheet in the pond's row: full names, protection, power pips |
 | `mock-phone-ask-sheet-375x548.png` | the same on the shortest screen, in three compact columns |
 | `mock-phone-answer-390x664.png` | the answer plank: equal truth and lie buttons, clock, card |
 | `mock-phone-answer-375x548.png` | the same on the shortest screen |
-| `mock-phone-dry-pond-390x664.png` | a neutral go-fish into an empty pool, and the closing gate |
-| `mock-desktop-1280x800.png` | the pond table: posts on an arc, the pond as the flight stage, the tally log |
-| `mock-desktop-1024x768.png` | the same at 1024×768 |
+| `mock-phone-dry-pond-390x664.png` | a neutral go-fish into an empty pool, the tally at its last set, and the stall gate |
+| `mock-desktop-1280x800.png` | the pond table: posts on an arc, the pond as the flight stage, the tally board log |
+| `mock-desktop-1024x768.png` | below 1100 px the log folds into a drawer and the table takes the width |
 | `mock-chip-states.png` | the 60×76 opponent chip in eight states, including the real worst cases, at 2× |
 
 To re-render: from the repo root run `npx vite --config docs/plan-evidence/mock/vite.config.ts`
@@ -50,24 +55,23 @@ It exits non-zero if an assertion fails. `OUT_DIR` writes the PNGs elsewhere;
 ## The audio prototype (§3, Appendix B)
 
 `audio/sketch.js` implements every Appendix B recipe in Chromium's Web Audio
-engine (`OfflineAudioContext`), the §3.3 master chain for both output profiles,
-a BS.1770 meter with true peak, and a three-minute human-paced scene at five
-players heard from seat 0. `audio/run.cjs` renders it headless and writes:
+engine (`OfflineAudioContext`), masters each cue per output profile, renders a
+three-minute human-paced scene at five players (heard from seat 0) into three
+stems, and runs them through the §3.3 chain — plain-JS dynamics with no bus
+compression, calibrated on one anchor cue. `audio/run.cjs` renders it headless
+and writes:
 
 | Output | What it is |
 |---|---|
-| `audio/wav/<cue>.wav` | every prototyped cue, class-normalised, peak ≤ −1 dBFS |
+| `audio/wav/<cue>.wav` | every prototyped cue as headphones play it: mastered, class-normalised, peak ≤ −1 dBFS |
 | `audio/wav/seat-signatures.wav` | the six seat signatures in turn (§3.1) |
-| `audio/wav/scene-speaker-12s.wav`, `scene-headphones-12s.wav` | the scene's busiest 12 s through each profile's chain, at 24 kHz |
-| `audio/metrics.md` | per-cue length, level, tail, speaker variant, class gain and seed spread; loudness, true peak and clipping per profile; cues a minute; and the rule checks |
+| `audio/wav/scene-speaker-12s.wav`, `scene-headphones-12s.wav` | the scene's busiest 12 s at each profile's chain output, at 24 kHz |
+| `audio/metrics.md` | the recipes and their mastering; every cue alone through the chain (level shift, tail at the output, non-linear residual); the scene per profile (anchor, program gain, cue stream, whole mix, true peak, pile-up, limiter, bed); the clock over the bed; confusability (rhythms, the seat bar, the closest pairs); and the checks |
 | `audio/spectrograms.png` | a log-frequency spectrogram of every cue |
 
-It exits non-zero unless all three rule checks pass:
-
-- **the plank grammar** — no cue but the seat cues strikes plank A, B or C;
-- **the echo budget** — measured without the safety fade;
-- **loudness** — within ±2 LU of target, true peak ≤ −1 dBTP (including the
-  worst six-cue pile-up), and no samples near the clip.
+It exits non-zero unless all eight checks pass, each measured at the chain's
+output: the plank grammar, confusability, the echo budget, peaks, headroom,
+ambience, the clock over the bed, and balance (§7.4).
 
 To re-render (about 90 s), from the repo root with Playwright installed:
 `node docs/plan-evidence/audio/run.cjs`. `OUT_DIR` and `CHROMIUM_PATH` work as
@@ -77,9 +81,10 @@ above.
 
 | Script | Purpose |
 |---|---|
-| `membot.ts` | the two bot populations. *Random* is the engine's own bot; *memory* remembers what every public event reveals and asks where it knows a match exists. It also holds `decided()`, the §11.2 check. |
+| `membot.ts` | the two bot populations. *Random* is the engine's own bot; *memory* learns only what the public record reveals and asks where it knows a match exists. It also holds the §11.2 end check: `setsStillPossible()` from the public record, `decided()`, and `decidedTrue()`, the leaky omniscient version kept for comparison. |
 | `eventfreq.ts` | mean occurrences of every event type per game at 3 and 6 players, for both populations (§1.1, §3.7, the cue sheet) |
-| `ending.ts` | how games really end, at 3–6 players, for both populations: cards stranded, when the pool runs dry, the dry share of go-fish, and the final run of misses. Also asks played after the score was final and the share of games where that happens, and a guard that no set is laid or destroyed after `decided()` fires (§1.1, §3.9, §11.2) |
+| `ending.ts` | how games really end at 3–6 players, for both populations. It reports cards stranded, when the pool runs dry and the dry share of go-fish. For the public end check it reports how often it fires, the asks it removes and its two guards (no set laid after it fires; the count never below the truth). It gives the omniscient check's figures for comparison, and where the countdown passes 12, 6, 3 and 1 (§1.1, §3.9, §11.2) |
+| `endcheck.ts` | two endgames with identical public records (two face-down 2 + 2 power sets, Squid + Squid or Squid + Whale): the omniscient check ends one and not the other; the public check treats them alike (§6.5, §11.2) |
 | `arc.ts` | when the pool runs dry and how cards in play fall, with random bots (the v2 arc) |
 | `eventcount.ts` | 800 seeded bot games: when the client's 300-event cap is reached (A10) |
 | `squid-events.ts` | the event sequences of an honest "no", a Squid deny and a Squid claim (A2) |

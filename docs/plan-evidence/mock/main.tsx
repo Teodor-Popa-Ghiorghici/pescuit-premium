@@ -147,7 +147,7 @@ const OPPONENTS: Seat[] = [
   { name: 'Ana', mark: 'brad', score: 2, unused: 1, used: 0, hand: 6 },
   { name: 'Alexandru-Constantin Pop', mark: 'val', score: 3, unused: 1, used: 1, hand: 9 },
   { name: 'Cezar', mark: 'soare', score: 1, unused: 0, used: 0, hand: 4, stunned: true },
-  { name: 'Dana', mark: 'funie', score: 0, unused: 0, used: 0, hand: 8, protectedRank: 'tortoise' },
+  { name: 'Dana', mark: 'funie', score: 2, unused: 0, used: 1, hand: 6, protectedRank: 'tortoise' },
   { name: 'Elena', mark: 'cruce', score: 1, unused: 0, used: 0, hand: 5, offline: true },
 ];
 
@@ -205,7 +205,22 @@ function Gate({ misses, limit }: { misses: number; limit: number }) {
   );
 }
 
-function Pond({ count, ticker, dry, gate }: { count: number; ticker: React.ReactNode; dry?: boolean; gate?: [number, number] }) {
+/** The pond's tally (§3.9): 18 notches on the basin rim, one per set that can still be laid,
+ *  computed from the public record. A lay knocks its notch out; the last one is inked. */
+function Tally({ sets }: { sets: number }) {
+  return (
+    <div className="tally" aria-label={`${sets} seturi încă posibile`}>
+      <span className="tally__notches">
+        {Array.from({ length: 18 }, (_, i) => (
+          <span key={i} className={`tally__notch ${i >= sets ? 'is-gone' : ''} ${sets === 1 && i === 0 ? 'is-last' : ''}`} />
+        ))}
+      </span>
+      <span className="tally__label">{sets === 1 ? 'ultimul set' : <>încă <span className="num">{sets}</span> seturi</>}</span>
+    </div>
+  );
+}
+
+function Pond({ count, ticker, dry, gate, sets = 9 }: { count: number; ticker: React.ReactNode; dry?: boolean; gate?: [number, number]; sets?: number }) {
   return (
     <div className="ph-pond">
       <div className={`pond__basin ${dry ? 'is-dry' : ''}`}>
@@ -234,6 +249,7 @@ function Pond({ count, ticker, dry, gate }: { count: number; ticker: React.React
           <span className="pond__label">în baltă</span>
         </div>
       </div>
+      <Tally sets={sets} />
       {gate && <Gate misses={gate[0]} limit={gate[1]} />}
       <div className="pond__ticker">{ticker}</div>
     </div>
@@ -332,7 +348,7 @@ function YourTurn() {
         count={11}
         ticker={
           <>
-            <Mark id="soare" size={11} color="#9db3bd" /> Cezar → Dana: <Seal rank="herring" size={11} color="#9db3bd" inline /> Hering? — Pescuiește!
+            <Mark id="cruce" size={11} color="#9db3bd" /> Elena e plecată — tura trece
           </>
         }
       />
@@ -448,7 +464,7 @@ function DryPond() {
     <div className="ph">
       <TopBar text="Rândul lui Alexandru" />
       <Strip seats={seats} />
-      <Pond count={0} dry gate={[9, 12]} ticker={<>Alexandru → Dana: Țestoasă? — Pescuiește!</>} />
+      <Pond count={0} dry sets={1} gate={[9, 12]} ticker={<>Alexandru → Dana: Țestoasă? — Pescuiește!</>} />
       <Dock hint="">
         <Hand groups={MY_HAND} avail={phoneAvail()} />
       </Dock>
@@ -504,14 +520,16 @@ function ChipSheet() {
 }
 
 /* ------------------------------------------------------------ the desktop */
+// A legal run of turns: Cezar asks, then Dana stuns him at the start of her turn, so he is
+// stunned now and skips his next turn; Elena is away, so hers passes.
 const LOG: [MarkId, Rank | 'turn', string][] = [
-  ['soare', 'herring', 'Cezar cere de la Dana: Hering.'],
+  ['soare', 'herring', 'Cezar cere de la Ana: Hering.'],
   ['soare', 'herring', 'Pescuiește! Cezar trage din baltă.'],
-  ['funie', 'turn', 'Rândul Danei.'],
-  ['funie', 'tortoise', 'Dana își apără Țestoasa.'],
+  ['funie', 'jellyfish', 'Dana folosește Meduza: Cezar pierde tura următoare.'],
   ['funie', 'catfish', 'Dana cere de la Elena: Somn.'],
   ['cruce', 'catfish', 'Elena îi dă 2 cărți de Somn.'],
   ['funie', 'catfish', 'Dana pune jos un set de Somn.'],
+  ['cruce', 'turn', 'Elena e plecată — tura trece.'],
   ['rozeta', 'turn', 'Rândul tău.'],
 ];
 
@@ -557,7 +575,7 @@ function Desktop() {
               <Post key={p.name} p={p} lift={lifts[i]} />
             ))}
           </div>
-          <Pond count={11} ticker={<>Dana pune jos un set de Somn · rândul tău</>} />
+          <Pond count={11} ticker={<>Elena e plecată — tura trece · rândul tău</>} />
           <div className="dk-me">
             <div className="dk-me__post">
               <span className="dock__totem">
@@ -569,9 +587,12 @@ function Desktop() {
               <PowerPips unused={1} used={0} />
               <span className="dk-me__hint">Trage un grup peste un jucător — sau atinge grupul, apoi jucătorul.</span>
             </div>
-            <Hand groups={MY_HAND} avail={880} />
+            <Hand groups={MY_HAND} avail={Math.min(880, window.innerWidth - (window.innerWidth >= 1100 ? 364 : 136))} />
           </div>
         </section>
+        <button className="dk-log-tab" aria-label="Deschide jurnalul">
+          Jurnal
+        </button>
         <aside className="dk-log">
           <h3 className="dk-log__title">Jurnal</h3>
           {LOG.map(([m, r, text], i) => (

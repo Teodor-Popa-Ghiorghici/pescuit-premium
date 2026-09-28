@@ -7,11 +7,12 @@ of evidence, all in `docs/plan-evidence/` with the scripts that produced them:*
 - *an audit of the shipped code (commit `05b3ae3`);*
 - *a live 3- and 6-player session on desktop and phone;*
 - *~5,000 seeded bot games, played by random bots and by bots that remember
-  what the table reveals;*
-- *layout mocks rendered from the game's own card art and fit-tested at real
-  browser heights;*
+  what the public record reveals;*
+- *layout mocks rendered from the game's own card art, fit-tested and hit-tested
+  at real browser heights;*
 - *an audio prototype that renders the plan's recipes through Chromium's Web
-  Audio engine, measures them, and fails when a rule of §3 is broken.*
+  Audio engine, measures them at the output of the plan's own chain, and fails
+  when a rule of §3 is broken.*
 
 *Where this plan disagrees with `DESIGN.md`, §12 lists the amendment and the
 reason. Revision history: Appendix E.*
@@ -25,8 +26,8 @@ often on phones.** Four laws follow from that sentence:
 
 1. **What leaves a device is public, and presentation never adds information.**
    Every speaker feeds a live microphone, and every animation can be seen on a
-   stream. Sight, sound and haptics may only restate what the public record
-   already says. (§3.2, §6)
+   stream. Sight, sound, haptics — and the moment the game ends — may only
+   restate what the public record already says. (§3.2, §6, §11.2)
 2. **The table talks; the game whispers.** The best sound in this game is a
    friend saying *"Pescuiește!"*. The mix sits under speech and treats the voice
    call — which re-broadcasts every speaker — as part of the mix. (§3.3–3.4)
@@ -50,9 +51,9 @@ found:
 The sound layer is four synthesised cues wired straight to the speakers. Two of
 them are tells over an open mic, and every event-driven cue falls silent for the
 last 40–50 % of the game. No card ever moves between players. At six players on
-a phone, your hand starts 479 px below the fold. And 98 % of well-played games
-end with a run of asks that can no longer change the score: a median of 6 at
-three players, 12 at six.
+a phone, your hand starts 479 px below the fold. And 95–97 % of well-played
+games end with a run of asks that can no longer change the score: a median of 6
+at three players, 12 at six.
 
 ### 0.1 The twelve moves, ranked by impact ÷ cost
 
@@ -60,15 +61,15 @@ three players, 12 at six.
 |---|---|---|---|---|
 | 1 | Redact events per viewer; one event shape for every answer; a server-side CSPRNG deal with UUID card ids | Mode Ascuns is broken for everyone; a lie is detectable; the deal is recoverable | M | M0 |
 | 2 | Law 1 in code: audio is a function of the public record, with the tells of the rules themselves never voiced | Voice chat carries every speaker to every player | S | M0 |
-| 3 | One-screen phone table with a thumb-zone ask sheet (mocked, asserted, §5.2) | Today you scroll to act | M | M2 |
+| 3 | One-screen phone table: a mid-screen ask sheet, every timed action in the thumb zone (mocked, asserted, §5.2) | Today you scroll to act | M | M2 |
 | 4 | Presentation timeline keyed on a server `seq`, driven by view diffs | Fixes the silent late game; carries all choreography | M | M1 |
 | 5 | Card flights and the four-beat ask with wet and dry outcomes | The core verb has no cause → effect | M | M2 |
-| 6 | Audio engine: the prototype-verified chain, loudness per output profile, live synthesis for frequent cues | The current design cannot be mixed, levelled or scaled | M | M1 |
-| 7 | End the game the moment the score is final; the closing gate as the public countdown | Every well-played game ends in 6–12 dead asks | S | M3 |
+| 6 | Audio engine: a transparent chain calibrated on one anchor cue, every cue mastered per output profile, live synthesis for frequent cues | The current design cannot be mixed, levelled or scaled | M | M1 |
+| 7 | End the game when no set can still be laid, judged from the public record, and count the sets down in public | 95–97 % of well-played games end in 6–12 dead asks | S | M3 |
 | 8 | Server-authoritative window clock | The one place audio carries information is guessed | S | M0/M2 |
 | 9 | Sorted, grouped hand with corner indices (mocked, §5.3) | The hand is unsorted and clipped | M | M2 |
 | 10 | Nine power motifs and four signature moments | Powers fire about once a game each; they should land like events | L | M3 |
-| 11 | The world arc: the pool drives act 1, the gate drives act 2 | A diegetic clock that is true at every player count | M | M4 |
+| 11 | The world arc: the public count of sets still possible drives the light; the pool drives the water | A clock that is true at every player count | M | M4 |
 | 12 | Texture and ink pass | DESIGN §1 rule 4 ("nothing is clean") is unbuilt | M | M4 |
 
 ### 0.2 Done means
@@ -79,32 +80,42 @@ three players, 12 at six.
     excepted, and private audio is heard only in headphones mode.
   - Public records that differ only in the tells the rules themselves create
     produce identical audio, up to the pause those windows add.
-  - Both are proven by property tests (§6.5); what remains is listed in §6.6.
-- **Loudness per output profile**, measured from seat 0's client over a
-  human-paced five-player scene: *speaker* −18 ± 2 LUFS, *headphones*
-  −23 ± 2 LUFS, true peak ≤ −1 dBTP, including the worst six-cue pile-up. The
-  prototype already meets this with the chain in §3.3: −18.0 LUFS at −3.5 dBTP,
-  and −23.0 LUFS at −1.8 dBTP.
-- **The audio rules are checked, not asserted.** The prototype's harness fails on
-  a seat-plank violation (§3.1), an echo-budget miss measured without any safety
-  fade (§3.4), or a loudness, true-peak or clipping miss. All pass today; the
-  same harness gates the product from M1 (§7.4).
+  - The moment the game ends is a function of the public record too (§11.2).
+  - All three are proven by tests (§6.5); what remains is listed in §6.6.
+- **The mix, measured at the chain's output** from seat 0's client over a
+  three-minute human-paced five-player scene:
+  - the anchor cue (`table.turn`, the most frequent) sounds at −21 LUFS on
+    speakers and −25 LUFS on headphones — provisional until the call test sets
+    it against speech (§9.3);
+  - the chain moves no cue more than 1 dB from its cue-sheet level;
+  - the pond bed sits 12–20 LU under the anchor, and every clock cue at least
+    10 LU over the bed;
+  - true peak ≤ −1 dBTP, including the worst six-cue pile-up, with the limiter
+    above 1 dB of gain reduction for under 1 % of the time;
+  - no cue shares a seat signature's rhythm, or another event's rhythm at the
+    same moment, without a timbre step at least as large as the one between two
+    seat planks.
+
+  The prototype passes all eight of its checks (§3.3, §7.4); the same harness
+  gates the product from M1.
 - **One screen** at 360×640, 390×664 and 375×548 in every state, and on desktop
-  at 1280×800 and 1024×768, with no page scroll. The mocks pass the asserted
-  check (§7.4); the product must too.
+  at 1280×800 and 1024×768, with no page scroll and nothing covered: every chip,
+  post, sheet row, plank button and hand index is hit-tested (§5.2). The mocks
+  pass; the product must too.
 - **Answer to rest: 0.8 s by design, ≤ 0.9 s p95 measured.** **Answer to the next
   possible input: 0.3 s by design, ≤ 0.35 s p95.** The overlaps are in §4.1; the
   margin absorbs delivery jitter and frame timing.
 - **Input to visible response ≤ 50 ms p95** on a mid-range Android; **≥ 55 fps**
   during a six-player whale shuffle.
 - **No dead ending.** Under rule §11.2 a decided game ends on the lay that decides
-  it. With memory bots that covers 98–99 % of games; the rest still have a set
-  possible in principle and end on the 2N rule, as today.
+  it. With memory bots in Mode Ascuns that is 95–97 % of games; in the rest a set
+  is still possible as far as the public record shows, and they end on the 2N
+  rule, as today.
 - **Playtests**, reported per round and pooled (n = 15, as counts): 0 whose-turn
   confusions in round 3; 0 private-information reports; ≤ 2 of 15 muted by the
   end (§9.2).
 
-**Effort:** 50–64 engineering days (≈ 10–13 weeks for one engineer). Audio
+**Effort:** 51–65 engineering days (≈ 10–13 weeks for one engineer). Audio
 production (≈ 6 days) and art (≈ 7 days) run beside the engineering path and do
 not shorten it. A four-week cut (§8.3) ships the secrecy fixes, the phone table
 and the core loop's feel.
@@ -140,9 +151,9 @@ and the core loop's feel.
 | A13 | **Nothing travels.** The totem is the only moving object. | README, "Known scope limitations" | M2/M3 |
 | A14 | **The window clock is a guess.** It is timed from when the state is *received*, and the server's deadline is never sent. | `InterruptPrompt.tsx:35-46`; `room.ts:110-125` | M0 |
 | A15 | **A dropped socket freezes the player.** `rejoin` is sent only on mount. | `net/client.ts:43-48`; `store.tsx:64-78` | M0 |
-| A16 | **The sound engine cannot be mixed.** Four cues (three noise-and-body hits and a two-oscillator chime) go straight to `destination`: no master, limiter, volume, ducking, voice cap, variation or pan. | `sound.ts:11,39-107` | M1 |
+| A16 | **The sound engine cannot be mixed.** Four cues (three noise-and-body hits and a two-oscillator chime) go straight to `destination`: no master, limiter, volume, voice cap, variation or pan. | `sound.ts:11,39-107` | M1 |
 | A17 | **The hand is unsorted and clipped**, and a ten-card hand overflows the page at 1280 px. | `table-desktop-midgame-overflow.png`; `styles.css:792,874-881` | M0/M2 |
-| A18 | **Almost every well-played game ends with dead asks.** No game ends by laying every card. Each egg substituted into a set orphans one real card, so skilled play strands ~6 cards that can never form a set. The game then runs on until 2N consecutive asks capture and draw nothing. In 98–99 % of memory-bot games the score is final before the end, and a median 6 (3 players) to 12 (6 players) asks follow — a minute or two of dead play, unsignalled. | `engine.ts:606-611`; `ending.ts` | M3 (§11.2) |
+| A18 | **Almost every well-played game ends with dead asks.** No game ends by laying every card. Each egg substituted into a set orphans one real card, so skilled play strands ~6 cards that can never form a set. The game then runs on until 2N consecutive asks capture and draw nothing. In 95–97 % of memory-bot games the public record already proves the score final before the end, and a median 6 (3 players) to 12 (6 players) asks follow — a minute or two of dead play, unsignalled. | `engine.ts:606-611`; `ending.ts` | M3 (§11.2) |
 | A19 | Declaring Jellyfish, Stickleback or Whale needs native `<select>`s under the clock. | `InterruptPrompt.tsx:326-393` | M3 |
 | A20 | Haptics are `vibrate(10 or 24)` behind the sound toggle; iOS Safari has none. | `sound.ts:110-117` | M2 |
 
@@ -168,27 +179,30 @@ frame for windows.
 Two bot populations bracket human play:
 
 - **Random** — the engine's own bots.
-- **Memory** — bots that remember what every public event reveals and ask where
-  they know a match exists (`membot.ts`).
+- **Memory** — bots that remember what the public record reveals (who asked for
+  what, who was found empty, which face-up sets were laid) and ask where they know
+  a match exists (`membot.ts`). They never read a hidden rank.
 
-Each figure below comes from 300 games per cell (`eventfreq.ts`, `ending.ts`).
+Each figure below comes from 300 games per cell in Mode Ascuns (`eventfreq.ts`,
+`ending.ts`).
 
 | Per game | 3 p random | 3 p memory | 6 p random | 6 p memory |
 |---|---|---|---|---|
-| Turns | 80 | 78 | 99 | 86 |
-| Asks (each opens an answer window) | 79 | 76 | 95 | 74 |
+| Turns | 80 | 78 | 99 | 87 |
+| Asks (each opens an answer window) | 79 | 77 | 95 | 75 |
 | Successful asks | 22 | 23 | 22 | 29 |
-| Go fish, pool wet | 45 | 45 | 24 | 26 |
-| Go fish, pool dry | 11 | 7 | 48 | 17 |
+| Go fish, pool wet | 45 | 44 | 24 | 26 |
+| Go fish, pool dry | 11 | 8 | 48 | 18 |
 | Draws from the pool | 45 | 44 | 24 | 23 |
 | Sets laid (power / other) | 8 / 7 | 9 / 8 | 6 / 6 | 9 / 8 |
-| Powers used, all nine together | 5.5 | 6.3 | 3.7 | 6.0 |
+| Powers used, all nine together | 5.5 | 6.4 | 3.7 | 6.1 |
 | Any *one* power's effect | 0.3–1.0 | ≈ 1 | 0.1–0.6 | 0.8–0.9 |
-| Pool runs dry at (share of turns, median) | 80 % | 85 % | 34 % | 54 % |
+| Pool runs dry at (share of turns, median) | 81 % | 86 % | 34 % | 53 % |
+| Sets still possible when it does (median, of 18) | 5 | 2 | 12 | 6 |
 | Games ending with every real card laid | 0 % | 0 % | 0 % | 0 % |
 | Real cards stranded at the end (median) | 9 | 6 | 22 | 6 |
-| Games whose score is final before they end | 40 % | 98 % | 10 % | 98 % |
-| Asks played after the score was final (median, p90) | 0, 6 | 6, 9 | 0, 12 | 12, 17 |
+| Games the public record proves decided before they end | 38 % | 95 % | 9 % | 96 % |
+| Asks played after that (median, p90) | 0, 6 | 6, 9 | 0, 0 | 12, 17 |
 
 Five consequences run through the plan:
 
@@ -199,12 +213,14 @@ Five consequences run through the plan:
 3. **The dry go-fish is common but not dominant** — 13 % of go-fish with skilled
    play at three players, up to 68 % with random play at six. It needs its own
    design, and a neutral one (§4.1).
-4. **Games end by deadlock, not exhaustion.** Skilled play ends 98 % of games
+4. **Games end by deadlock, not exhaustion.** Skilled play ends 95–97 % of games
    with stranded cards and a run of asks that cannot change the score. The end
    needs a rule (§11.2) and a public countdown (§3.9); the old "cards in play →
    0" clock is false.
-5. **Two acts.** The pool is a true clock while it lasts; after it runs dry, the
-   public no-progress count is the only honest measure of how close the end is.
+5. **The pool is not a clock.** It runs dry anywhere from 34 % to 86 % of the way
+   through a game, depending on the table. The count of sets still possible falls
+   from 18 to 0 at every player count, and reaches 1 before the end in every
+   decided game (§3.9).
 
 ---
 
@@ -218,18 +234,19 @@ Five consequences run through the plan:
 | **P4 Every ask is a drama.** | Screen off: can a listener tell whose turn it is and what kind of thing happened (ask, give, go fish, lay, power, stun)? Sound off: can a watcher tell who asked whom, for what, and what happened? |
 | **P5 One glance, one thumb.** | On a real phone browser: whose turn, can I act, how close is the end — each in one second — and is every timed action under the thumb? |
 
-**The session has two acts, and the arc follows them.**
+**One clock, two textures.**
 
-- **Act 1, fishing.** The pool is the clock: a public count that only falls. It
-  drives the water and the light, from dusk to evening as the pool drains.
-- **Act 2, the dry pond.** It begins the moment the pool empties: at 80–85 % of
-  a three-player game, and at 34–54 % of a six-player one. Night falls. From
-  here the only honest measure of the end is the public **no-progress count**:
-  consecutive asks that capture and draw nothing, which ends the game at 2N. It
-  is drawn as a **closing gate** (§3.9). A capture or a lay swings the gate back
-  open.
-- **Ceremony.** Under the rule proposed in §11.2, the game ends the moment the
-  score can no longer change, so the last possible set *is* the finale.
+- **The clock is the pond's tally: sets still possible.** It is computed from the
+  public record alone, starts at 18 and only falls (§3.9). It drives the light,
+  from dusk to night. With memory bots it reaches 6 at 67–79 % of the game at
+  every player count. It reaches 1 before the end in every decided game, so the
+  last set is always announced.
+- **The pool gives the texture.** While it lasts, the pond laps and the fish jump;
+  once it is dry, the water drains to wind. That happens at 34–86 % of a game, so
+  it colours the table but never pretends to measure the end.
+- **The finale** is the lay that takes the tally to 0 (§11.2). A game that stalls
+  with a set still possible counts down on the **gate** instead: consecutive asks
+  that capture and draw nothing, to the 2N rule.
 
 **References — what to take from each.** *Inscryption:* a table that creaks and
 cards with weight. *Pentiment:* an entire UI in the language of print.
@@ -257,11 +274,11 @@ else:
 
 | Material | Source | Means | Used by |
 |---|---|---|---|
-| **Wood, ringing** — planks A 180 Hz, B 320 Hz, C 620 Hz | the seats | "who" | seat signatures only: turn, ask, target, join, skipped |
-| **Wood, small** — plank D, 1.2 kHz | the rules' clock and your own hand | "the table acknowledges" | ticks, presses, bonus, asked, answer, reveal, snaps and splinters |
+| **Wood, ringing** — planks A 180 Hz, B 320 Hz, C 620 Hz | the seats | "who" | seat signatures only: turn, bonus, ask, target, join, skipped |
+| **Wood, small** — plank D, 1.2 kHz | the rules' clock and your own hand | "the table acknowledges" | clicks, presses, the asked roll, reveal, snaps, splinters |
 | **The table top** — an unpitched thud | things landing | "it landed" | the close, give, lay, dry go fish, error, mantis, tortoise |
 | **Paper** | the printed cards | "cards moved" | give, draw, steal, shuffle, flight |
-| **Ink** | the stamp | "it is recorded" | answer, lay, score |
+| **Ink** | the stamp | "it is recorded" | lay, score |
 | **Water** | the pond | "the pool" | go fish, draw, ambience |
 | **Breath** — fluier, caval, tulnic | the powers, the call to the table | "a power spoke" | the nine motifs, start, end |
 | **Strings** — țambal | magic resolving | "something changed you can't see" | power granted, clownfish binding |
@@ -272,27 +289,44 @@ All wood shares the mode ratios of a free-free bar (1 : 2.756 : 5.404 : 8.933),
 so it reads as one material at four sizes.
 
 **A ringing A, B or C knock always means a seat.** No other cue may strike one:
-the clock and the interface use plank D, and things that land use the table top,
+the clock and your hand use plank D, and things that land use the table top,
 which has no modal ring. The prototype's harness fails if any other cue strikes
-A, B or C (`audio/metrics.md`). This keeps the one identity channel clean. Moving
-identity onto plank size made the rule necessary: the answer window's close, a
-single plank-B knock since v2, would otherwise have been seat B1's signature after
-every answer.
+A, B or C.
 
 **Seat signatures.** Each seat owns a knock, made from a plank size (A low, B
-middle, C high) and a knock count (one or two). That gives six signatures, built
-from categories any listener can tell apart. There is no absolute pitch to
-learn, no octave pair to confuse, and no knock that glides.
+middle, C high) and a knock count (one, or two 75 ms apart). That gives six
+signatures, built from categories any listener can tell apart. There is no
+absolute pitch to learn, no octave pair to confuse, and no knock that glides.
 
 - **Turn:** the new player's signature.
+- **Bonus:** the asker keeps the turn, so the totem settles back with their own
+  signature again, softer.
 - **Ask:** the arrow-chip's short paper flick, then the *target's* signature as
   it lands. The asker is already known from the turn.
 - **Waiting room:** each player's signature as they join.
 
+**Nothing else may sound like a seat.** The signatures use two rhythms — one
+knock, or two 75 ms apart — and three plank sizes. No other cue may share one of
+those rhythms unless its timbre differs by at least the step between two seat
+planks; nor may two cues of different events that can sound at the same moment
+of the ask. The harness measures both from the rendered sound: onsets in the
+first 300 ms for rhythm, a log-mel pattern of the first 50 ms for timbre
+(`audio/metrics.md`, *Confusability*). This is why three cues changed in v4:
+
+- In v3, `table.bonus` and `table.asked` were both two plank-D knocks. That is a
+  fourth register of the two-knock seat pattern, an octave above C2. The bonus is
+  now the asker's own signature; the asked cue is a roll of three taps, the only
+  three-onset figure in the game.
+- The clock's tick is a dry **click** — a bright exciter on plank D stopped at
+  once — not a knock. The urgent tick is a double click.
+- The Shark is a flam: the jaws snap on plank D, and the body lands on the dobă
+  40 ms later. A single low thump was too close to seat A1.
+
 Listen: `audio/wav/seat-signatures.wav`. Whether signatures really carry "who"
-by ear is a claim for the M2 blindfold test (§9.3). If listeners score below 8 of
-10 on seat, the fallback keeps signatures on the turn knock only, and the ask
-lands on a neutral knock.
+by ear is a claim for the M2 blindfold test (§9.3), which also asks listeners to
+name the bonus, the asked roll and the clicks. If listeners score below 8 of 10
+on seat, the fallback keeps signatures on the turn knock only, and the ask lands
+on a neutral knock.
 
 ### 3.2 Law 1 — presentation never adds information
 
@@ -318,7 +352,7 @@ existing (A6). Audio behaves as if they were not there:
 - **The answer window's close fires when `RESPONSE_PENDING` leaves the view,
   whatever replaces it.** That may be nothing, the next player's `TURN_START`,
   a `TURN_END` or a `TRANSFER_PENDING`. It fires at the same offset from the
-  answer every time.
+  answer every time. The answering device plays the same cue at its own press.
 - The pause such a window adds is the one thing sound cannot hide. It is a
   rules-level tell (§6.6).
 
@@ -326,7 +360,7 @@ existing (A6). Audio behaves as if they were not there:
 |---|---|---|
 | Ask, on your turn | yes | yes |
 | Lay a set | yes | yes |
-| Answer when asked | yes — the target was named aloud | yes: **one cue for every answer, Squid included** |
+| Answer when asked | yes — the target was named aloud | yes: **the close, at the press — one cue for every answer, Squid included** |
 | The answer window closes | yes — it opens on every ask | yes: **`clock.close` on every client**; its opening is the ask's landing |
 | Any other window opens or closes | its existence reveals holdings | **never** |
 | Declare or decline in a reactive window | no | no; visual and private haptic only |
@@ -355,36 +389,58 @@ were true.
 local cue, haptic and plank animation. The two answer buttons are the same size
 and weight (`mock-phone-answer-390x664.png`).
 
-### 3.3 Law 2 — the voice-first mix, and a chain that is proven
+### 3.3 Law 2 — the voice-first mix, and a chain whose output is tested
 
-**Loudness is set per output profile**, following ASWG-R001 (−24 LUFS home,
-−18 LUFS portable):
+**Loudness is anchored, not averaged.** The game's sound is a sparse stream of
+short knocks — about 24 a minute — over a quiet bed. An integrated loudness figure
+for such a stream mostly measures its gaps and whatever fills them. v3's
+"−18.0 LUFS on speakers" was exactly that: the review split the scene and found
+the pond bed alone at −18.1 LUFS and the cues alone at −21.0.
 
-| Profile | When | Integrated | True peak | Differences |
-|---|---|---|---|---|
-| **Speaker** (default) | phone and laptop speakers | −18 ± 2 LUFS | ≤ −1 dBTP | high-pass 150 Hz; +2 dB at 3 kHz; the **densifier**; UI and Clock +4 dB; speaker variants (§3.4) |
-| **Headphones** | chosen in settings | −23 ± 2 LUFS | ≤ −1 dBTP | high-pass 30 Hz, flat; full tails; the private tier |
+v4 calibrates program gain on one thing: **the anchor cue, `table.turn`**, the
+most frequent sound in the game. It is measured while it sounds (K-weighted over
+its active span) at the chain's output:
 
-**The chain.** It was built and measured in the prototype; v2's order clipped.
+| Profile | When | Anchor | Differences |
+|---|---|---|---|
+| **Speaker** (default) | phone and laptop speakers | −21 LUFS | high-pass 150 Hz; +2 dB at 3 kHz; cues mastered denser (peaks ≤ 12 dB over loudness); UI and Clock +4 dB; speaker variants (§3.4) |
+| **Headphones** | chosen in settings | −25 LUFS | high-pass 30 Hz, flat; cues mastered lightly (peaks ≤ 16 dB over loudness); full tails; the private tier |
+
+Everything else — every other cue, the whole mix, the bed — follows from the cue
+sheet and is **measured, not set**. The anchors are provisional. With the
+mastering below, they leave every cue alone under the limiter's ceiling, which
+the balance check verifies. The call test sets the final values against the
+speech on the same device (§9.3). ASWG-R001's −18
+and −24 LUFS apply to full mixes with music and voice-over, which this game does
+not have.
+
+**The chain.**
 
 ```
-cue ─► bus ─► profile EQ ─► [speaker: densifier] ─► program gain ─► glue comp ─► limiter ─► soft clip ─► user volume ─► out
-Clock bus ─► profile EQ ─► program gain ──────────────────────────────────────────►┘ (joins at the limiter)
+each cue → mastered for the profile → bus and cue level → main / clock / ambience stem
+stems → profile EQ → program gain → sum → lookahead limiter (−1.5 dBFS) → safety clip (−1 dBFS) → user volume
 ```
 
-- **Program gain comes before the dynamics.** It is the loudness calibration.
-  **User volume comes last and only attenuates.** v2 put the calibration after
-  the limiter. The prototype needed +8 dB there to reach −18 LUFS and hit
-  +6.3 dBTP.
-- **The densifier is speaker-only**: a gentle `tanh` stage (drive 2.2), then
-  4:1 compression from −26 dB (1 ms attack, 60 ms release). Struck wood has a
-  peak-to-loudness ratio of ~22 dB, so −18 LUFS at −1 dBTP is unreachable
-  without it.
-- **The Clock bus skips the densifier and the glue** and meets the mix only at
-  the limiter, so ticks keep a steady level whatever else is sounding.
-- **Glue:** −20 dB, 3:1, knee 6, attack 5 ms, release 120 ms. **Limiter:** −4 dB,
-  20:1, knee 0, attack 0, release 50 ms. **Soft clip** at −1 dBFS: a safety net
-  that the measurements show never engages.
+- **No bus compression.** v3 used three native `DynamicsCompressorNode`s. Each
+  applies an automatic make-up gain that cannot be switched off, so the chain
+  lifted a −60 dBFS signal by 27 dB on speakers and a −6 dBFS one by 2 dB. That is
+  an upward compressor: it put the pond bed above the knocks and the clock under
+  the bed. A compressor on a mix either pumps the bed or reshuffles the cues, so
+  v4 has none.
+- **Every cue is mastered for its profile before it reaches a bus.** Its peaks
+  are rounded (`c·tanh(x/c)`) until they sit at most 12 dB (speaker) or 16 dB
+  (headphones) over its class loudness, and the loudness is then restored. Struck
+  wood starts 15–22 dB over its loudness, so on speakers this is the density
+  phone speakers need. It rounds a knock's first milliseconds by up to 10 dB and
+  moves the waveform by −6 to −18 dB of residual, listed per cue in
+  `metrics.md`. Rendered families are mastered at load; live ones pass through a
+  per-voice shaper whose setting is measured once per recipe.
+- **So the chain is transparent.** Every cue alone passes it within 0.6 dB, and
+  the limiter meets only pile-ups.
+- **The dynamics are plain JS** with unity gain below the ceiling. The prototype
+  runs them on rendered stems; the product runs the same functions in an
+  AudioWorklet, so the chain behaves the same in every engine.
+- **User volume comes last and only attenuates.**
 
 **Measured** (`audio/metrics.md`). The scene is three scripted, human-paced
 minutes at five players, heard from seat 0. Thinks are lognormal around 6 s
@@ -392,27 +448,29 @@ minutes at five players, heard from seat 0. Thinks are lognormal around 6 s
 every frequent cue, including seat 0's own asked and answer cues, over the live
 pond bed.
 
-| Profile | Integrated | Short-term max | True peak | Worst six-cue pile-up | Samples near the clip |
-|---|---|---|---|---|---|
-| Speaker | −18.0 LUFS | −16.9 LUFS | −3.5 dBTP | −3.9 dBTP | 0 |
-| Headphones | −23.0 LUFS | −16.4 LUFS | −1.8 dBTP | −1.8 dBTP | 0 |
+| Profile | Program gain | Cue stream | Whole mix | True peak | Worst six-cue pile-up | Limiter above 1 dB | Bed, short-term max | Clock over the bed |
+|---|---|---|---|---|---|---|---|---|
+| Speaker | +4.1 dB | −23.1 LUFS | −29.1 LUFS | −1.5 dBTP | −1.1 dBTP (2.7 dB of limiting) | 0 % of the time | −38.4 LUFS (17.4 LU under) | 16–19 LU |
+| Headphones | +1.0 dB | −25.2 LUFS | −30.9 LUFS | −1.5 dBTP | −1.5 dBTP (3.7 dB of limiting) | 0 % of the time | −41.8 LUFS (16.8 LU under) | 11–14 LU |
 
 The scene plays **24 cues a minute** (19 table, 4.3 clock, 0.7 power) at 4.7 asks
-a minute — about one cue every 2.5 s.
+a minute — about one cue every 2.5 s. **All eight checks pass**; each can fail,
+and each did while v4 was being built (Appendix E).
 
-- **Normalise by loudness per class, not by peak.** Raw recipe levels span 16 dB
-  (the whale motif needs −10.1 dB, the dry go-fish +5.8 dB, `metrics.md`). *Transient* assets
-  (< 200 ms) are normalised by K-weighted level over their active span;
-  *sustained* ones by maximum momentary loudness. Per-cue levels then live in
-  one place: the cue sheet (Appendix D).
+- **Normalise by loudness per class, not by peak.** Raw recipe levels span 18 dB
+  (the whale motif needs −10.1 dB, the dry go-fish +8.4 dB, `metrics.md`).
+  *Transient* assets (< 200 ms) are normalised by K-weighted level over their
+  active span; *sustained* ones by maximum momentary loudness. Per-cue levels then
+  live in one place: the cue sheet (Appendix D).
 - **Transient-first.** Informative cues carry their meaning in the first 250 ms.
 - **Carve the sustain.** A −6 dB bell at 2 kHz and a 7 kHz low-pass on sustained
-  sources. Only ambience sustains past 1.5 s, and it stays under −32 LUFS
-  short-term.
-- **No pumping.** Ambience follows a slow *table activity* envelope — rising over
-  1.5 s, falling over 6 s, at most −4 dB — rather than ducking per cue.
+  sources. Only ambience sustains past 1.5 s, and it sits 12–20 LU under the
+  anchor: under the table, never gone.
+- **No pumping.** Ambience is never compressed. It follows a slow *table
+  activity* envelope — rising over 1.5 s, falling over 6 s, at most −4 dB —
+  rather than ducking per cue.
 - **Small speakers.** Weight below 150 Hz gets a saturated harmonic layer at
-  120–400 Hz.
+  120–400 Hz (the table top, the stamp, the dobă).
 
 ### 3.4 The call is part of the mix
 
@@ -423,20 +481,21 @@ noise suppressors pass them.
 
 **The echo budget.** In the speaker profile, every public cue says what it has to
 say in 250 ms. Energy after 250 ms sits at least 12 dB under the first 250 ms.
-The budget is met **by design, per cue** — not by a generic fade, which the
-prototype showed fails on multi-hit cues. The numbers below are measured with no
-fade at all. The engine keeps a 250–400 ms fade on speaker variants only as a
-safety net.
+The budget is met **by design, per cue**, and measured at the output of the
+speaker chain with no fade at all. The engine keeps a 250–400 ms fade on speaker
+variants only as a safety net.
 
-| Cue | Headphones | Speaker variant | Speaker energy after 250 ms |
+| Cue | Headphones | Speaker variant | Speaker energy after 250 ms, at the output |
 |---|---|---|---|
 | `table.lay` | four hits over 425 ms | the same four hits in 204 ms | none |
 | `table.give` | 331 ms | a 150 ms slide, then the landing at 160 ms (192 ms) | none |
 | `power.granted` | a 1.4 s țambal | the strings damped by hand at 180 ms (200 ms) | none |
 | motifs | full, 0.9–1.1 s | the first two notes (214–226 ms) | none |
-| `power.shark` | 427 ms | the snap moved to 120 ms; the drum's decay runs on | −36 dB |
+| `power.mantis` | 288 ms | the splinters packed into 170 ms (191 ms) | none |
+| `power.shark` | 458 ms | the churn cut short; the drum's decay runs on | −35 dB |
 | `power.whale` | 1.34 s: tulnic, riffle, redeal | the riffle in 170 ms and one landing (236 ms) | none |
 | `power.jellyfish` | 538 ms | the drâmbă cut to 150 ms, then the stamp (192 ms) | none |
+| `table.flight` | 260 ms | the same | −25 dB |
 | `mus.start`, `mus.end.*` | — | exempt: heard once a game | — |
 
 **Experiment E1 — actor emphasis.** The acting client plays the full cue while
@@ -451,33 +510,34 @@ headset recorder, with noise suppression on and off.
 
 | Bus | Level (Table = 0 dB) | Voices | Carries |
 |---|---|---|---|
-| UI | −10 dB (speaker +4) | 2 | presses, selections, errors, `table.answer`, the private eligibility figure |
-| Table | 0 dB | 6 | turn, ask, give, go fish, draw, lay, flight, bonus |
+| UI | −10 dB (speaker +4) | 2 | presses, selections, errors, the private eligibility figure |
+| Table | 0 dB | 6 | turn, bonus, ask, asked, give, go fish, draw, lay, flight |
 | Power | +1 dB | 3 | the nine, reveal, granted |
-| Clock | −8 dB (speaker +4) | 2 | the answer window's ticks and close — joins at the limiter |
-| Music | −2 dB | 2 | start and end ceremonies |
+| Clock | −8 dB (speaker +4) | 2 | the answer window's ticks and close |
+| Music | −2 dB | 2 | start and end ceremonies, the last set |
 | Ambience | −26 dB, activity-shaped | 3 live layers | water, life, the last act |
 
 **Two ways to make a sound.**
 
 - **Live synthesis** for every family heard more than 15 times a game (wood, the
-  table top, paper, water drops). Each hit uses 6–10 nodes and draws an exciter from one
-  shared noise buffer at a random offset. That gives continuous seeded variation
-  and zero buffer memory; the seed is the event's `seq`, so renders reproduce.
+  table top, paper, water drops). Each hit uses 6–10 nodes and draws an exciter
+  from one shared noise buffer at a random offset. That gives continuous seeded
+  variation and zero buffer memory; the seed is the event's `seq`, so renders
+  reproduce.
 - **Rendered at load in plain JS** for the rare, complex families (țambal
   strings, the riffle, the motifs), at 32 kHz. It must be plain JS: a
   `DelayNode` in a feedback cycle is clamped to one 128-frame render quantum, so
   a native Karplus–Strong loop cannot sound above ~375 Hz.
-- **Ambience is generated live** from a looped 2 s noise buffer, modulated
-  filters and scheduled one-shots. No long loops are stored.
+- **Ambience is generated live** from a looped noise buffer, modulated filters
+  and scheduled one-shots. No long loops are stored.
 
 | Budget | Value |
 |---|---|
 | Rendered buffers | ≈ 30 s at 32 kHz ≈ 3.8 MB |
 | Recorded tier (M4), decoded | ≤ 6.5 MB |
 | Download, all audio | ≤ 220 KB |
-| Render at load | ≤ 150 ms on a mid-range Android, in the waiting room |
-| Live synthesis | ≤ 10 nodes a hit, ≤ 14 voices, ~24 cues a minute |
+| Render and mastering at load | ≤ 150 ms on a mid-range Android, in the waiting room |
+| Live synthesis | ≤ 10 nodes a hit plus a 2-node mastering shaper, ≤ 14 voices, ~24 cues a minute |
 
 **The rest of the engine:**
 
@@ -506,7 +566,9 @@ headset recorder, with noise suppression on and off.
 ```
 packages/client/src/audio/
   context.ts   unlock, lifecycle, audioSession, outputLatency, profiles
-  mixer.ts     buses, activity envelope, the §3.3 chain, settings
+  mixer.ts     buses, stems, activity envelope, per-voice mastering, settings
+  dynamics.ts  PURE: the limiter and safety clip — shared by the AudioWorklet and the offline harness
+  worklet.ts   the AudioWorklet that runs dynamics.ts on the summed stems
   voices.ts    pool, priority, stealing, cooldowns, merging
   live/        wood.ts, tabletop.ts, paper.ts, water.ts — per-hit synthesis from (params, seed)
   render/      strings.ts, riffle.ts, breath.ts — JS sample renderers → AudioBuffer
@@ -517,8 +579,8 @@ packages/client/src/audio/
   lab.tsx      dev-only audio lab (§7.3)
 ```
 
-The prototype in `docs/plan-evidence/audio/` is the reference for `mixer.ts` and
-the recipes. It runs the same chain in the same engine.
+The prototype in `docs/plan-evidence/audio/` is the reference for `mixer.ts`,
+`dynamics.ts` and the recipes.
 
 ### 3.6 Production
 
@@ -534,16 +596,17 @@ the recipes. It runs the same chain in the same engine.
   bank per bus, not a sprite, since encoder padding drifts. ≤ 220 KB, loaded
   eagerly at game start (DESIGN §9.1). No request is ever rank-named.
 - **Swap-in without code.** Recordings become the exciters of the live families,
-  under the same cue ids.
+  under the same cue ids, and pass the same per-profile mastering and the same
+  eight checks.
 
 ### 3.7 Frequency decides variation, length and level
 
 | Plays per game | Treatment | Cues (plays, from §1.1) |
 |---|---|---|
-| > 60 | **live**, continuous variation, ≤ 250 ms, the lowest levels | `table.turn` (78–99), `table.ask` (74–95), `clock.close` (73–94) |
-| 15–60 | **live**, ≤ 450 ms | go fish wet (24–45) and dry (7–48), give, flight, bonus (21–29), draw (23–45), `table.asked`, `table.answer`, `ui.select` and `ui.target` (12–26), `table.turn.you` (13–27) |
+| > 60 | **live**, continuous variation, ≤ 250 ms, the lowest levels | `table.turn` (78–99), `table.ask` (75–95), `clock.close` (74–94) |
+| 15–60 | **live**, ≤ 450 ms | go fish wet (24–45) and dry (8–48), give and flight (22–29), bonus (21–28), draw (23–45), `table.asked`, `ui.select` and `ui.target` (12–26), `table.turn.you` (13–27) |
 | 3–15 | 3–4 takes, may run long | lays (6–9 each kind), power granted, power used (4–6), reveal |
-| < 3 | 1–2 premium takes, ceremony allowed | each power's effect, pool empty, start, end |
+| < 3 | 1–2 premium takes, ceremony allowed | each power's effect, pool empty, the last set, start, end |
 
 `cuesheet.ts` holds the sheet as data, and a unit test enforces this table on
 it: play band, variation mode, maximum length and bus. Appendix D is generated
@@ -554,8 +617,8 @@ from the same data.
 - **Mode.** All in D Romanian minor (Dorian ♯4: D E F G♯ A B C) — the colour of
   the doina.
 - **Instrument by type.** Reactive powers speak on the **fluier** (high, bright);
-  active powers on the **caval** (low, breathy); Clownfish, the mimic, on the
-  **drâmbă**.
+  active powers on the **caval** (low, breathy, its breath band darker at
+  1.4 kHz); Clownfish, the mimic, on the **drâmbă**.
 
 | Power | Instrument | Motif | Why |
 |---|---|---|---|
@@ -578,29 +641,61 @@ from the same data.
 - **Listen:** `power.used.lanternfish.wav` (the palindrome is visible in
   `audio/spectrograms.png`) and `power.used.whale.wav`.
 
-### 3.9 The world arc: two acts and a gate
+### 3.9 The world arc: one clock, two textures
 
-| Act | Clock (public) | Sound | Sight |
+**The clock: sets still possible.** It is computed on the server from the public
+record alone:
+
+- the deck's composition;
+- the rank of every face-up set;
+- the real and egg counts of every face-down set, which are public for every set
+  (`redact.ts`).
+
+A face-down set's rank is unknown, so the count is **the most sets any assignment
+of ranks the record allows could still yield**, if every unlaid card could be
+gathered into one hand. It is sent in the view as `sets: { possible, start }` and
+is the same number for every viewer.
+
+- **It never lies in the safe direction.** It is never below the true count: 0
+  violations after every action of 2,400 bot games (`ending.ts`). So the rule
+  built on it never ends a game that could still change (§11.2).
+- **It cannot leak.** Its only input is the public record, so its value, and the
+  moment it reaches 0, are the same in any two games with the same record
+  (`endcheck.ts`).
+- **It is a clock at every table size.** It starts at 18. With memory bots it
+  first reaches:
+
+  | At most | 3 players | 4 | 5 | 6 |
+  |---|---|---|---|---|
+  | 12 | 44 % | 40 % | 36 % | 32 % |
+  | 6 | 79 % | 75 % | 71 % | 67 % |
+  | 3 | 90 % | 88 % | 85 % | 82 % |
+  | 1 | 97 % | 97 % | 95 % | 93 % |
+
+  These are medians, as a share of the game under §11.2; random bots reach 6 at
+  70–77 %. It reaches 1 before the end in every decided game, so **the last set
+  is always announced**.
+
+| Stage | The count | Sound | Sight |
 |---|---|---|---|
-| **1 Fishing** | the pool count | `amb.water`: lapping, thinning as the pool drains; `table.draw` gets drier; fish jumps and reeds in `amb.life` | dusk; `--apa` steps darker once at half the pool |
-| **2 The dry pond** | the **no-progress count**: consecutive asks that capture and draw nothing, 0 → 2N | the water drains to dry wind (`table.poolEmpty` marks the turn); `amb.lastact`, a low dobă pulse, enters at N and quickens from 2N − 2 | night (one more flat step of `--apa`); the **gate** under the basin shuts one notch per miss (`mock-phone-dry-pond-390x664.png`) |
-| **Finale** | the score becomes final | the gate shuts, or the last set is pressed; the ceremony | the podium |
+| **Dusk** | 18 → 13 | `amb.water` laps while the pool lasts; fish jumps and reeds in `amb.life` | dusk light; the tally of 18 notches carved on the basin rim (`mock-phone-your-turn-*.png`) |
+| **Evening** | 12 → 7 | the same, thinner as the pool drains | `--apa` one flat step darker |
+| **Night** | 6 → 2 | when the pool is dry (at any stage): the water drains to wind (`table.poolEmpty` marks it); from 3, `amb.lastact`, a low dobă pulse | night; the notches left glow faintly |
+| **The last set** | 1 | `mus.lastset`: the pulse quickens and one low tulnic note | last light; the one notch left is inked, labelled *"ultimul set"* |
+| **Finale** | 0 | the last lay's stamp, one held beat, the gate doors, the ceremony | the podium |
 
-- **The count is public by construction.** It is advanced by public outcomes and
-  reset by public ones: a capture, a draw, a refill, a set laid, a steal, a
-  shuffle, a successful shark jump or reflection. The engine already keeps it
-  (`staleRequestStreak`), so it goes into the view as
-  `endPressure: { misses, limit }`. Nothing is derived client-side.
-- **The gate swings both ways.** A capture or a lay throws it open again, with a
-  wooden creak and the pulse dropping out. The last act can breathe.
-- **Under rule §11.2** the game ends the moment the score is final, so the gate
-  rarely closes. The finale becomes *the last possible lay*: its stamp, one held
-  beat, then the ceremony. The gate stays as the public countdown for games that
-  stall before they are decided.
-- **Levels.** ≤ −32 LUFS short-term, carved per Law 2, shaped by the activity
-  envelope, all generated live. **Default on**, playtest-gated: if 5 or more of
-  the 15 pooled players switch it off, it ships off. No music bed during play
-  (DESIGN §7.1 stands).
+- **Each lay knocks its notch out** of the rim, with its own lay cue. A lay that
+  also strands another set's cards takes two notches, and the tally says so.
+- **The gate is for stalls only.** When the count of consecutive asks that capture
+  and draw nothing reaches N, the gate appears under the basin and shuts one notch
+  per miss, to the 2N rule (`endPressure: { misses, limit }` in the view; the
+  engine's `staleRequestStreak`). It serves the games that stall with a set
+  still possible as far as the record shows: 3–5 % of memory-bot games. A capture
+  or a lay throws it open again, with a wooden creak.
+- **Levels.** The bed sits 12–20 LU under the anchor, carved per Law 2, shaped by
+  the activity envelope, all generated live. **Default on**, playtest-gated: if 5
+  or more of the 15 pooled players switch it off, it ships off. No music bed
+  during play (DESIGN §7.1 stands).
 
 ### 3.10 The window clock
 
@@ -612,11 +707,11 @@ from the same data.
     there would double the most frequent moment in the game. When a structural
     window comes between, the answer window opens later in silence; the pause is
     the rules' tell (§6.6).
-  - Silence follows until *T* seconds remain, then a `clock.tick` each second,
-    then `clock.tick.urgent` every 500 ms in the last 3 s — the same plank struck
-    with a harder mallet, so urgency is density, not pitch.
+  - Silence follows until *T* seconds remain, then a click each second
+    (`clock.tick`), then a double click every 500 ms in the last 3 s
+    (`clock.tick.urgent`): urgency is rhythm and density, not pitch.
   - `clock.close` sounds when `RESPONSE_PENDING` leaves the view, whatever follows
-    it (§3.2).
+    it (§3.2); the answering device plays it at the press.
   - *T* starts at 5 s and is re-set from playtest 1's answer times, so that most
     answers never tick.
 - **Every other window is silent** until the rules decision (§11.1). The eligible
@@ -659,11 +754,11 @@ were asked" only, and never for private signals.
 |---|---|---|
 | **0 Intent** | Phone: tap a card group — it lifts, and the ask sheet takes the pond's row. Tap a name. Desktop: drag the group onto a post, or tap-tap. The lift answers in ≤ 50 ms; `ui.select`, then `ui.target` in the target's signature. | human |
 | **1 Ask** | The arrow-chip — a carved token bearing the rank's seal — flies from asker to target on an arc and lands with `table.ask`. The target's post wobbles 2 px; the log line stamps in. | 320 ms |
-| **2 Hold** | The target's plank rises with `table.asked` and the 12·60·12 haptic, its two equal buttons in the thumb zone. Everyone else sees the *"Bogdan răspunde…"* banner and a compact clock. The arrow-chip rocks gently — the only idle motion in the game. | human |
-| **3 Answer** | Any answer plays `table.answer` locally. When `RESPONSE_PENDING` leaves the view, every client plays `clock.close` and the uniform 220 ms close. | 220 ms |
-| **4a Yes** | At +100 ms the chip flips to its ochre face. At +120 ms backs fly target → asker (460 ms, 60 ms stagger), with `table.flight`, then `table.give` on landing. At +640 ms the totem stamps in place (`table.bonus`). | rest at ≈ 700 ms for up to three cards; +60 ms per further card |
+| **2 Hold** | The target's plank rises with the `table.asked` roll and the 12·60·12 haptic, its two equal buttons in the thumb zone. Everyone else sees the *"Bogdan răspunde…"* banner and a compact clock. The arrow-chip rocks gently — the only idle motion in the game. | human |
+| **3 Answer** | The answering device plays `clock.close` at the press. When `RESPONSE_PENDING` leaves the view, every other client plays it, and every client plays the uniform 220 ms close. | 220 ms |
+| **4a Yes** | At +100 ms the chip flips to its ochre face. At +120 ms backs fly target → asker (460 ms, 60 ms stagger), with `table.flight`, then `table.give` on landing. At +640 ms the totem settles back on the asker with their signature, softer (`table.bonus`). | rest at ≈ 700 ms for up to three cards; +60 ms per further card |
 | **4b No, water in the pool** | At +100 ms the chip dives into the pond; the plop (`table.gofish`) and a ripple at +300 ms. A card rises and flies to the asker (+300 → +620 ms, `table.draw`). The totem leaves at +300 ms and lands at +760 ms. | rest at ≈ 800 ms |
-| **4c No, the pool is dry** | At +100 ms the chip drops onto the basin floor: `table.gofish.dry` (183 ms, neutral), and the gate shuts a notch. The totem leaves at +300 ms and lands at +760 ms. | rest at ≈ 800 ms |
+| **4c No, the pool is dry** | At +100 ms the chip drops onto the basin floor: `table.gofish.dry` (183 ms, neutral). The totem leaves at +300 ms and lands at +760 ms. | rest at ≈ 800 ms |
 
 Times in beat 4 run from the answer, which for every client but the target is the
 moment `RESPONSE_PENDING` leaves the view. **Answer to rest: 0.8 s by design**,
@@ -672,10 +767,9 @@ design**, gated at ≤ 0.35 s p95, because the next player may act as the totem
 leaves. Input is never blocked. A *table speed* setting (1× or 1.5×) scales every
 table-lane duration.
 
-**The dry go-fish is neutral and brief.** It is a knock on a dry floor, with no
-joke and no repeated text. The ticker says *"— Pescuiește!"* and nothing more. Its
-weight comes from the gate: each miss shuts a notch, and the final misses carry
-the pulse of the last act.
+**The dry go-fish is neutral and brief.** It is a thud on a dry floor, with no
+joke and no repeated text. The ticker says *"— Pescuiește!"* and nothing more. The
+tension of the last act comes from the tally (§3.9), not from the misses.
 
 ### 4.2 The presentation timeline (replaces `beats.ts`)
 
@@ -705,9 +799,9 @@ the pulse of the last act.
 
 | Class | Events (plays per game) | Allowed |
 |---|---|---|
-| Light | turn, ask, answer, draw, go fish, tick, press (20–99) | stamp and sound; no shake; ≤ 320 ms of table time |
+| Light | turn, ask, close, draw, go fish, tick, press (20–99) | stamp and sound; no shake; ≤ 320 ms of table time |
 | Medium | give, bonus, lay, reveal, reflect, block, steal, stun (1–29) | flights, stamp, sound; shake ≤ 1 px |
-| Heavy | shark, mantis, whale, pool empty, the last lay (≈ 1) | hit-stop 60–80 ms; trauma 0.4–0.6; one impact frame; the signature cue |
+| Heavy | shark, mantis, whale, pool empty, the last set (≈ 1) | hit-stop 60–80 ms; trauma 0.4–0.6; one impact frame; the signature cue |
 | Ceremony | game start, game end (1) | up to 3 s, never blocking input |
 
 - **Hit-stop.** Table-lane animations pause for 60–80 ms at impact; audio does not
@@ -730,11 +824,11 @@ the pulse of the last act.
 ### 4.4 Input under the clock
 
 - **Phone.**
-  - Asking is tap group → tap name. While it is open the ask sheet replaces the
-    pond, so it always sits between the strip and the dock. On short screens it
+  - Asking is tap group → tap name. While it is open, the ask sheet replaces the
+    pond. It is a **mid-screen** sheet, not a thumb-zone one: at 375×548 it spans
+    y 142–313, all above the bottom 45 % (y ≥ 301). Asks are untimed, so reach
+    matters less than keeping the hand in view for a re-pick. On short screens it
     uses three compact columns (`mock-phone-ask-sheet-375x548.png`).
-  - Its top row reaches above the bottom 45 %. That is acceptable because asks
-    are untimed.
   - Timed actions live on the plank, entirely in the bottom 45 %, on targets
     ≥ 44 px. Plank buttons are 56 px.
 - **The sheet carries the facts an ask depends on.**
@@ -769,8 +863,10 @@ the pulse of the last act.
 
   After 15 s idle, it knocks once more (`meta.nudge`).
 - **Someone else's turn:** the totem's travel and their signature.
-- **How close is the end:** in act 1, the pool plaque; in act 2, the gate and its
-  number, *"3 încercări până se închide balta"*.
+- **How close is the end:** the tally on the basin rim, always in view and
+  labelled *"încă 9 seturi"* — distinct from the pool's *"11 în baltă"*, which
+  counts cards — and *"ultimul set"* at 1. In a stall, the gate and its number:
+  *"3 încercări până se închide balta"*.
 
 ### 4.6 Connection feel
 
@@ -791,7 +887,7 @@ Palette and tokens; Vollkorn for display text and Source Serif 4 for text **and
 all numerals** (A26); the nineteen carvings and their seals; category by shape;
 notched geometry; the totem.
 
-### 5.2 The one-screen table — mocked, asserted
+### 5.2 The one-screen table — mocked, asserted, hit-tested
 
 `docs/plan-evidence/mock/` renders every frame from the client's **real** card
 art, seals, totem, hand fan, notch clock, fonts and tokens. `shoot.cjs` asserts
@@ -800,18 +896,28 @@ that:
 - the top bar sits at the top edge;
 - strip, dock, hand and plank are inside the viewport;
 - the ask sheet lies between the strip and the dock;
-- there is no sideways scroll, and on desktop no page scroll.
+- there is no sideways scroll, and on desktop no page scroll;
+- **nothing is covered.** Boxes cannot see one element drawn over another, so it
+  hit-tests with `elementFromPoint`. The centre of every opponent chip, desktop
+  post, sheet row and plank button, and the index corner of every hand group,
+  must land on that element. Every post must sit inside the table, and every hand
+  group inside its panel.
 
-**All ten layout frames pass;** the chip sheet is a reference, not a layout.
+**All ten layout frames pass;** the chip sheet is a reference, not a layout. The
+hit-tests catch v3's 1024×768 frame, whose fifth post (x 695–845) ran past the
+table's edge (712) and under the log.
 
 | Frame | Proves |
 |---|---|
-| `mock-phone-your-turn-390x664` / `-360x640` / `-375x548` | the whole table at the iOS Safari, Android Chrome and iPhone SE heights |
+| `mock-phone-your-turn-390x664` / `-360x640` / `-375x548` | the whole table at the iOS Safari, Android Chrome and iPhone SE heights, with the tally under the basin |
 | `mock-phone-ask-sheet-390x664` / `-375x548` | the sheet in the pond's row, with full names, protection and power pips |
 | `mock-phone-answer-390x664` / `-375x548` | the answer plank: equal buttons, clock, card |
-| `mock-phone-dry-pond-390x664` | the neutral dry go-fish and the gate |
-| `mock-desktop-1280x800` / `-1024x768` | the pond table |
+| `mock-phone-dry-pond-390x664` | the neutral dry go-fish, the tally at its last set, and the stall gate |
+| `mock-desktop-1280x800` / `-1024x768` | the pond table, with the log beside it or folded into a drawer |
 | `mock-chip-states` | the chip in eight states, including the real worst cases |
+
+Every mock shows a legal moment: the ticker and log never show a stunned player
+asking.
 
 **Phone anatomy:**
 
@@ -843,19 +949,21 @@ that:
 
 - Five opponent posts (150 px, fixed) stand on an arc along the top of a carved
   table, the outer ones lower.
-- The pond sits at the table's centre, as the flight stage.
+- The pond sits at the table's centre, as the flight stage, with the tally on its
+  rim.
 - Your post and hand run along the bottom, on paper, with 132×198 cards.
 - The log is a 280 px tally board on the right: marks, seals, the last three
   lines at full ink.
 
-The same layout fits at 1024×768. Between 600 and 1024 px the table scales and
-the log becomes a drawer.
+**Below 1100 px the log folds into a drawer** behind a tab on the right edge, and
+the table takes the width (`mock-desktop-1024x768.png`). Five posts need about
+800 px; at 1024 px with the log open, the table has 696.
 
 ### 5.3 The hand
 
 - **Sort** by category (powers, normal, eggs), then rank.
   - Duplicates **group**, with a step of 25 % of the card's width inside a group.
-    That keeps the index strip clear.
+    That keeps the index strip clear, and the hit-test proves it.
   - The step between groups is computed from the width available, up to 60 %.
   - A ×N badge marks duplicates.
 - **Corner index.** The seal is already carved into each card's top-left corner.
@@ -873,8 +981,8 @@ the log becomes a drawer.
   - A wood grain tile that replaces the stripes.
   - A water background of carved waves (≤ 10 KB).
   - The mocks use feTurbulence stand-ins for all three.
-- **Light follows the acts**: `--apa` steps darker at half the pool and again when
-  it empties — flat steps, no gradients.
+- **Light follows the tally**: `--apa` steps darker at 12, 6 and 1 sets still
+  possible — flat steps, no gradients.
 - **Ink edges, baked in vector.** `scripts/bake-ink.mjs` jitters vertices along
   their normals with seeded noise (±1–2 units) and adds ink pools at junctions.
   - It is deterministic, one seed per asset, and never rank-derived for backs.
@@ -890,10 +998,10 @@ Stepped SVG sequences, 3–4 frames each, ≤ 2 KB each, reviewed in the Codex:
 | Effect | Used for |
 |---|---|
 | ink burst | the stamp |
-| wood chips | splinter |
+| wood chips | splinter; a notch knocked from the rim |
 | water ring and splash | go fish |
 | dust puff | dry go fish |
-| gate notch and creak | the last act |
+| gate notch and creak | a stall |
 | speed grooves | flight smear |
 | shell clamp | Tortoise |
 | bell stamp | Jellyfish |
@@ -915,12 +1023,11 @@ lines and arrow-chips. Identity is carried by shape and sound, never by colour.
   frames, rises to the pond's centre with its seal and motif, holds 400 ms, and
   presses flat. About 1.3 s, never blocking.
 - **The Mantis strike**: hit-stop, an impact frame, splinters; the crack stays.
-- **The Shark's interception**: cards turn mid-flight; the water rushes.
+- **The Shark's interception**: cards turn mid-flight; the water churns.
 - **The Whale**: twelve backs spiral at the pond's centre, then the redeal.
-- **The pool empties**: the stack drains into the basin, the light steps to night,
-  and the gate appears.
-- **The last lay** (under §11.2): the set presses flat, one held beat, the gate
-  doors close, and the podium follows. The winners' posts rise, ties are equal
+- **The last set**: when the tally reaches 1 its notch is inked and the pulse
+  quickens. The lay that takes it presses flat, one held beat follows, and the
+  gate doors close. The podium follows: the winners' posts rise, ties are equal
   totems, and the pips count up.
 
 ### 5.8 Screens and chrome
@@ -1008,11 +1115,17 @@ extended in M1 to `choreography.ts`, `cues.ts` and the haptics map.
   - two face-down power sets of different ranks, on paths that open no
     rank-dependent window;
   - a clownfish bound to different powers, in Ascuns;
-  - different hands behind the same public actions.
+  - different hands behind the same public actions;
+  - **the endgame pair** of `endcheck.ts`: two face-down 2 + 2 power sets that
+    are Squid and Squid in one history, Squid and Whale in the other. A check
+    that read the true ranks would end the second game at once and let the first
+    play on.
 
   It asserts:
   - identical beats, durations, classes, cues and haptics for every non-owner;
-  - identical audible output for every viewer, owners included, in default mode.
+  - identical audible output for every viewer, owners included, in default mode;
+  - an identical end: the same `sets.possible` after every action, and the game
+    ending, or not, at the same `seq`.
 - **Test 2 — structural erasure.** Pairs whose public records differ *only* by a
   structural window that opens and closes without a declaration. Examples: a
   Shark held (a `TURN_END` window, declined) vs not; the next player holding an
@@ -1021,10 +1134,14 @@ extended in M1 to `choreography.ts`, `cues.ts` and the haptics map.
   It asserts that the audible output — cue ids, parameters and order — is
   identical, with times shifted only by the window's pause. This is what catches
   a close cue that goes missing when a structural window follows.
+- **Test 3 — the end check is safe.** Over seeded bot games: `sets.possible` is
+  never below the true count, and no set is ever laid after it reaches 0 (both 0
+  in 2,400 games today, `ending.ts`).
 
 **Guards.**
 
 - The client imports only `PublicEvent`.
+- The end check's only input is the spectator view of the laid sets.
 - A lint rule rejects rank-named dynamic imports and bank keys.
 - `cuesheet.ts` is checked against §3.7.
 
@@ -1038,6 +1155,10 @@ What sound cannot hide, the plan does not claim to hide:
 - **The rules-tell test** enumerates the five windows and is marked
   *known-failing* until §11.1 is decided.
 
+The end of the game is **not** one of these tells. v3's end rule read the true
+ranks, and its timing would have revealed face-down sets, Squid included; v4's
+reads only the public record (§11.2, test 1).
+
 ---
 
 ## 7. Tooling — so one person can tune a six-player game
@@ -1049,8 +1170,8 @@ population in the browser, feeding seat 0's redacted record into the real store.
 You play or watch seat 0 at 0.25–4× speed, with pause and step.
 
 - The engine's random bots are one population.
-- The memory bots from `membot.ts` are the other; they make realistic endings and
-  a dry act.
+- The memory bots from `membot.ts` are the other. They learn only from the public
+  record, and they produce realistic endings.
 
 ≈ 1.5 days.
 
@@ -1062,8 +1183,8 @@ Loaded from a menu:
 - a mantis strike;
 - a whale between full hands;
 - a pool at one card;
-- a dry pool with the gate at 2N − 2;
-- the last possible lay;
+- a tally at 1 (the last set);
+- a stall, with the gate at 2N − 2;
 - a ten-card hand;
 - six 24-character names.
 
@@ -1071,32 +1192,41 @@ Loaded from a menu:
 
 `?lab=audio`:
 
-- every cue with its variations;
+- every cue with its variations, in both profiles, before and after mastering;
 - recipe parameters on sliders;
 - bus meters, the activity envelope and the voice count;
 - an event → cue trace;
-- short-term loudness;
+- short-term loudness and the anchor;
+- an ABX pair player for the confusability check's closest pairs;
 - the profile switch.
 
 It grows out of the prototype (`docs/plan-evidence/audio/`).
 
 ### 7.4 Automated checks
 
-- **Layout.** `mock/shoot.cjs`'s assertions, pointed at the product: the phone
-  frames at 360×640, 390×664 and 375×548, and the desktop frames at 1280×800 and
-  1024×768, each with three and six players in every state.
-- **Offline audio.** The prototype's harness (`audio/run.cjs`) renders every cue
-  and a three-minute human-paced scene per profile, and exits non-zero on any of:
-  - a cue other than a seat cue striking plank A, B or C (§3.1);
-  - a speaker variant whose energy after 250 ms is less than 12 dB under its
-    first 250 ms, measured without the safety fade (§3.4);
-  - integrated loudness more than 2 LU off target;
-  - true peak above −1 dBTP, in the scene or the worst six-cue pile-up;
-  - any sample within 0.5 dB of the soft clip.
+- **Layout.** `mock/shoot.cjs`'s assertions and hit-tests, pointed at the product:
+  the phone frames at 360×640, 390×664 and 375×548, and the desktop frames at
+  1280×800 and 1024×768, each with three and six players in every state.
+- **Audio.** The prototype's harness (`audio/run.cjs`) renders every cue and a
+  three-minute human-paced scene per profile, and calibrates program gain on the
+  anchor alone. It then exits non-zero on any of eight checks, all measured at
+  the chain's output:
 
-  All pass today. From M1 it runs against the product's cue sheet and mixer.
+  | Check | Rule |
+  |---|---|
+  | Plank grammar | no cue but the seat cues strikes plank A, B or C |
+  | Confusability | no cue shares a seat signature's rhythm, or another event's rhythm at the same moment, without a timbre step at least as large as the step between two seat planks |
+  | Echo budget | every speaker variant keeps its energy after 250 ms at least 12 dB under its first 250 ms |
+  | Peaks | true peak ≤ −1 dBTP in the scene and the six-cue pile-up; the soft clip never engages |
+  | Headroom | at the anchor level, the limiter is above 1 dB of reduction for under 1 % of the time |
+  | Ambience | the bed sits 12–20 LU under the anchor |
+  | The clock | every Clock cue sounds at least 10 LU over the bed |
+  | Balance | the chain moves no cue more than 1 dB from its cue-sheet level |
+
+  All pass today. From M1 it runs against the product's cue sheet, mastering and
+  `dynamics.ts`.
 - **Unit.**
-  - Test 1 and test 2 (§6.5).
+  - Tests 1, 2 and 3 (§6.5).
   - The rules-tell test.
   - The cue-sheet rules (§3.7).
   - The RNG wire test (§6.3).
@@ -1122,14 +1252,14 @@ the engineering path.
 | | Scope | Eng. days | Exit |
 |---|---|---|---|
 | **M0 Stop the bleeding** | Redaction (§6.1): 1.5 d. One answer shape (§6.2): 0.5 d. The CSPRNG deal, whale entropy and UUIDs, with test re-baselining (§6.3): 1.75 d. Action binding (§6.4): 1 d. Both audio tells and the view-driven close: 0.5 d. `seq` and the late-game fix: 0.5 d. `endPressure` in the view: 0.25 d. Auto-rejoin: 0.25 d. Log scroll, overflow, sixth post, zoom, numerals, copy: 0.5 d. `deadlineAt` and `serverNow`: 0.75 d. Client Vitest and test 1 at the event and view layer: 1 d. | 7.5–9.5 | test 1 passes at the event and view layer; the RNG wire test passes; a 1,000-event game still presents; a 5 s cut recovers without reload |
-| **M1 Foundations** | The audio engine on the §3.3 chain, with current cues migrated; the timeline (§4.2); the bot table with both populations; fixtures; the lab; the offline audio harness; the Playwright checks; the ink-bake prototype on two cards | 8–10 | no regressions; six bots at 4× for 30 min with no drift; loudness per profile and test 2 in CI |
+| **M1 Foundations** | The audio engine: stems, the §3.3 chain in an AudioWorklet, per-voice mastering, current cues migrated; the timeline (§4.2); the bot table with both populations; fixtures; the lab; the audio harness's eight checks; the Playwright checks with hit-tests; the ink-bake prototype on two cards | 8.5–10.5 | no regressions; six bots at 4× for 30 min with no drift; the eight audio checks and test 2 in CI |
 | **M2 The ask** | The phone table and the desktop table (§5.2); the hand and the ask sheet; drag and keyboard; flights, arrow-chip, masking, totem; beats 0–4c with their overlaps; seat signatures; the answer window's cues and the server clock; haptic tiers; the call rig's first run | 10–13 | layout checks green; answer to rest ≤ 0.9 s p95 in the bot table; playtest 1 |
-| **M3 Powers and rules** | The motifs with speaker variants; every power cue; the four signature moments; declares without selects; optimistic declare. If accepted: the single answer plank (2 d), folding `TURN_START` (1 d), ending when the score is final (1 d); the gate either way (0.5 d). | 11–14 (+3 art) | every power has a public, rank-correct audiovisual in both modes; test 1 covers all nine; playtest 2 |
-| **M4 World and ceremony** | Texture and ink; the two-act arc and the gate's sound; lobby and waiting-room audio; the tulnic and the ceremonies; the last-lay finale; the tally; marks; icons; the Codex; recorded banks | 8–10 (+4 audio, +4 art) | art review in the Codex; the ambience opt-out count; loudness re-verified with the recordings |
-| **M5 Tune and gate** | Performance, accessibility, the mix pass (the blindfold, mute, call, desk and phone-speaker tests), playtest 3 and its fixes | 5–7 | every §0.2 item |
+| **M3 Powers and rules** | The motifs with speaker variants; every power cue; the four signature moments; declares without selects; optimistic declare. If accepted: the single answer plank (2 d), folding `TURN_START` (1 d), the public end check with `sets.possible` and test 3 (1.5 d); the stall gate either way (0.5 d). | 11.5–14.5 (+3 art) | every power has a public, rank-correct audiovisual in both modes; test 1 covers all nine and the endgame pair; playtest 2 |
+| **M4 World and ceremony** | Texture and ink; the tally, the light and the last-set cue; the pond's two textures; lobby and waiting-room audio; the tulnic and the ceremonies; the finale; the tally board; marks; icons; the Codex; recorded banks | 8–10 (+4 audio, +4 art) | art review in the Codex; the ambience opt-out count; the eight checks re-run with the recordings |
+| **M5 Tune and gate** | Performance, accessibility, the mix pass (the blindfold, mute, call, desk and phone-speaker tests; the anchors set), playtest 3 and its fixes | 5–7 | every §0.2 item |
 
-**Totals:** 50–64 engineering days — M0 7.5–9.5, M1 8–10, M2 10–13, M3 11–14,
-M4 8–10, M5 5–7 — plus ≈ 6 days of audio production and ≈ 7 of art.
+**Totals:** 51–65 engineering days — M0 7.5–9.5, M1 8.5–10.5, M2 10–13,
+M3 11.5–14.5, M4 8–10, M5 5–7 — plus ≈ 6 days of audio production and ≈ 7 of art.
 
 ### 8.2 Critical path
 
@@ -1138,10 +1268,10 @@ land as swaps under existing ids.
 
 ### 8.3 Cut lines
 
-- **Four weeks (~21 days).** M0; the minimal M1 (the chain, profiles, voices,
-  live wood, paper and water, the timeline); and M2's core (the phone table, the
-  hand, the ask sheet, give and draw flights, wet and dry go fish, the server
-  clock). It delivers the secrecy, phone and core-loop gains.
+- **Four weeks (~21 days).** M0; the minimal M1 (the chain, profiles, mastering,
+  voices, live wood, table top, paper and water, the timeline); and M2's core
+  (the phone table, the hand, the ask sheet, give and draw flights, wet and dry go
+  fish, the server clock). It delivers the secrecy, phone and core-loop gains.
 - **Eight weeks:** plus the rest of M2, and M3 with the end rule.
 - **Full:** everything.
 
@@ -1172,7 +1302,7 @@ because the builds differ, and pooled (n = 15), as counts.**
 | Whose-turn confusions | observer tally | 0 in round 3 |
 | Missed windows | timed-out eligible windows and the total (`?metrics=1`) | report both; investigate any miss |
 | Answer time | median and p90 (`?metrics=1`) | sets *T* (§3.10) |
-| Time from the score becoming final to the podium | `?metrics=1` | ≤ one beat under §11.2 |
+| Time from the tally reaching 0 to the podium | `?metrics=1` | ≤ one beat under §11.2 |
 | Muted by the end | count | ≤ 2 of 15 |
 | Ambience turned off | count | ≥ 5 of 15 → ships off |
 | "I always knew what just happened" (1–7) | median | ≥ 6 |
@@ -1185,19 +1315,24 @@ because the builds differ, and pooled (n = 15), as counts.**
 
 - **Blindfold.** Screen off, ten turns. The listener names the seat (by
   signature) and the outcome type (ask, give, wet or dry go fish, lay, power,
-  stun). Target: 8 of 10 on each; fallback per §3.1.
+  stun), and tells the bonus, the asked roll and the clock clicks from the seat
+  knocks. Target: 8 of 10 on each; fallback per §3.1.
 - **Mute.** A full game with sound off; no missed window attributable to missing
   audio.
 - **Call.** The §7.5 rig, with noise suppression on and off:
   - no private-tier cue in default mode;
   - copies and smear per cue family;
-  - the game's short-term loudness against the recorded speech level;
+  - **the anchors.** The anchor cue's loudness against the call's speech, played
+    on the same device. The final speaker and headphones anchors are set here, so
+    that the table sits under the talk;
   - experiment E1's decision.
 - **Desk.** An ERM and an LRA phone on a wooden desk beside a laptop microphone.
   The quietest perceptible private pattern the microphone cannot detect is chosen
   per motor class; a class with none keeps private haptics off.
-- **Phone speaker.** Every cue audible and undistorted in the speaker profile at
-  50 % volume, in quiet and in ~60 dBA café noise.
+- **Phone speaker.** On three phones: every cue audible and undistorted in the
+  speaker profile at 50 % volume in quiet, and at full volume in ~60 dBA café
+  noise. The mastering's crunch is judged here: if a cue reads as distorted, its
+  cap rises and the anchor falls to match.
 
 ---
 
@@ -1208,13 +1343,14 @@ because the builds differ, and pooled (n = 15), as counts.**
 | R1 iOS Safari audio quirks | H | H | a device matrix per milestone; unlock on first gesture; `audioSession`; the silent-switch hint |
 | R2 Bluetooth latency | M | M | `outputLatency` compensation; the A/V offset |
 | R3 Flights drop frames on low-end Android | M | H | transform and opacity only; at most 12 in flight; flutter dropped first |
-| R4 A future change re-leaks a secret | M | H | tests 1 and 2, the RNG wire test, `PublicEvent`-only imports, lint |
-| R5 The call smears the mix | H | M | the echo budget met per cue; the speaker profile; E1; the rig from M2 |
+| R4 A future change re-leaks a secret | M | H | tests 1–3, the RNG wire test, `PublicEvent`-only imports, lint |
+| R5 The call smears the mix | H | M | the echo budget met per cue and measured at the output; the speaker profile; E1; the rig from M2 |
 | R6 Folk or liturgical material misreads | M | M | material, not liturgy; the tulnic calls; a consultant; a real player |
 | R7 The vector ink bake reads as fake | M | M | the two-card prototype in M1; the raster fallback |
-| R8 The rules decisions are refused | M | M | structural tells stay silent in audio and neutral in text; without §11.2 the gate is the countdown; both are documented |
+| R8 The rules decisions are refused | M | M | structural tells stay silent in audio and neutral in text; without §11.2 the stall gate is the countdown; both are documented |
 | R9 Seat signatures don't carry "who" by ear | M | L | the M2 blindfold test and the §3.1 fallback |
-| R10 Scope creep | H | M | the vertical slice first; the cut lines |
+| R10 Speaker mastering sounds crunchy | M | M | residuals are measured per cue; the three-phone speaker test; a gentler cap costs about 1 dB of anchor |
+| R11 Scope creep | H | M | the vertical slice first; the cut lines |
 
 ---
 
@@ -1234,31 +1370,44 @@ because the builds differ, and pooled (n = 15), as counts.**
 *Recommended:* (a) and (b) in M3; (c) as a playtest A/B against accepting the
 group-level tell.
 
-**11.2 End the game when the score is final.** Whenever an action resolves with
-no window open and the pool empty, the server asks one question. Could any rank
-still reach a set from the cards left in hands — at least two real cards, at most
-two eggs, as if every card could be gathered into one hand — or could four eggs
-still make an eggs set? If not, no set can ever be laid or destroyed again, so
-neither the score nor the power-set tie-break can move. The game ends at once with
+**11.2 End the game when no set can still be laid, judged from the public
+record.** Whenever an action resolves with no window open, the server computes
+`sets.possible` (§3.9) from the spectator view of the laid sets alone. That is
+the most sets any assignment of ranks to the face-down sets could still yield,
+if every card not yet laid — in hands or in the pool — could be gathered into one
+hand. When it is 0, no set can ever be laid again, so neither the score nor the
+power-set tie-break can move. The game ends at once with
 `GAME_ENDED { reason: 'decided' }`.
 
-- **Only at rest.** While a `SET_COMPLETED` window is open, a Mantis can still
-  destroy the set just laid. A check made mid-window fired too early 70 times in
-  2,400 bot games; the at-rest check never did (`ending.ts`, `membot.ts`).
-- **The last lay is the finale.** With the pool empty the answer can only change
-  when a lay resolves, so a decided game ends on its last lay.
-- **What it removes:** a median 6–12 dead asks in 98–99 % of skilled games (§1.1,
+- **Why the public record, not the server's knowledge.** v3's check read the true
+  ranks. `endcheck.ts` builds two endgames with byte-identical public records:
+  two face-down 2 + 2 power sets, Squid and Squid in one, Squid and Whale in the
+  other. A check reading the true ranks lets the first play on and ends the
+  second at once, which tells the table what the hidden sets are. In Mode Ascuns
+  a face-down set's rank is hidden, and a Squid set never flips (RULES §4). The
+  public check gives both the same answer.
+- **What secrecy costs.** In Mode Ascuns the public check fires in 95–97 % of
+  skilled games, against 97–99 % for the omniscient one; in Mode Deschis they are
+  identical.
+- **Why at rest.** A Mantis cannot change a score — a destroyed set still counts
+  (RULES §7) — so the check could run mid-window without error. It waits for rest
+  so that the last lay's windows and choreography finish. (v3 gave the wrong
+  reason for this.)
+- **The last lay is the finale,** and it is always announced: the count passes
+  through 1 in every decided game (§3.9).
+- **What it removes:** a median 6–12 dead asks in 95–97 % of skilled games (§1.1,
   A18).
-- **What remains:** a game in which a set is still possible in principle runs to
-  the 2N rule, as today, with the gate as its countdown.
-- **Strategy:** unchanged; once the check fires, nothing a player does can matter.
-- **Cost:** about a day in M3.
+- **What remains:** a game in which a set is still possible as far as the record
+  shows runs to the 2N rule, as today, with the stall gate as its countdown.
+- **Strategy:** unchanged; once the count is 0, nothing a player does can matter.
+- **Cost:** about 1.5 days in M3, with test 3.
 
-*Recommended.* Without it, the gate (§3.9) is the public countdown to the 2N rule.
+*Recommended.* Without it, the tally still counts down in public, and the stall
+gate counts the misses to the 2N rule.
 
 **11.3 Ambience default** — on, playtest-gated (§3.9).
 
-**11.4 Phone asking** — the thumb-zone sheet on phones; drag on desktop.
+**11.4 Phone asking** — the mid-screen sheet on phones; drag on desktop.
 
 **11.5 The uniform close** — replaces the 700 ms hold (§12).
 
@@ -1275,13 +1424,13 @@ neither the score nor the power-set tie-break can move. The game ends at once wi
 | § | DESIGN.md says | This plan says | Why |
 |---|---|---|---|
 | 2 | Vollkorn for display, including numerals on cards | Source Serif 4 lining figures for every numeral | Vollkorn's "1" reads as "I" (A26) |
-| 5.4 | tap a post, then a card, then confirm | phone: tap a group, then a name, in the thumb zone; desktop: drag or tap-tap | the targets must be under the thumb |
+| 5.4 | tap a post, then a card, then confirm | phone: tap a group, then a name, on a mid-screen sheet; desktop: drag or tap-tap | fewer steps; the hand stays in view |
 | 6.2 | nothing may exceed `--dur-heavy` except game over | signature moments may run to 1.4 s, never blocking | rare moments need anticipation, turn and hold |
 | 6.5 | the authoritative view updates immediately | logic and input do; arriving pixels are masked for ≤ 800 ms; transitions come from view diffs | otherwise cards appear before they fly, and event shapes could steer presentation |
-| 7.1–7.2 | the toacă as the UI material; ambience off; one sprite | the material, not the liturgy; the tulnic calls; a two-act ambience, on and playtest-gated, generated live | cultural care; the pond is the world's voice; budgets close |
+| 7.1–7.2 | the toacă as the UI material; ambience off; one sprite | the material, not the liturgy; the tulnic calls; ambience with two textures, on and playtest-gated, generated live | cultural care; the pond is the world's voice; budgets close |
 | 7.3 | `SET_LAID` identical for power and normal | identical for every *rank*; the category may differ | `isPowerSet` is already public |
 | 7.3–7.4 | eligible players hear a distinct window figure and ticks | only the answer window is voiced, identically everywhere; its close follows its leaving the view | a distinct sound on one client is a tell; a missing close would be one too |
-| 7.5 | duck ambience −6 dB under table cues; cap total output | a slow activity envelope; the chain of §3.3, proven in the prototype | per-cue ducking pumps; the calibration gain must precede the limiter |
+| 7.5 | duck ambience −6 dB under table cues; cap total output | no ducking and no bus compression: program gain set by an anchor cue, every cue mastered per profile, a limiter that meets only pile-ups | per-cue ducking pumps; v3's native compressors lifted the bed above the knocks |
 | 8.2 | haptics as the eligibility signal | Android only; the private pattern is set by the desk test | iOS has no Vibration API; a buzzing phone is audible |
 | 9.4 | hold 700 ms after every window closes | the same 220 ms close for every window; durations leak-tested | the hold hides nothing that uniform, pure choreography does not, and it would add half a second to the most frequent transition |
 
@@ -1291,20 +1440,21 @@ neither the score nor the power-set tie-break can move. The game ends at once wi
 
 | Event | Motion | Sound (default) | Haptic | Class |
 |---|---|---|---|---|
-| `GAME_STARTED` | the gate opens; the posts carve in | `mus.start` | — | ceremony |
+| `GAME_STARTED` | the gate opens; the posts carve in; the tally is carved on the rim | `mus.start` | — | ceremony |
 | `TURN_STARTED` | the totem travels | `table.turn` (signature) / `table.turn.you` | 16 (you) | light |
 | `TURN_SKIPPED_STUNNED` | the totem passes over the post | `table.skipped` | 40 (you) | light |
-| `BONUS_TURN` | the totem stamps in place | `table.bonus` | — | light |
+| `BONUS_TURN` | the totem settles back in place | `table.bonus` (the asker's signature, softer) | — | light |
 | `HAND_REFILLED` | *n* cards rise from the pool | `table.draw` × *n* | 6 each (you) | light |
 | `REQUEST_MADE` | the arrow-chip flies asker → target | `table.ask` (the target's signature) | — | light |
 | the answer window opens (view) | the plank (target); the banner (others) | none for the table — the ask's landing is the opening; `table.asked` (target) | 12·60·12 (target) | — |
-| the answer window leaves the view, whatever follows | the uniform 220 ms close | `clock.close` | — | — |
+| the target answers (local) | the plank lowers | `clock.close`, at the press | — | — |
+| the answer window leaves the view, whatever follows | the uniform 220 ms close | `clock.close` (every other client) | — | — |
 | a structural window opens or closes (view) | the plank and frame (eligible); a neutral banner (others) | **none** | private (eligible) | — |
 | `REQUEST_SUCCEEDED` | backs fly target → asker | `table.flight`, `table.give` | 30 (loser) | medium |
 | `REQUEST_FAILED`, pool > 0 | the chip dives into the pond | `table.gofish` | — | light |
-| `REQUEST_FAILED`, pool empty | the chip drops to the basin floor; the gate shuts a notch | `table.gofish.dry`; `amb.lastact` from N | — | light |
+| `REQUEST_FAILED`, pool empty | the chip drops to the basin floor | `table.gofish.dry`; the gate shuts a notch in a stall | — | light |
 | `DREW_FROM_POOL` | a card rises from the pool | `table.draw` (or `table.poolEmpty`) | 6 (you) | light / heavy |
-| `SET_LAID` | the group presses flat under the post; a pip is gouged; the gate swings open | `table.lay` / `table.lay.power` | — | medium |
+| `SET_LAID` | the group presses flat under the post; a pip is gouged; a notch is knocked from the rim | `table.lay` / `table.lay.power`; `mus.lastset` when the tally reaches 1 | — | medium |
 | `SET_DESTROYED` | the Mantis strike | `power.mantis` | 20·30·40 (owner) | heavy |
 | `POWER_GRANTED` | the collar or rosette core ignites — the same for every hidden rank | `power.granted` (the motif in Deschis) | — | medium |
 | `POWER_USED` | the reveal (Ascuns) or the flip to spent (Deschis) | `power.used.<rank>`, `power.reveal` | — | medium |
@@ -1327,17 +1477,19 @@ WAVs and spectrograms are beside it.
 |---|---|---|
 | **Wood** | live | Exciter: a 3 ms noise burst from the shared buffer, band-passed at 2.5 × f0 (Q 1). Four sine modes at f0 × 1 / 2.756 / 5.404 / 8.933, amplitudes 1 / 0.5 / 0.25 / 0.12, T60 160 / 90 / 45 / 25 ms × size (A 1.4, B 1.0, C 0.7, D 0.45). *Damping* shortens and low-passes. *Hard mallet:* a 2 ms exciter band-passed at 4 × f0. Variation: f0 ±3 %, ratios ±1 %, exciter offset. Planks A–C ring only in seat cues. |
 | **Seat signature** | live | Plank A, B or C, one knock or two 75 ms apart (the second at −2 dB). |
+| **Click** (the clock) | live | A 4 ms noise burst band-passed at 3.2 kHz (Q 1.5) over plank D damped 0.9 — no ring. The urgent tick is two clicks 40 ms apart. |
 | **Table top** | live | *Thud:* a sine falling from 125/w Hz to 60 % of that over 50 ms, with a `tanh` harmonic layer at −10 dB, over a 35 ms noise burst band-passed at 440/√w Hz (w = weight). No modes, so no ring. *Slap* (a card laid): a 12 ms paper transient at 2.2 kHz on a thud. |
 | **Paper** | live | *Slide:* noise through a band-pass swept 2.5 → 4.5 kHz (Q 1.2), 40–80 Hz amplitude grain. *Lift / flick:* a 25 ms burst, high-passed at 3 kHz. |
 | **Water** | live | *Bubble:* a sine rising ~40 % over its 40–80 ms life (large 450 Hz, small 900–1600 Hz). *Plop:* one large and two to four small bubbles in 60 ms, plus a 120 ms splash. *Drip:* one 1.8–2.6 kHz bubble. |
 | **Dry go fish** | live | One table-top thud, then three plank-D skid ticks at 70, 110 and 160 ms, falling in level (183 ms in all). |
 | **Riffle** | rendered | 30–45 clicks, each high-passed at 2.5–4 kHz, sparse–dense–sparse over 0.8 s (170 ms in the speaker variant). |
-| **Breath** | rendered, 32 kHz | *Fluier:* sine plus 2nd (−14 dB) and 3rd (−20 dB) harmonics; breath noise band-passed at f0 (Q 8) and 3 kHz; 50 ms attack with a −30-cent scoop; 5.5 Hz vibrato of ±12 cents after 150 ms. *Caval:* an octave down, breathier. *Tulnic:* harmonics 1–8 at −6 dB/octave, low-passed at 900 Hz, 200 ms attack. |
+| **Breath** | rendered, 32 kHz | *Fluier:* sine plus 2nd (−14 dB) and 3rd (−20 dB) harmonics; breath noise band-passed at f0 (Q 8) and at 3 kHz; 50 ms attack with a −30-cent scoop; 5.5 Hz vibrato of ±12 cents after 150 ms. *Caval:* an octave down, breathier, its breath band at 1.4 kHz. *Tulnic:* harmonics 1–8 at −6 dB/octave, low-passed at 900 Hz, 200 ms attack. |
 | **Strings (țambal)** | rendered, 32 kHz | Karplus–Strong in JS, three strings per course detuned ±4 cents, decay 0.996. The speaker variant is damped by hand at 180 ms. |
 | **Skin (dobă)** | live | A sine falling 95 → 52 Hz, a 500 Hz slap, a `tanh` harmonic layer at −10 dB. |
 | **Drâmbă** | rendered | A 10 %-duty pulse at 98 Hz through two swept band-pass formants, with a 6 Hz wobble. |
 | **Ink stamp** | live | A sine falling 110 → 70 Hz over 60 ms with a `tanh` harmonic layer, then a 15 ms noise peel. |
 | **Pond beds** | live | A looped noise buffer through a slowly drifting low-pass; drips from the water recipe every 3–8 s. |
+| **Mastering** | per voice | `c·tanh(x/c)`, with c lowered until peaks sit at most 12 dB (speaker) or 16 dB (headphones) over the cue's class loudness; the class normalisation then restores the loudness. |
 
 ## Appendix C — The cue bible
 
@@ -1370,18 +1522,17 @@ plank A, B or C appears only in seat cues (§3.1).
 |---|---|---|---|---|
 | `table.turn` | `TURN_STARTED`, someone else | all | the new player's signature as the totem lands, panned to their post | ≤ 200 ms |
 | `table.turn.you` | `TURN_STARTED`, you | you | your signature, then a bright plank D knock | 190 ms |
-| `table.bonus` | `BONUS_TURN` | all | two quick plank D ticks, the second higher — *again* | 130 ms |
+| `table.bonus` | `BONUS_TURN` | all | the asker's own signature again, softer, as the totem settles back — still their turn | 200 ms |
 | `table.skipped` | `TURN_SKIPPED_STUNNED` | all | the stunned seat's signature, muffled, with a drâmbă wobble | 400 ms |
 | `table.ask` | `REQUEST_MADE` | all | the arrow-chip's paper flick, then the target's signature as it lands | 200 ms |
-| `table.asked` | the answer window opens, on the target | you | two plank-D taps — knock, knock — as your plank rises | 150 ms |
-| `table.answer` | the target presses any answer | local | a small ink stamp and a plank-D tap: the answer is recorded — **identical for truth and lie** | 63 ms |
+| `table.asked` | the answer window opens, on the target | you | a quick roll of three taps on plank D — the only three-onset figure in the game | 120 ms |
 | `table.flight` | cards in flight | all | paper flutter, one per batch | 260 ms |
 | `table.give` | `REQUEST_SUCCEEDED` | all | a paper slide, then the stack lands on the table top, heavier per card | 330 ms |
 | `table.gofish` | `REQUEST_FAILED`, pool > 0 | all | the plop — one large bubble with an upward chirp, small ones, a short splash | 100–350 ms |
 | `table.gofish.dry` | `REQUEST_FAILED`, pool empty | all | a table-top thud — the dry basin floor — and a short skid of plank-D ticks; neutral | 183 ms |
 | `table.draw` | `DREW_FROM_POOL` | all | a wet paper lift; wetness follows the pool | 44–140 ms |
 | `table.refill` | `HAND_REFILLED` | all | `table.draw` × count, 90 ms apart | ≤ 360 ms |
-| `table.poolEmpty` | the last card leaves the pool | all | a drain gurgle into the hollow ring of the empty basin; act 2 begins | 1.2 s |
+| `table.poolEmpty` | the last card leaves the pool | all | a drain gurgle into the hollow ring of the empty basin; the water turns to wind | 1.2 s |
 | `table.lay` | `SET_LAID`, normal or eggs | all | three cards slapped down, each heavier, and an ink stamp; the gate creaks open if shut | 425 ms (speaker 204 ms) |
 | `table.lay.power` | `SET_LAID`, power set | all | `table.lay` with a low dobă — the same for all nine ranks | 450 ms |
 | `table.tally` | game over, each pip | all | plank D, a step up per pip | 90 ms each |
@@ -1391,16 +1542,16 @@ plank A, B or C appears only in seat cues (§3.1).
 | Cue | Trigger | Heard by | Material and recipe | Length |
 |---|---|---|---|---|
 | `mus.start` | `GAME_STARTED` | all | the tulnic calls the table — two long rising notes — and the gate opens | 2.4 s |
+| `mus.lastset` | the tally reaches 1 | all | the dobă pulse quickens under one low tulnic note — *the last set in the pond* | 1.2 s |
 | `mus.end.win` / `.tie` / `.lose` | `GAME_ENDED` | you | fluier over dobă, rising / two fluiers in thirds / a gentle falling caval — never a "fail" sting | 2.5–3 s |
-| `mus.lastlay` | the lay that makes the score final (§11.2) | all | the stamp, a held beat, the gate doors closing | 1.2 s |
 
 **The clock** (the answer window only)
 
 | Cue | Trigger | Heard by | Material and recipe | Length |
 |---|---|---|---|---|
-| `clock.tick` | each second from *T* to 3 s left | all | plank D | 60 ms |
-| `clock.tick.urgent` | every 500 ms in the last 3 s | all | plank D with a harder mallet — density, not pitch or level | 60 ms |
-| `clock.close` | `RESPONSE_PENDING` leaves the view, whatever follows | all | the plank lowered: a paper lift and a soft table-top thud | 54 ms |
+| `clock.tick` | each second from *T* to 3 s left | all | a dry click on plank D — no ring | 23 ms |
+| `clock.tick.urgent` | every 500 ms in the last 3 s | all | a double click, 40 ms apart — urgency is rhythm, not pitch or level | 62 ms |
+| `clock.close` | the answering device at its press; every other device when `RESPONSE_PENDING` leaves the view | all | the plank lowered: a paper lift and a soft table-top thud — one cue for every answer | 54 ms |
 | `clock.eligible` | a plank appears where you are eligible | private | a two-note rising fluier, +120 ms | 400 ms |
 
 **Powers**
@@ -1409,14 +1560,14 @@ plank A, B or C appears only in seat cues (§3.1).
 |---|---|---|---|---|
 | `power.granted` | `POWER_GRANTED` whose rank is not public | all | a țambal shimmer over a low swell — the same for all nine | 1.4 s (speaker 200 ms) |
 | `power.granted.<rank>` / `.mine` | Mode Deschis / your own grant in Ascuns | all / private | the rank's motif, soft | ≤ 1 s |
-| `power.used.<rank>` | `POWER_USED` | all | the rank's motif, under the effect cue | 0.9–1.2 s (speaker two notes) |
+| `power.used.<rank>` | `POWER_USED` | all | the rank's motif, under the effect cue | 0.9–1.1 s (speaker two notes) |
 | `power.reveal` | a face-down set flips on first use | all | three plank-D clacks, then an ink stamp | 400 ms |
-| `power.shark` | `SHARK_JUMP` | all | a dobă hit, a water rush, the jaw snapping shut on plank D | 427 ms (speaker: the snap at 120 ms) |
+| `power.shark` | `SHARK_JUMP` | all | the jaws snap on plank D, the body lands on the dobă 40 ms later, and the water churns | 458 ms (speaker: the churn cut short) |
 | `power.lanternfish` | `LANTERNFISH_REFLECT` | all | a țambal glint, then the asker's signature — the ask comes back | 500 ms |
 | `power.tortoise` | `TORTOISE_BLOCK` | all | the shell clamps — two table-top thuds — and the cards slap back | 450 ms |
 | `power.jellyfish` | `JELLYFISH_STUN` | all | drâmbă through a sweeping formant, then the bell stamp | 540 ms (speaker 192 ms) |
 | `power.stickleback` / `.miss` | `STICKLEBACK_STEAL` / `_WASTED` | all | a barbed scrape and a paper whip / the scrape, hollow | 280 / 180 ms |
-| `power.mantis` | `SET_DESTROYED` | all | the club lands on the table top, the shell cracks, plank D splinters | 288 ms |
+| `power.mantis` | `SET_DESTROYED` | all | the club lands on the table top, the shell cracks, plank D splinters | 288 ms (speaker 191 ms) |
 | `power.whale` | `WHALE_SHUFFLE` | all | a tulnic swell, the riffle, the redeal | 1.34 s (speaker 236 ms) |
 | `power.clownfish.bound` | `CLOWNFISH_BOUND` | private in Ascuns; all in Deschis | a peg in a slot, then the copied motif on drâmbă | 600 ms |
 | — | **Squid, in any form** | nobody | **silence** | — |
@@ -1425,10 +1576,10 @@ plank A, B or C appears only in seat cues (§3.1).
 
 | Cue | Trigger | Heard by | Material and recipe |
 |---|---|---|---|
-| `amb.water` | act 1, the pool | all | lapping, thinning as the pool drains; dry wind in act 2 |
-| `amb.life` | act 1 | all | fish jumps, reeds, distant birds |
-| `amb.lastact` | act 2, `endPressure.misses` ≥ N | all | a low dobă pulse, quickening from 2N − 2; stops when the gate swings open |
-| `amb.gate` | each dry miss / each reset | all | the gate shuts a notch (a low creak) / swings open (a longer creak) |
+| `amb.water` | while the pool lasts | all | lapping, thinning as the pool drains; dry wind once it is empty |
+| `amb.life` | while the pool lasts | all | fish jumps, reeds, distant birds |
+| `amb.lastact` | the tally at 3 or fewer | all | a low dobă pulse; it quickens at 1 |
+| `amb.gate` | a stall: each miss from N / each reset | all | the gate shuts a notch (a low creak) / swings open (a longer creak) |
 | `amb.lobby` | lobby and waiting room | local | the full pond, louder |
 | `meta.join` / `.leave` | a player joins / leaves or drops | all | their signature / the same, damped |
 | `meta.reconnected` | you rejoin | you | a soft ink stamp |
@@ -1436,44 +1587,44 @@ plank A, B or C appears only in seat cues (§3.1).
 
 ## Appendix D — The cue sheet
 
-Levels are dB relative to the bus, after class normalisation (§3.3). **Prio** runs
-from 0 to 5. **Var:** *live* means continuous seeded variation. **Short** is the
-backlog variant. **Env:** *src* feeds the activity envelope; *ex* makes the
-ambience fade under the cue. **Plays** are the §1.1 ranges across both bot
-populations. `cuesheet.ts` holds this data, and a test enforces §3.7 on it.
+Levels are dB relative to the bus, after class normalisation and mastering
+(§3.3). **Prio** runs from 0 to 5. **Var:** *live* means continuous seeded
+variation. **Short** is the backlog variant. **Env:** *src* feeds the activity
+envelope; *ex* makes the ambience fade under the cue. **Plays** are the §1.1
+ranges across both bot populations. `cuesheet.ts` holds this data, and a test
+enforces §3.7 on it.
 
 | Cue | Bus | Plays | Level | Prio | Inst. | Cooldown | Var. | Max len | Short | Env |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `ui.press` / `.soft` | UI | per input | 0 / −4 | 1 | 2 | 40 ms | live | 60 ms | same | — |
 | `ui.select` / `ui.target` | UI | 12–26 | −2 | 1 | 2 | 60 ms | live | 90 ms | same | — |
 | `ui.error` / `.toggle` / `.copy` | UI | rare | 0 / −3 | 1–2 | 1 | 100–250 ms | 2–3 | 120 ms | same | — |
-| `table.answer` | UI | 12–26 | −4 | 2 | 1 | 200 ms | live | 70 ms | same | — |
 | `clock.eligible` (private) | UI | per window | 0 | 4 | 1 | — | 1 | 400 ms | — | — |
 | `table.turn` | Table | 78–99 | −6 | 2 | 1 | 150 ms | live | 200 ms | same | src |
-| `table.ask` | Table | 74–95 | −4 | 2 | 1 | 150 ms | live | 200 ms | knock | src |
+| `table.ask` | Table | 75–95 | −4 | 2 | 1 | 150 ms | live | 200 ms | knock | src |
 | `table.turn.you` | Table | 13–27 | −2 | 3 | 1 | 300 ms | live | 190 ms | signature | src |
-| `table.bonus` | Table | 21–28 | −4 | 2 | 1 | 200 ms | live | 130 ms | one tick | src |
-| `table.asked` | Table | 12–26 | −2 | 3 | 1 | — | live | 160 ms | one tap | — |
+| `table.bonus` | Table | 21–28 | −4 | 2 | 1 | 200 ms | live | 200 ms | one knock | src |
+| `table.asked` | Table | 12–26 | −2 | 3 | 1 | — | live | 120 ms | one tap | — |
 | `table.flight` | Table | 22–29 | −10 | 1 | 2 | 100 ms | live | 260 ms | dropped | — |
 | `table.give` | Table | 22–29 | −2 | 3 | 1 | — | live | 340 ms | landing | src |
 | `table.gofish` | Table | 24–45 | 0 | 3 | 1 | — | live | 350 ms | plop | src |
-| `table.gofish.dry` | Table | 7–48 | −2 | 3 | 1 | — | live | 190 ms | thud | src |
+| `table.gofish.dry` | Table | 8–48 | −2 | 3 | 1 | — | live | 190 ms | thud | src |
 | `table.draw` | Table | 23–45 | −6 | 2 | 3 | 60 ms | live | 140 ms | drip | src |
 | `table.poolEmpty` | Table | 1 | +2 | 4 | 1 | — | 1 | 1.2 s | gurgle | src |
 | `table.lay` / `.lay.power` | Table | 6–9 each | 0 | 3 | 1 | — | 4 / 3 | 450 ms | stamp | src |
 | `table.tally` | Table | per pip | −6 | 2 | 2 | 60 ms | live | 90 ms | same | — |
-| `clock.close` | Clock | 73–94 | −2 | 5 | 1 | — | live | 60 ms | same | — |
+| `clock.close` | Clock | 74–94 | −2 | 5 | 1 | — | live | 60 ms | same | — |
 | `clock.tick` / `.urgent` | Clock | set by *T* | −2 / 0 | 5 | 1 | 900 / 400 ms | live | 60 ms | same | — |
 | `power.granted` | Power | 5–8 | −2 | 4 | 1 | — | 3 | 1.4 s | 250 ms | src |
 | `power.granted.<rank>` | Power | 5–8 | −4 | 4 | 1 | — | 1 each | 1 s | 2 notes | src |
 | `power.used.<rank>` | Power | 4–6 | 0 | 4 | 1 | — | 1–2 each | 1.2 s | 2 notes | src |
-| `power.reveal` | Power | ≤ 6 | 0 | 4 | 1 | — | 2 | 400 ms | clacks | src |
-| `power.shark` / `.mantis` | Power | ≈ 1 | +2 | 4 | 1 | — | 2 | 430 ms | hit | src |
+| `power.reveal` | Power | ≤ 6 | 0 | 4 | 1 | — | 3 | 400 ms | clacks | src |
+| `power.shark` / `.mantis` | Power | ≈ 1 | 0 / −2 | 4 | 1 | — | 2 | 460 ms | bite / club | src |
 | `power.lanternfish` / `.tortoise` / `.jellyfish` / `.stickleback` | Power | ≤ 1 | 0 | 4 | 1 | — | 2 | 280–700 ms | first hit | src |
 | `power.whale` | Power | ≈ 1 | +1 | 4 | 1 | — | 1 | 1.4 s | 400 ms | src |
 | `power.clownfish.bound` | Power | ≈ 1 | −4 | 3 | 1 | — | 1 | 600 ms | peg | — |
-| `mus.start` / `.end.*` / `.lastlay` | Music | 1 | 0 | 5 | 1 | — | 1 each | 3 s | — | ex |
-| `amb.gate` | Ambience | 7–48 | −20 | 1 | 1 | 200 ms | live | 400 ms | — | — |
+| `mus.start` / `.lastset` / `.end.*` | Music | 1 | 0 | 5 | 1 | — | 1 each | 3 s | — | ex |
+| `amb.gate` | Ambience | 0–6 (stalls only) | −20 | 1 | 1 | 200 ms | live | 400 ms | — | — |
 | `meta.*` | Table / UI | rare | −4 | 2 | 1 | 200 ms | live | 200 ms | same | — |
 | ambience beds, life, last act | Ambience | continuous | −26 bus | 0 | 3 | — | live | — | — | target |
 | **Squid** | — | — | — | — | — | — | — | — | — | — |
@@ -1484,52 +1635,43 @@ populations. `cuesheet.ts` holds this data, and a test enforces §3.7 on it.
 - **v2** (`a14d309`) — the Squid event-shape leak; a precise guarantee; per-profile
   loudness; the cue bible and sheet; the call model; live synthesis; seat voices;
   mocks at real heights; re-scoped M0. Review 2: **7.5/10**.
-- **v3** — revised after review 2:
-  - *Two audio fixes.*
-    - The answer-window close now fires when `RESPONSE_PENDING` leaves the view,
-      whatever follows, and the rules' own windows are never voiced (§3.2).
-    - A new structural-erasure test catches the leak v2's close rule had (§6.5,
-      test 2).
-  - *The deal.*
-    - A server-side CSPRNG, with per-action whale entropy and UUID card ids.
-    - The seeded-PRNG design was dropped, because xoshiro's outputs reveal its
-      state.
-    - An RNG wire test (§6.3).
-  - *The ending and the arc.*
-    - The arc is re-based on how games really end, measured with memory bots:
-      no game ends by laying every card, and skilled play leaves 6–12 dead asks
-      (`ending.ts`, `membot.ts`).
-    - A new rule ends the game when the score is final, with the last lay as the
-      finale (§11.2).
-    - The two-act arc, the public `endPressure` and the closing gate (§3.9).
-  - *The audio prototype* (`docs/plan-evidence/audio/`).
-    - The master chain was corrected: calibration before the limiter, the speaker
-      densifier, the Clock bus bypassing the glue.
-    - Per-cue speaker variants meet the echo budget.
-    - Both profiles were measured on target with no clipping (§3.3).
-  - *The cue sheet obeys the frequency rule.* Every cue heard more than 15 times
-    a game is live, those heard more than 60 are ≤ 250 ms, and the sheet is data
-    under test (§3.7).
-  - *Seat signatures replace absolute pitch*, and the gliding knock is gone; the
-    claim is conditional on the blindfold test (§3.1). The dry go-fish is neutral
-    (§4.1). Every beat has specified overlaps, with answer to rest 0.8 s by design
-    (§4.1).
-  - *The plank grammar* (§3.1). Planks A–C now ring only for seats; the clock,
-    the presses and the landings moved to plank D and a new table-top thud. The
-    separate `clock.open` is gone, since the ask's landing is the opening.
-  - *A self-checking prototype.* The harness fails on a grammar, echo-budget or
-    loudness miss (§7.4). The echo budget is measured with no safety fade. The
-    riffle, drâmbă, table-top and drifting pond-bed recipes are implemented, so
-    Appendix B is complete. The scene is three minutes, with clamped thinks.
-  - *The end check runs only at rest*, since a Mantis can still destroy the set
-    just laid (§11.2).
-  - *Visuals.*
-    - Numerals moved to Source Serif 4 (A26).
-    - The stunned state keeps the score, and the ask sheet shows protection and
-      powers.
-    - The real worst-case chips are shown.
-    - A desktop mock at 1280×800 and 1024×768.
-    - The ask sheet moved into the pond's row.
-    - `shoot.cjs` now asserts the sheet, the plank and the top edge (§5.2).
-  - *Numbers corrected:* effort 50–64; ~24 cues a minute; "successful asks"; the
-    bus for `table.answer`. Playtests are reported per round and pooled.
+- **v3** (`f15a0ea`) — the close fires whenever `RESPONSE_PENDING` leaves the view,
+  with a structural-erasure test; a server CSPRNG deal; the ending measured with
+  memory bots and a rule to end decided games; the plank grammar; a self-checking
+  audio prototype; the desktop mock. Review 3: **7.5/10**.
+- **v4** — revised after review 3:
+  - *The chain* (§3.3). Review 3 found v3's chain was an upward compressor: native
+    compressors' automatic make-up gain lifted a −60 dBFS signal by 27 dB. The pond
+    bed ended above the knocks and the clock under the bed; v3's headline −18 LUFS
+    was the bed. The fixes:
+    - Program gain is now calibrated on one anchor cue; everything else is
+      measured.
+    - Cues are mastered per profile, and there is no bus compression.
+    - The dynamics are plain JS, run by an AudioWorklet in the product.
+    - The harness checks eight rules at the chain's output, including the
+      ambience ceiling, the clock over the bed and the cue balance. While v4 was
+      built, those checks failed on a −18 LUFS target, on bus compression and on
+      a 10 dB speaker cap before passing.
+  - *Confusability* (§3.1). A measured check replaces the code-level one:
+    - rhythm from onsets and timbre from a log-mel pattern, with the step between
+      two seat planks as the bar;
+    - the bonus is now the asker's signature, and the asked cue a three-tap roll;
+    - the clock ticks are clicks, the Shark a flam;
+    - the answer and the close are one sound.
+  - *The end* (§3.9, §11.2).
+    - The end check reads only the public record: v3's leaked face-down ranks,
+      Squid included (`endcheck.ts`).
+    - The public count of sets still possible is the clock. It drives the light
+      and announces the last set in every decided game.
+    - The gate serves only stalls, and the memory bots learn only from public
+      events.
+    - The "at rest" rationale is corrected.
+  - *Layout* (§5.2).
+    - The 1024×768 frame hid a post under the log; the log now folds into a
+      drawer below 1100 px.
+    - `shoot.cjs` hit-tests every chip, post, sheet row, plank button and hand
+      index, and catches the v3 frame.
+    - The ask sheet is called what it is: mid-screen.
+    - The mocks show legal moments only.
+  - *Smaller.* `power.reveal` gets three takes. The phone-speaker test runs at full
+    volume in noise. Effort is 51–65 days.

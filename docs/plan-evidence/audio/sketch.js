@@ -164,6 +164,14 @@ function slap(ctx, out, t, gain, r, weight = 1) {
   thud(ctx, out, t + 0.003, gain * 0.8, r, weight);
 }
 
+// A dry wooden click — the clock: a bright exciter on plank D, stopped at once, so it has
+// no ring a seat could own.
+function click(ctx, out, t, s, gain = 1) {
+  const r = rng(s);
+  noise(ctx, t, 0.004, r).connect(filt(ctx, 'bandpass', 3200, 1.5)).connect(env(ctx, t, gain * 0.7, 0.0005, 0.003)).connect(out);
+  wood(ctx, out, t, { plank: 'D', damping: 0.9, gain: gain * 0.6, seed: s });
+}
+
 // The riffle: 30-45 high-passed clicks, sparse-dense-sparse (accelerando, ritardando).
 function riffle(ctx, out, t, dur, gain, r) {
   const n = 30 + Math.floor(r() * 16);
@@ -242,7 +250,7 @@ function dramba(ctx, out, t, dur, gain, sweep = [450, 1300]) {
 }
 
 // Breath: fluier (and caval an octave down) — three partials, breath noise, scoop, vibrato.
-function breath(ctx, out, t, note, dur, { gain = 1, octave = 0, breathDb = -18 } = {}) {
+function breath(ctx, out, t, note, dur, { gain = 1, octave = 0, breathDb = -18, breathBand = octave < 0 ? 1400 : 3000 } = {}) {
   const f = midi(note + 12 * octave);
   const e = ctx.createGain();
   e.gain.setValueAtTime(0.0001, t);
@@ -280,7 +288,7 @@ function breath(ctx, out, t, note, dur, { gain = 1, octave = 0, breathDb = -18 }
   n.buffer = NOISE;
   n.loop = true;
   const b1 = filt(ctx, 'bandpass', f, 8);
-  const b2 = filt(ctx, 'bandpass', 3000, 1);
+  const b2 = filt(ctx, 'bandpass', breathBand, 1);
   const g1 = ctx.createGain();
   g1.gain.value = fromDb(breathDb) * 6;
   const g2 = ctx.createGain();
@@ -344,7 +352,7 @@ function signature(c, o, t, seat, s, gain = 1) {
   for (let k = 0; k < knocks; k++) wood(c, o, t + k * 0.075, { plank, gain: gain * (k ? 0.8 : 1), seed: s + k });
 }
 // The only cues allowed to strike plank A, B or C (the grammar check in runSketch).
-const SEAT_CUES = new Set(['table.turn', 'table.turn.you', 'table.ask']);
+const SEAT_CUES = new Set(['table.turn', 'table.turn.you', 'table.ask', 'table.bonus']);
 const CUES = {
   'table.turn': ['T', 0.3, (c, o, s) => signature(c, o, 0.01, 4, s)],
   'table.turn.you': ['T', 0.45, (c, o, s) => {
@@ -356,22 +364,16 @@ const CUES = {
     paperLift(c, o, 0.01, 0.5, rng(s));
     signature(c, o, 0.08, 1, s);
   }],
-  'table.bonus': ['T', 0.25, (c, o, s) => {
-    wood(c, o, 0.005, { plank: 'D', seed: s });
-    wood(c, o, 0.075, { plank: 'D', f0: PLANK.D[0] * 1.12, seed: s + 1 });
-  }],
+  // the asker keeps the turn: their own signature again, softer, as the totem settles back
+  'table.bonus': ['T', 0.3, (c, o, s) => signature(c, o, 0.01, 4, s, 0.7)],
   'table.flight': ['T', 0.35, (c, o, s) => paperSlide(c, o, 0.005, 0.26, 0.45, rng(s))],
-  // the target's own device as their plank rises: knock, knock
+  // the target's own device as their plank rises: a quick roll of three taps on plank D —
+  // "someone is asking for you", and the only three-onset figure in the game
   'table.asked': ['T', 0.3, (c, o, s) => {
-    wood(c, o, 0.01, { plank: 'D', seed: s });
-    wood(c, o, 0.1, { plank: 'D', seed: s + 1 });
+    [0.01, 0.05, 0.09].forEach((t, i) => wood(c, o, t, { plank: 'D', damping: 0.5, gain: 0.55 + 0.15 * i, seed: s + i }));
   }],
-  // the answering device, any answer: a small ink stamp and a plank D tap — it is recorded
-  'table.answer': ['T', 0.2, (c, o, s) => {
-    stamp(c, o, 0.01, 0.8, rng(s));
-    wood(c, o, 0.01, { plank: 'D', gain: 0.5, seed: s });
-  }],
-  // every device, when RESPONSE_PENDING leaves the view: the plank lowered onto the table
+  // the answer and the close are one sound: the plank lowered onto the table. The answering
+  // device plays it at the press, every other device when RESPONSE_PENDING leaves the view
   'clock.close': ['T', 0.2, (c, o, s) => {
     const r = rng(s);
     paperLift(c, o, 0.005, 0.35, r);
@@ -406,9 +408,13 @@ const CUES = {
     [0, 1, 2].forEach((i) => slap(c, o, k[i], 1, r, 1 + 0.3 * i));
     stamp(c, o, k[3], 0.9, r);
   }],
-  'clock.tick': ['T', 0.12, (c, o, s) => wood(c, o, 0.005, { plank: 'D', seed: s })],
-  // urgency is density and a harder mallet, not pitch or level
-  'clock.tick.urgent': ['T', 0.12, (c, o, s) => wood(c, o, 0.005, { plank: 'D', hard: true, seed: s })],
+  // the clock is a dry click, not a knock: plank D stopped at once, so it has no ring a seat
+  // could own; urgency is rhythm — a double click, twice a second
+  'clock.tick': ['T', 0.12, (c, o, s) => click(c, o, 0.005, s)],
+  'clock.tick.urgent': ['T', 0.12, (c, o, s) => {
+    click(c, o, 0.005, s);
+    click(c, o, 0.045, s + 1, 0.8);
+  }],
   'power.granted': ['S', 1.5, (c, o, s, sp) => {
     const k = carve(c, o);
     if (sp) {
@@ -440,23 +446,26 @@ const CUES = {
     breath(c, k, 0.01, 71, sp ? 0.12 : 0.5, { octave: -1, breathDb: -12, gain: 1.2 });
     breath(c, k, sp ? 0.12 : 0.52, 62, sp ? 0.14 : 0.62, { octave: -1, breathDb: -12, gain: 1.2 });
   }],
-  // the club lands on the table top, the shell cracks, plank D splinters
-  'power.mantis': ['T', 0.8, (c, o, s) => {
+  // the club lands on the table top, the shell cracks, plank D splinters; the speaker cut
+  // packs the splinters into the first 170 ms
+  'power.mantis': ['T', 0.8, (c, o, s, sp) => {
     const r = rng(s);
     thud(c, o, 0.01, 1.4, r, 1.6);
     splash(c, o, 0.01, r, 0.5, 3000, 0.05);
-    [0.07, 0.1, 0.14, 0.19, 0.26].forEach((dt, i) => wood(c, o, dt, { plank: 'D', damping: 0.2, gain: 0.6 - i * 0.08, seed: s + 20 + i }));
+    const at = sp ? [0.05, 0.075, 0.1, 0.13, 0.17] : [0.07, 0.1, 0.14, 0.19, 0.26];
+    at.forEach((dt, i) => wood(c, o, dt, { plank: 'D', damping: sp ? 0.4 : 0.2, gain: 0.6 - i * 0.08, seed: s + 20 + i }));
   }],
-  // a dobă hit, a water rush, the jaw snapping shut on plank D
+  // the jaws snap on plank D, the body lands 40 ms later on the dobă — a flam no seat uses —
+  // and the water churns after it
   'power.shark': ['T', 0.8, (c, o, s, sp) => {
     const r = rng(s);
-    doba(c, o, 0.01, 1, r);
-    const lp = filt(c, 'lowpass', 400);
-    lp.frequency.setValueAtTime(400, 0.02);
-    lp.frequency.exponentialRampToValueAtTime(4000, sp ? 0.18 : 0.3);
-    noise(c, 0.02, sp ? 0.18 : 0.3, r).connect(lp).connect(env(c, 0.02, 0.35, 0.04, sp ? 0.14 : 0.25)).connect(o);
-    wood(c, o, sp ? 0.12 : 0.3, { plank: 'D', hard: true, seed: s });
-    wood(c, o, sp ? 0.15 : 0.33, { plank: 'D', hard: true, seed: s + 1 });
+    wood(c, o, 0.01, { plank: 'D', hard: true, gain: 1.2, seed: s });
+    doba(c, o, 0.05, 1, r);
+    const churn = sp ? 0.14 : 0.3;
+    const lp = filt(c, 'lowpass', 4000);
+    lp.frequency.setValueAtTime(4000, 0.03);
+    lp.frequency.exponentialRampToValueAtTime(500, 0.03 + churn);
+    noise(c, 0.03, churn, r).connect(lp).connect(env(c, 0.03, 0.3, 0.02, churn - 0.02)).connect(o);
   }],
   // drâmbă through a sweeping formant, then the bell stamp brands the plate
   'power.jellyfish': ['S', 0.9, (c, o, s, sp) => {
@@ -599,11 +608,11 @@ function speakerFade(x) {
 // Levels from the cue sheet (Appendix D): bus + cue, dB. UI and Clock get +4 dB on speakers.
 const BUS = { UI: -10, Table: 0, Power: 1, Clock: -8, Ambience: -26, Music: -2 };
 const LEVEL = {
-  'table.turn': ['Table', -6], 'table.turn.you': ['Table', -2], 'table.ask': ['Table', -4], 'table.answer': ['UI', -4],
+  'table.turn': ['Table', -6], 'table.turn.you': ['Table', -2], 'table.ask': ['Table', -4],
   'table.asked': ['Table', -2], 'table.give': ['Table', -2], 'table.gofish': ['Table', 0], 'table.gofish.dry': ['Table', -2],
   'table.draw': ['Table', -6], 'table.lay': ['Table', 0], 'clock.tick': ['Clock', -2], 'clock.tick.urgent': ['Clock', 0],
   'power.granted': ['Power', -2], 'power.used.lanternfish': ['Power', 0], 'power.used.whale': ['Power', 0],
-  'power.mantis': ['Power', 2], 'power.shark': ['Power', 2], 'power.jellyfish': ['Power', 0], 'power.whale': ['Power', 1],
+  'power.mantis': ['Power', -2], 'power.shark': ['Power', 0], 'power.jellyfish': ['Power', 0], 'power.whale': ['Power', 1],
   'mus.start': ['Music', 0], 'table.bonus': ['Table', -4], 'table.flight': ['Table', -10], 'clock.close': ['Clock', -2],
 };
 
@@ -633,8 +642,7 @@ function scenePlan(seconds, seed) {
     const hold = Math.min(logn(2.5, 0.5), 12);
     for (let k = 7; k < hold; k += k >= 9 ? 0.5 : 1) plan.push([k >= 9 ? 'clock.tick.urgent' : 'clock.tick', t + k]);
     t += hold;
-    if (toMe) plan.push(['table.answer', t - 0.08]);
-    plan.push(['clock.close', t]);
+    plan.push(['clock.close', toMe ? t - 0.08 : t]); // seat 0 hears it at its own press
     const roll = r();
     if (roll < 0.35) {
       plan.push(['table.flight', t + 0.1]);
@@ -659,69 +667,157 @@ function scenePlan(seconds, seed) {
   return plan.filter(([, at]) => at < seconds); // only what the scene contains
 }
 
-// The corrected master chain (v3): profile EQ -> [speaker: densifier] -> program gain ->
-// glue -> limiter -> soft clip at -1 dBFS -> destination. The user's volume would follow,
-// and only ever attenuates. v2 put the calibration gain after the limiter, which clipped.
-function masterChain(ctx, profile, programDb) {
-  const eq = profile === 'speaker' ? [filt(ctx, 'highpass', 150), filt(ctx, 'highshelf', 3000, 0.707, 2)] : [filt(ctx, 'highpass', 30)];
-  eq.reduce((a, b) => (a.connect(b), b));
-  let tail = eq[eq.length - 1];
-  if (profile === 'speaker') {
-    // struck wood has a ~22 dB peak-to-loudness ratio; phone speakers need it denser
-    const sat = ctx.createWaveShaper();
-    const curve = new Float32Array(2048);
-    for (let i = 0; i < 2048; i++) { const x = i / 1023.5 - 1; curve[i] = Math.tanh(2.2 * x) / Math.tanh(2.2); }
-    sat.curve = curve;
-    sat.oversample = '4x';
-    const pre = ctx.createGain(); pre.gain.value = fromDb(-6);
-    const post = ctx.createGain(); post.gain.value = fromDb(6);
-    const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -26; comp.ratio.value = 4; comp.knee.value = 6; comp.attack.value = 0.001; comp.release.value = 0.06;
-    tail.connect(pre).connect(sat).connect(post).connect(comp);
-    tail = comp;
-  }
-  const program = ctx.createGain();
-  program.gain.value = fromDb(programDb);
-  const glue = ctx.createDynamicsCompressor();
-  glue.threshold.value = -20; glue.ratio.value = 3; glue.knee.value = 6; glue.attack.value = 0.005; glue.release.value = 0.12;
-  const lim = ctx.createDynamicsCompressor();
-  lim.threshold.value = -4; lim.ratio.value = 20; lim.knee.value = 0; lim.attack.value = 0; lim.release.value = 0.05;
-  const clip = ctx.createWaveShaper();
-  const c = fromDb(-1);
-  const cc = new Float32Array(4096);
-  for (let i = 0; i < 4096; i++) { const x = (i / 2047.5 - 1) * 2; cc[i] = Math.abs(x) < 0.5 * c ? x : Math.sign(x) * (0.5 * c + 0.5 * c * Math.tanh((Math.abs(x) - 0.5 * c) / (0.5 * c))); }
-  clip.curve = cc;
-  clip.oversample = '4x';
-  const inG = ctx.createGain(); inG.gain.value = 0.5; // the clip curve spans +-2
-  const outG = ctx.createGain(); outG.gain.value = 1; // the curve already returns full-scale values
-  tail.connect(program).connect(glue).connect(lim).connect(inG).connect(clip).connect(outG).connect(ctx.destination);
-  // The Clock bus skips the densifier and the glue so ticks keep a steady level whatever
-  // else is sounding; it meets the rest of the mix only at the limiter.
-  const clockEq = filt(ctx, 'highpass', profile === 'speaker' ? 150 : 30);
-  const clockProgram = ctx.createGain();
-  clockProgram.gain.value = fromDb(programDb);
-  clockEq.connect(clockProgram).connect(lim);
-  return { pre: eq[0], clock: clockEq };
+/* ------------------------------------------------------------ the master chain */
+// v3 built the dynamics from native DynamicsCompressorNodes. Each applies an automatic
+// make-up gain that cannot be switched off (about 0.6 × its full-scale gain reduction), so
+// the chain lifted a −60 dBFS signal by 27 dB on speakers and a −6 dBFS one by 2 dB: an
+// upward compressor that put the pond bed above the knocks. v4 has no bus compression:
+//
+//   each cue, mastered for the profile → bus and cue level → main / clock / ambience stem
+//   stems → profile EQ → program gain → sum → lookahead limiter → safety clip
+//
+// Mastering rounds each cue's peaks until they sit a fixed distance over its loudness, then
+// restores the loudness, so every cue alone passes the chain untouched and the limiter meets
+// only pile-ups. The dynamics are plain JS with unity gain below the ceiling: the prototype
+// runs them on rendered stems, the product in an AudioWorklet running the same functions.
+const DYN = {
+  // Each cue is mastered per profile before it reaches a bus: peaks rounded (c·tanh(x/c)) until
+  // they sit no more than this far over the cue's loudness, then the loudness restored.
+  masterCap: { speaker: 12, headphones: 16 },
+  limiter: { ceiling: -1.5, lookahead: 0.003, release: 0.08 },
+  clip: -1, // the last safety net; the checks require it never to engage
+};
+
+function shave(x, ceilDb) {
+  const c = fromDb(ceilDb);
+  const y = new Float32Array(x.length);
+  for (let i = 0; i < x.length; i++) y[i] = c * Math.tanh(x[i] / c);
+  return y;
 }
 
-function place(ctx, chain, bank, name, t, profile) {
+// Lookahead brick-wall limiter: the gain each sample needs, the minimum of it over the
+// next `lookahead`, ramped in over the same span, with an exponential release.
+function limit(x, { ceiling, lookahead, release }) {
+  const c = fromDb(ceiling), L = Math.max(1, Math.round(lookahead * SR)), n = x.length;
+  const need = new Float32Array(n);
+  for (let i = 0; i < n; i++) need[i] = Math.min(1, c / (Math.abs(x[i]) + 1e-12));
+  const win = new Float32Array(n); // min of need[i .. i+L], by a monotonic deque
+  const dq = new Int32Array(n + L + 1);
+  let h = 0, t = 0;
+  for (let j = n - 1 + L; j >= 0; j--) {
+    if (j < n) {
+      while (t > h && need[dq[t - 1]] >= need[j]) t--;
+      dq[t++] = j;
+    }
+    // the deque holds indices in (j .. j+L]; drop those past the window of i = j
+    while (t > h && dq[h] > j + L) h++;
+    if (j < n) win[j] = need[dq[h]];
+  }
+  // Each of the last L windows starts at most L − 1 samples before i, so it contains i: their
+  // average never exceeds the gain sample i needs, and the ramp alone holds the ceiling.
+  const aR = Math.exp(-1 / (release * SR));
+  const y = new Float32Array(n);
+  let acc = L, g = 1, grMax = 0, busy = 0; // the moving sum starts from L samples of unity
+  for (let i = 0; i < n; i++) {
+    acc += win[i] - (i >= L ? win[i - L] : 1);
+    g = Math.min(acc / L, aR * g + (1 - aR));
+    const gr = -db(g);
+    if (gr > grMax) grMax = gr;
+    if (gr > 1) busy++;
+    y[i] = x[i] * g;
+  }
+  return { y, grMax, busy: busy / n };
+}
+
+function softClip(x, ceilDb) {
+  const c = fromDb(ceilDb), k = fromDb(ceilDb - 0.3);
+  const y = new Float32Array(x.length);
+  let engaged = 0;
+  for (let i = 0; i < x.length; i++) {
+    const a = Math.abs(x[i]);
+    if (a <= k) y[i] = x[i];
+    else {
+      engaged++;
+      y[i] = Math.sign(x[i]) * (k + (c - k) * Math.tanh((a - k) / (c - k)));
+    }
+  }
+  return { y, engaged };
+}
+
+// No bus compression: a compressor on the mix either pumps the bed or reshuffles the cues.
+// Mastered cues arrive with their peaks inside the headroom, so the limiter meets only
+// pile-ups, and the clock and the bed are never moved by what else is sounding.
+function chain(stems, profile, programDb) {
+  const n = stems.find(Boolean).length, g = fromDb(programDb);
+  const sum = new Float32Array(n);
+  for (const stem of stems) if (stem) for (let i = 0; i < n; i++) sum[i] += stem[i] * g;
+  const lim = limit(sum, DYN.limiter);
+  const clip = softClip(lim.y, DYN.clip);
+  return { out: clip.y, limiterGrMax: lim.grMax, limiterBusy: lim.busy, clipped: clip.engaged };
+}
+
+// Mastering one cue for a profile: round its peaks until they sit at most `cap` dB over its
+// class loudness (active loudness for transients, momentary maximum for sustained cues).
+// The class normalisation that follows restores the loudness.
+function master(name, x, cap) {
+  const loud = (y) => (CUES[name][0] === 'T' ? measure(y).activeLufs : measure(y).momentaryMax);
+  const peakDb = (y) => db(y.reduce((m, v) => Math.max(m, Math.abs(v)), 0));
+  const before = peakDb(x) - loud(x);
+  let y = x, c = loud(x) + cap;
+  for (let k = 0; k < 8 && peakDb(y) - loud(y) > cap + 0.1; k++) {
+    y = shave(x, c);
+    c -= peakDb(y) - loud(y) - cap;
+  }
+  // how far mastering moved the waveform from a scaled copy of the original, in dB
+  let xy = 0, xx = 0;
+  for (let i = 0; i < x.length; i++) { xy += x[i] * y[i]; xx += x[i] * x[i]; }
+  const a = xy / xx;
+  let rr = 0, yy = 0;
+  for (let i = 0; i < x.length; i++) { const r = y[i] - a * x[i]; rr += r * r; yy += y[i] * y[i]; }
+  return { y, before, after: peakDb(y) - loud(y), residualDb: 10 * Math.log10(rr / yy + 1e-12) };
+}
+
+function profileEq(ctx, profile) {
+  const eq = profile === 'speaker' ? [filt(ctx, 'highpass', 150), filt(ctx, 'highshelf', 3000, 0.707, 2)] : [filt(ctx, 'highpass', 30)];
+  eq.reduce((a, b) => (a.connect(b), b));
+  return { input: eq[0], output: eq[eq.length - 1] };
+}
+
+// Renders into three stems — main, clock, ambience — each through the profile EQ.
+async function renderStems(profile, seconds, fill) {
+  const ctx = new OfflineAudioContext(3, Math.ceil(seconds * SR), SR);
+  ctx.destination.channelInterpretation = 'discrete';
+  shared(ctx);
+  const merger = ctx.createChannelMerger(3);
+  merger.connect(ctx.destination);
+  const [main, clock, ambience] = [0, 1, 2].map((i) => {
+    const eq = profileEq(ctx, profile);
+    eq.output.connect(merger, 0, i);
+    return eq.input;
+  });
+  fill(ctx, { main, clock, ambience });
+  const buf = await ctx.startRendering();
+  return [0, 1, 2].map((c) => buf.getChannelData(c).slice());
+}
+
+// A cue at its cue-sheet level: class-normalised, then bus + cue level (+4 dB for UI and
+// Clock on speakers). `variant` picks the speaker cut as designed, or with the safety fade.
+function place(ctx, stems, bank, name, t, profile, variant = 'faded') {
   const [bus, lvl] = LEVEL[name];
   const boost = profile === 'speaker' && (bus === 'Clock' || bus === 'UI') ? 4 : 0;
+  const cue = profile === 'speaker' && name !== 'mus.start' ? bank[name][variant] : bank[name].full;
   const src = ctx.createBufferSource();
-  src.buffer = profile === 'speaker' && name !== 'mus.start' ? bank[name].cut : bank[name].full;
+  src.buffer = cue.buffer;
   const g = ctx.createGain();
-  g.gain.value = (profile === 'speaker' ? bank[name].normCut : bank[name].norm) * fromDb(BUS[bus] + lvl + boost);
-  src.connect(g).connect(bus === 'Clock' ? chain.clock : chain.pre);
+  g.gain.value = cue.norm * fromDb(BUS[bus] + lvl + boost);
+  src.connect(g).connect(bus === 'Clock' ? stems.clock : stems.main);
   src.start(t);
 }
 
-const SCENE = 180; // three minutes, so one long think cannot skew the measurement
-async function renderScene(profile, bank, seconds = SCENE, programDb = 0) {
-  const ctx = new OfflineAudioContext(1, seconds * SR, SR);
-  shared(ctx);
-  const chain = masterChain(ctx, profile, programDb);
-  // the pond bed, generated live: looped noise through a slowly drifting low-pass, and a
-  // drip from the water recipe every few seconds
+// The pond bed, generated live: looped noise through a slowly drifting low-pass, and a
+// drip from the water recipe every 3–8 s.
+const BED_DB = 1; // the bed's level within the ambience bus
+function pondBed(ctx, out, seconds) {
   const bed = ctx.createBufferSource();
   bed.buffer = NOISE;
   bed.loop = true;
@@ -733,28 +829,26 @@ async function renderScene(profile, bank, seconds = SCENE, programDb = 0) {
   drift.connect(depth).connect(lp.frequency);
   drift.start(0);
   const bedG = ctx.createGain();
-  bedG.gain.value = fromDb(BUS.Ambience + 6);
-  bed.connect(lp).connect(bedG).connect(chain.pre);
+  bedG.gain.value = fromDb(BUS.Ambience + BED_DB);
+  bed.connect(lp).connect(bedG).connect(out);
   bed.start(0);
   const dripG = ctx.createGain();
-  dripG.gain.value = fromDb(BUS.Ambience + 10);
-  dripG.connect(chain.pre);
+  dripG.gain.value = fromDb(BUS.Ambience + BED_DB + 4);
+  dripG.connect(out);
   const dr = rng(5);
   for (let at = 2 + dr() * 4; at < seconds; at += 3 + dr() * 5) bubble(ctx, dripG, at, 1800 + dr() * 800, 0.04, 1);
-  for (const [name, t] of scenePlan(seconds, 7)) place(ctx, chain, bank, name, t, profile);
-  const out = await ctx.startRendering();
-  return out.getChannelData(0).slice();
 }
 
-async function renderBurst(profile, bank, programDb) {
-  // six cues landing within 50 ms: the loudest pile-up the table can make
-  const ctx = new OfflineAudioContext(1, 2 * SR, SR);
-  shared(ctx);
-  const chain = masterChain(ctx, profile, programDb);
-  ['power.mantis', 'power.shark', 'table.gofish', 'table.give', 'table.lay', 'clock.tick.urgent'].forEach((name, i) => place(ctx, chain, bank, name, 0.1 + i * 0.01, profile));
-  const out = await ctx.startRendering();
-  return out.getChannelData(0).slice();
-}
+const SCENE = 180; // three minutes, so one long think cannot skew the measurement
+const renderScene = (profile, bank) =>
+  renderStems(profile, SCENE, (ctx, stems) => {
+    pondBed(ctx, stems.ambience, SCENE);
+    for (const [name, t] of scenePlan(SCENE, 7)) place(ctx, stems, bank, name, t, profile);
+  });
+// six cues landing within 50 ms: the loudest pile-up the table can make
+const BURST = ['power.mantis', 'power.shark', 'table.gofish', 'table.give', 'table.lay', 'clock.tick.urgent'];
+const renderBurst = (profile, bank) => renderStems(profile, 2, (ctx, stems) => BURST.forEach((name, i) => place(ctx, stems, bank, name, 0.1 + i * 0.01, profile)));
+const renderAlone = (profile, bank, name, variant) => renderStems(profile, CUES[name][1] + 0.3, (ctx, stems) => place(ctx, stems, bank, name, 0.02, profile, variant));
 
 /* ------------------------------------------------------------------ outputs */
 // Listening excerpts are halved to 24 kHz (a windowed-sinc low-pass, then every other sample).
@@ -842,33 +936,154 @@ function drawSpectrogram(canvas, x, label, meta) {
   g.fillText(meta, 6, H - 8);
 }
 
+/* ------------------------------------------------------------ confusability (§3.1) */
+// Two cues can be mistaken for each other when they share a rhythm and differ too little in
+// timbre. Rhythm: the onsets in the first 300 ms (a rise of 9 dB within 20 ms, at most 30 dB
+// under the peak, 25 ms apart at least); two rhythms match when they have as many onsets and
+// every gap agrees within 25 ms. Timbre: the log-mel pattern of the first 50 ms after the
+// first onset (5 frames × 32 bands, 100 Hz–12 kHz, in dB under its loudest cell, floored at
+// −50 dB), compared by mean absolute difference over the cells where either has energy.
+// The bar is set by the design itself: the smallest timbre difference between two seat
+// signatures of the same rhythm — the plank-size step every listener must hear anyway.
+const MEL_EDGES = (() => {
+  const mel = (f) => 2595 * Math.log10(1 + f / 700), inv = (m) => 700 * (10 ** (m / 2595) - 1);
+  return Array.from({ length: 34 }, (_, i) => inv(mel(100) + ((mel(12000) - mel(100)) * i) / 33));
+})();
+function onsets(x) {
+  const hop = 240, frames = Math.min(Math.floor(x.length / hop), 60); // 5 ms frames over 300 ms
+  const lv = [];
+  for (let f = 0; f < frames; f++) {
+    let e = 1e-20;
+    for (let i = f * hop; i < (f + 1) * hop; i++) e += x[i] * x[i];
+    lv.push(10 * Math.log10(e / hop));
+  }
+  const top = Math.max(...lv), found = [];
+  for (let f = 0; f < frames; f++) {
+    const floor = f === 0 ? -200 : Math.min(...lv.slice(Math.max(0, f - 4), f));
+    if (lv[f] > top - 30 && lv[f] - floor >= 9 && (!found.length || f * 5 - found[found.length - 1] >= 25)) found.push(f * 5);
+  }
+  return found.map((t) => t - found[0]);
+}
+const sameRhythm = (a, b) => a.length === b.length && a.every((t, i) => Math.abs(t - b[i]) <= 25);
+function timbre(x) {
+  let peak = 0;
+  for (const v of x) peak = Math.max(peak, Math.abs(v));
+  let on = 0;
+  while (on < x.length && Math.abs(x[on]) < peak * 0.01) on++;
+  const N = 1024, P = [];
+  for (let f = 0; f < 5; f++) {
+    const re = new Float32Array(N), im = new Float32Array(N);
+    for (let i = 0; i < N; i++) re[i] = (x[on + f * 480 + i] || 0) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N));
+    fft(re, im);
+    for (let b = 0; b < 32; b++) {
+      const [f0, f1, f2] = [MEL_EDGES[b], MEL_EDGES[b + 1], MEL_EDGES[b + 2]];
+      let e = 1e-20;
+      for (let k = Math.floor((f0 / SR) * N); k <= Math.ceil((f2 / SR) * N); k++) {
+        const fk = (k * SR) / N, w = fk < f1 ? (fk - f0) / (f1 - f0) : (f2 - fk) / (f2 - f1);
+        if (w > 0) e += w * (re[k] * re[k] + im[k] * im[k]);
+      }
+      P.push(10 * Math.log10(e));
+    }
+  }
+  const top = Math.max(...P);
+  return P.map((v) => Math.max(v - top, -50));
+}
+function timbreDistance(p, q) {
+  let sum = 0, cnt = 0;
+  for (let i = 0; i < p.length; i++) {
+    if (p[i] < -40 && q[i] < -40) continue;
+    sum += Math.abs(p[i] - q[i]);
+    cnt++;
+  }
+  return sum / Math.max(1, cnt);
+}
+// Where a listener must tell cues apart: every cue against the seat signatures, and cues that
+// can sound at the same moment of the ask against each other — unless they belong to one
+// event and always sound together.
+const SLOT = {
+  'table.turn': 'turn', 'table.turn.you': 'turn', 'table.bonus': 'turn',
+  'table.ask': 'ask', 'table.asked': 'ask',
+  'clock.tick': 'window', 'clock.tick.urgent': 'window', 'clock.close': 'window',
+  'table.flight': 'outcome', 'table.give': 'outcome', 'table.gofish': 'outcome', 'table.gofish.dry': 'outcome', 'table.draw': 'outcome', 'power.shark': 'outcome',
+  'table.lay': 'lay', 'power.mantis': 'lay', 'power.granted': 'lay',
+  'power.used.lanternfish': 'power', 'power.used.whale': 'power', 'power.jellyfish': 'power', 'power.whale': 'power',
+  'mus.start': 'ceremony',
+};
+const EVENT = {
+  'table.turn': 'seat', 'table.turn.you': 'seat', 'table.bonus': 'seat', 'table.ask': 'ask', 'table.asked': 'ask',
+  'clock.tick': 'clock', 'clock.tick.urgent': 'clock', 'clock.close': 'clock',
+  'table.flight': 'give', 'table.give': 'give', 'table.gofish': 'wet', 'table.draw': 'wet',
+  'power.used.whale': 'whale', 'power.whale': 'whale',
+};
+const eventOf = (name) => EVENT[name] ?? name;
+// the seat whose signature each seat cue carries in this sketch
+const SEAT_OF = { 'table.turn': 4, 'table.bonus': 4, 'table.ask': 1, 'table.turn.you': 0 };
+
+/* ------------------------------------------------------------------- the run */
+// The anchor (§3.3): table.turn, the most frequent cue, calibrated to this loudness while it
+// sounds (K-weighted over its active span) at the chain's output. Everything else is measured.
+// With every cue mastered (peaks at most 12 dB over loudness on speakers, 16 on headphones)
+// these anchors keep every cue alone under the limiter's −1.5 dBFS ceiling — which the
+// balance check proves rather than assumes. The call test sets the final anchors (§9.3).
+const ANCHOR = { speaker: -21, headphones: -25 };
+const AMBIENCE_UNDER = [12, 20]; // the bed's short-term loudness this many LU under the anchor
+const TICK_OVER_BED = 10; // every Clock cue at least this far over the bed while it sounds
+const BALANCE = 1; // the dynamics may move no cue more than this from its cue-sheet level
+
+const toBuffer = (x) => {
+  const b = new AudioBuffer({ length: x.length, sampleRate: SR, numberOfChannels: 1 });
+  b.copyToChannel(x, 0);
+  return b;
+};
+const sumStems = ([a, b, c], g) => a.map((v, i) => (v + b[i] + c[i]) * g);
+function shortTermMax(x) {
+  const k = kWeight(x), win = 3 * SR;
+  let m = -Infinity;
+  for (let i = 0; i + win <= k.length; i += SR / 10) m = Math.max(m, lufsOf(meanSquare(k, i, i + win)));
+  return m;
+}
+const levelOf = (name, x) => (CUES[name][0] === 'T' ? measure(x).activeLufs : measure(x).momentaryMax);
+
 window.runSketch = async function () {
-  const results = { cues: {}, scenes: {}, grammar: [] };
+  const results = { cues: {}, scenes: {}, grammar: [], alone: {} };
   const bank = {};
+  const mastering = {};
+  const sound = { full: {}, speaker: {} };
   const sheet = document.getElementById('sheet');
   for (const name of Object.keys(CUES)) {
     STRIKES = [];
     const x = await renderCue(name, 3);
     const m = measure(x);
     const design = name === 'mus.start' ? x : await renderCue(name, 3, true);
-    const mc = measure(design); // the speaker variant as designed, before the safety fade
-    const cut = name === 'mus.start' ? x : speakerFade(design);
+    const md = measure(design); // the speaker variant as designed, before any fade or chain
+    const faded = name === 'mus.start' ? x : speakerFade(design);
     // the grammar (§3.1): only the seat cues may strike plank A, B or C, in either variant
     if (!SEAT_CUES.has(name)) for (const p of new Set(STRIKES.filter((k) => 'ABC'.includes(k.plank)).map((k) => k.plank))) results.grammar.push(`${name} strikes plank ${p}`);
-    const norm = normGain(name, x);
-    const normCut = normGain(name, cut);
-    bank[name] = { full: toBuffer(x), cut: toBuffer(cut), norm, normCut };
+    // mastered per profile: headphones play the full cue, speakers the designed variant
+    const mh = master(name, x, DYN.masterCap.headphones);
+    const ms = master(name, design, DYN.masterCap.speaker);
+    const msFaded = name === 'mus.start' ? ms.y : speakerFade(ms.y);
+    bank[name] = {
+      full: { buffer: toBuffer(mh.y), norm: normGain(name, mh.y) },
+      design: { buffer: toBuffer(ms.y), norm: normGain(name, ms.y) },
+      faded: { buffer: toBuffer(msFaded), norm: normGain(name, msFaded) },
+    };
+    mastering[name] = { headphones: mh, speaker: ms };
+    for (const [variant, y] of [['full', x], ['speaker', design]]) sound[variant][name] = { rhythm: onsets(y), timbre: timbre(y) };
     const variants = [];
     for (const s of [11, 12, 13]) variants.push(measure(await renderCue(name, s)).activeLufs);
-    const listen = x.map((v) => v * norm);
+    // the listening file is what headphones play: the cue as mastered for them, normalised
+    const norm = bank[name].full.norm;
+    const listen = mh.y.map((v) => v * norm);
     let pk = 0;
     for (const v of listen) pk = Math.max(pk, Math.abs(v));
     const safe = pk > fromDb(-1) ? fromDb(-1) / pk : 1;
     results.cues[name] = {
       class: CUES[name][0],
       ...m,
-      speakerActiveMs: mc.activeMs,
-      speakerTailVsHeadDb: mc.tailVsHeadDb,
+      plr: { raw: mh.before, headphones: mh.after, speaker: ms.after },
+      masteringResidualDb: { headphones: mh.residualDb, speaker: ms.residualDb },
+      speakerActiveMs: md.activeMs,
       normDb: db(norm),
       variantSpreadDb: Math.max(...variants) - Math.min(...variants),
       wav: wav(listen.map((v) => v * safe)),
@@ -877,18 +1092,58 @@ window.runSketch = async function () {
     cv.width = 300;
     cv.height = 170;
     sheet.appendChild(cv);
-    drawSpectrogram(cv, x, name, `${m.activeMs.toFixed(0)} ms · tail ${Number.isFinite(m.tailVsHeadDb) ? m.tailVsHeadDb.toFixed(0) + ' dB' : '—'} · speaker ${mc.activeMs.toFixed(0)} ms`);
+    drawSpectrogram(cv, x, name, `${m.activeMs.toFixed(0)} ms · tail ${Number.isFinite(m.tailVsHeadDb) ? m.tailVsHeadDb.toFixed(0) + ' dB' : '—'} · speaker ${md.activeMs.toFixed(0)} ms`);
   }
-  // the six seat signatures, one after another, for listening (§3.1)
-  {
-    const ctx = new OfflineAudioContext(1, Math.ceil(3.2 * SR), SR);
+
+  // The six seat signatures: a listening file, and the confusability bar.
+  const sigs = [];
+  for (let seat = 0; seat < 6; seat++) {
+    const ctx = new OfflineAudioContext(1, Math.ceil(0.5 * SR), SR);
     shared(ctx);
-    for (let seat = 0; seat < 6; seat++) signature(ctx, ctx.destination, 0.1 + seat * 0.5, seat, 40 + seat);
-    const x = (await ctx.startRendering()).getChannelData(0).slice();
-    let pk = 0;
-    for (const v of x) pk = Math.max(pk, Math.abs(v));
-    results.seats = wav(x.map((v) => (v * fromDb(-3)) / pk));
+    signature(ctx, ctx.destination, 0.01, seat, 40 + seat);
+    sigs.push((await ctx.startRendering()).getChannelData(0).slice());
   }
+  {
+    const all = new Float32Array(Math.ceil(3.2 * SR));
+    sigs.forEach((x, seat) => x.forEach((v, i) => (all[Math.round((0.1 + seat * 0.5) * SR) + i] += v)));
+    let pk = 0;
+    for (const v of all) pk = Math.max(pk, Math.abs(v));
+    results.seats = wav(all.map((v) => (v * fromDb(-3)) / pk));
+  }
+  const names = ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'];
+  const seat = sigs.map((x) => ({ rhythm: onsets(x), timbre: timbre(x) }));
+  let bar = { d: Infinity, pair: '' };
+  for (let i = 0; i < 6; i++)
+    for (let j = i + 1; j < 6; j++) {
+      if (!sameRhythm(seat[i].rhythm, seat[j].rhythm)) continue;
+      const d = timbreDistance(seat[i].timbre, seat[j].timbre);
+      if (d < bar.d) bar = { d, pair: `${names[i]} / ${names[j]}` };
+    }
+  const pairs = [];
+  const cueNames = Object.keys(CUES);
+  for (const variant of ['full', 'speaker']) {
+    const S = sound[variant];
+    const tag = variant === 'full' ? 'headphones' : 'speaker';
+    for (const a of cueNames) {
+      // every cue against every signature it does not carry (a seat cue carries its own)
+      seat.forEach((q, i) => {
+        if (SEAT_OF[a] === i) return;
+        if (sameRhythm(S[a].rhythm, q.rhythm)) pairs.push({ pair: `${a} / seat ${names[i]} (${tag})`, d: timbreDistance(S[a].timbre, q.timbre) });
+      });
+      for (const b of cueNames)
+        if (a < b && SLOT[a] === SLOT[b] && eventOf(a) !== eventOf(b) && sameRhythm(S[a].rhythm, S[b].rhythm)) pairs.push({ pair: `${a} / ${b} (${tag})`, d: timbreDistance(S[a].timbre, S[b].timbre) });
+    }
+  }
+  pairs.sort((p, q) => p.d - q.d);
+  results.confusability = {
+    bar,
+    rhythms: Object.fromEntries(cueNames.map((n) => [n, sound.full[n].rhythm])),
+    seatRhythms: Object.fromEntries(seat.map((q, i) => [names[i], q.rhythm])),
+    closest: pairs.slice(0, 6),
+    violations: pairs.filter((p) => p.d < bar.d),
+  };
+
+  // The scene: cues per minute and the listening excerpt.
   const plan = scenePlan(SCENE, 7).filter(([n]) => n !== 'mus.start');
   const perMin = (k) => Math.round((k / SCENE) * 60 * 10) / 10;
   results.cuesPerMinute = {
@@ -898,7 +1153,6 @@ window.runSketch = async function () {
     power: perMin(plan.filter(([n]) => n.startsWith('power.')).length),
     asks: perMin(plan.filter(([n]) => n === 'table.ask').length),
   };
-  // the listening excerpt: the busiest 12 s of the scene
   let excerpt = 0;
   for (const [, at] of plan) {
     const from = Math.max(0, at - 0.5);
@@ -907,35 +1161,58 @@ window.runSketch = async function () {
     if (busy(from) > busy(excerpt)) excerpt = from;
   }
   results.excerptFrom = excerpt;
-  for (const [profile, target] of [['speaker', -18], ['headphones', -23]]) {
+
+  for (const profile of ['speaker', 'headphones']) {
+    const target = ANCHOR[profile];
+    const stems = await renderScene(profile, bank);
+    const [main, clock, amb] = stems;
+    // Program gain is calibrated on the anchor cue alone, never on the bed or the scene.
+    const anchor = await renderAlone(profile, bank, 'table.turn', profile === 'speaker' ? 'design' : 'faded');
     let programDb = 0;
-    let x = await renderScene(profile, bank, SCENE, programDb);
-    for (let pass = 0; pass < 4; pass++) {
-      programDb += target - integrated(x);
-      x = await renderScene(profile, bank, SCENE, programDb);
+    for (let pass = 0; pass < 3; pass++) programDb += target - measure(chain(anchor, profile, programDb).out).activeLufs;
+    const full = chain(stems, profile, programDb);
+    const cues = chain([main, clock, null], profile, programDb);
+    const bed = chain([null, null, amb], profile, programDb);
+    const burst = chain(await renderBurst(profile, bank), profile, programDb);
+    const bedST = shortTermMax(bed.out);
+    // Every cue alone through the chain, against the same cue with no dynamics at all.
+    const alone = {};
+    for (const name of cueNames) {
+      const variant = profile === 'speaker' ? 'design' : 'faded';
+      const st = await renderAlone(profile, bank, name, variant);
+      const out = chain(st, profile, programDb).out;
+      const lin = sumStems(st, fromDb(programDb));
+      const mo = measure(out);
+      let ab = 0, aa = 0;
+      for (let i = 0; i < out.length; i++) { ab += out[i] * lin[i]; aa += lin[i] * lin[i]; }
+      const alpha = ab / aa;
+      let rr = 0, oo = 0;
+      for (let i = 0; i < out.length; i++) { const r = out[i] - alpha * lin[i]; rr += r * r; oo += out[i] * out[i]; }
+      alone[name] = {
+        shiftDb: levelOf(name, out) - levelOf(name, lin),
+        tailVsHeadDb: mo.tailVsHeadDb,
+        activeLufs: mo.activeLufs,
+        nonlinearDb: 10 * Math.log10(rr / oo + 1e-12),
+        overBedDb: LEVEL[name][0] === 'Clock' ? mo.activeLufs - bedST : null,
+      };
     }
-    const burst = await renderBurst(profile, bank, programDb);
-    let shortTermMax = -Infinity;
-    const k = kWeight(x), win = 3 * SR;
-    for (let i = 0; i + win <= k.length; i += SR / 10) shortTermMax = Math.max(shortTermMax, lufsOf(meanSquare(k, i, i + win)));
-    let clipped = 0;
-    for (const v of x) if (Math.abs(v) > fromDb(-1.5)) clipped++;
+    results.alone[profile] = alone;
     results.scenes[profile] = {
       target,
       programDb,
-      integrated: integrated(x),
-      shortTermMax,
-      truePeak: truePeakDb(x),
-      burstTruePeak: truePeakDb(burst),
-      clipShare: clipped / x.length,
-      wav: wav(decimate2(x.subarray(Math.round(excerpt * SR), Math.round((excerpt + 12) * SR))), SR / 2),
+      cueLoudness: integrated(cues.out),
+      integrated: integrated(full.out),
+      shortTermMax: shortTermMax(full.out),
+      truePeak: truePeakDb(full.out),
+      burstTruePeak: truePeakDb(burst.out),
+      limiterGrMax: Math.max(full.limiterGrMax, burst.limiterGrMax),
+      limiterBusy: full.limiterBusy,
+      clipped: full.clipped + burst.clipped,
+      bedShortTermMax: bedST,
+      bedIntegrated: integrated(bed.out),
+      wav: wav(decimate2(full.out.subarray(Math.round(excerpt * SR), Math.round((excerpt + 12) * SR))), SR / 2),
     };
   }
+  results.limits = { ANCHOR, AMBIENCE_UNDER, TICK_OVER_BED, BALANCE, DYN };
   return results;
-
-  function toBuffer(x) {
-    const b = new AudioBuffer({ length: x.length, sampleRate: SR, numberOfChannels: 1 });
-    b.copyToChannel(x, 0);
-    return b;
-  }
 };
