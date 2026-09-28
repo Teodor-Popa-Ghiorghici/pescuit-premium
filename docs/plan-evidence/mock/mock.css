@@ -12,6 +12,17 @@ body {
   overflow: hidden;
 }
 
+/* numerals are set in Source Serif 4 lining tabular figures: Vollkorn's "1" reads as "I" */
+.num {
+  font-family: var(--text);
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 700;
+}
+
+.clock__numeral {
+  font-family: var(--text) !important;
+}
+
 /* --------------------------------------------------------------- the frame */
 .ph {
   position: relative;
@@ -92,7 +103,17 @@ body {
   text-align: center;
   overflow: hidden;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.chip__name {
+  overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .chip__row {
@@ -149,18 +170,21 @@ body {
   z-index: 2;
 }
 
-.chip.is-stunned > :not(.chip__row--foot):not(.chip__brand) {
-  opacity: 0.45;
+/* stunned is branded, not tinted: the plate is burned dark with the jellyfish seal, the
+   wood darkens, and the score stays at full ink */
+.chip.is-stunned .chip__plate {
+  background: var(--ink);
+  background-image: none;
+  color: var(--hartie);
 }
 
-/* stunned is branded, not tinted: the jellyfish seal burned across the post */
-.chip__brand {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  z-index: 2;
-  filter: drop-shadow(1px 1px 0 #17120e) drop-shadow(-1px -1px 0 #17120e);
+.chip.is-stunned {
+  background-color: #4a3421;
+}
+
+.chip.is-stunned .chip__row svg,
+.chip.is-stunned .chip__hand {
+  opacity: 0.6;
 }
 
 .chip.is-offline {
@@ -316,7 +340,7 @@ body {
 
 .hgroup {
   position: relative;
-  height: 156px;
+  height: var(--ch);
   flex: none;
   transition: transform var(--dur-snap) var(--ease-strike);
 }
@@ -346,21 +370,21 @@ body {
 }
 
 .hcard .card__plate {
-  width: 104px;
-  height: 156px;
+  width: var(--cw);
+  height: var(--ch);
 }
 
 /* the corner index: the seal is already carved top-left; the name is stacked under it */
 .hcard__index {
   position: absolute;
-  left: 12px;
-  top: 33px;
-  width: 15px;
+  left: calc(var(--cw) * 0.115);
+  top: calc(var(--ch) * 0.21);
+  width: calc(var(--cw) * 0.14);
   writing-mode: vertical-rl;
   text-orientation: upright;
   font-family: var(--display);
   font-weight: 800;
-  font-size: 10px;
+  font-size: calc(var(--cw) * 0.095);
   letter-spacing: -1px;
   color: var(--ink);
   background: var(--hartie);
@@ -410,7 +434,7 @@ body {
   position: absolute;
   left: -2px;
   right: -2px;
-  bottom: 22px;
+  bottom: calc(var(--ch) * 0.14);
   height: 8px;
   z-index: 19;
   background: repeating-linear-gradient(120deg, var(--ocru) 0 4px, var(--lemn-inchis) 4px 5.5px);
@@ -420,11 +444,10 @@ body {
 
 /* -------------------------------------------------------- the ask sheet */
 .sheet {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 212px;
-  z-index: 30;
+  align-self: end;
+  margin: 0 8px 8px;
+  max-height: calc(100% - 10px);
+  overflow: auto;
   background-color: var(--lemn);
   background-image: var(--tex-wood);
   border: var(--line-thin) solid var(--ink);
@@ -494,6 +517,12 @@ body {
   gap: 3px;
   font-size: 11px;
   color: var(--ink-soft);
+}
+
+.sheet__who.is-warn {
+  border-color: var(--verde);
+  background-color: #dde8df;
+  background-image: var(--tex-paper);
 }
 
 .sheet__who.is-off {
@@ -643,6 +672,248 @@ body {
   color: var(--pe-apa);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px 18px;
   flex-wrap: wrap;
+}
+
+.chipsheet__legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------- the closing gate */
+.gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.gate__notches {
+  display: flex;
+  gap: 3px;
+}
+
+.gate__notch {
+  width: 11px;
+  height: 18px;
+  border: 2px solid var(--lemn-inchis);
+  background: transparent;
+}
+
+.gate__notch.is-shut {
+  background: var(--lemn);
+  background-image: var(--tex-wood);
+}
+
+.gate__label {
+  font-size: 12px;
+  color: var(--hartie-2);
+}
+
+/* -------------------------------------------------------------- the desktop */
+.dk {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr);
+}
+
+.dk-top {
+  padding: 0 16px 0 24px;
+}
+
+.dk-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  padding: 14px 16px 12px;
+  min-height: 0;
+}
+
+.dk-table {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background-color: #5d3f27;
+  background-image: var(--tex-wood);
+  border: var(--line-mid) solid var(--lemn-inchis);
+  box-shadow: var(--elev-2);
+  clip-path: polygon(22px 0, calc(100% - 22px) 0, 100% 22px, 100% calc(100% - 22px), calc(100% - 22px) 100%, 22px 100%, 0 calc(100% - 22px), 0 22px);
+  padding: 12px 18px 10px;
+  min-height: 0;
+}
+
+.dk-table .ph-pond {
+  background: rgba(14, 43, 56, 0.55);
+  margin: 6px 12% 8px;
+  border: var(--line-thin) solid var(--lemn-inchis);
+  clip-path: polygon(30px 0, calc(100% - 30px) 0, 100% 30px, 100% calc(100% - 30px), calc(100% - 30px) 100%, 30px 100%, 0 calc(100% - 30px), 0 30px);
+}
+
+.dk-posts {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.post-d {
+  position: relative;
+  width: 150px;
+  background-color: var(--lemn);
+  background-image: var(--tex-wood);
+  border: var(--line-thin) solid var(--lemn-inchis);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--hartie);
+}
+
+.post-d.is-current {
+  border-color: var(--ocru);
+}
+
+.post-d.is-stunned {
+  background-color: #4a3421;
+}
+
+.post-d.is-stunned .post-d__plate {
+  background: var(--ink);
+  background-image: none;
+  color: var(--hartie);
+}
+
+.post-d.is-offline {
+  border-style: dashed;
+  background-color: #4e4036;
+  filter: saturate(0.35);
+}
+
+.post-d__shell {
+  position: absolute;
+  top: -12px;
+  left: -3px;
+  width: 150px;
+  height: 14px;
+}
+
+.post-d__plate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background-color: var(--hartie);
+  background-image: var(--tex-paper);
+  color: var(--ink);
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 14px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.post-d__row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.post-d__row--foot {
+  justify-content: space-between;
+}
+
+.post-d__score {
+  font-size: 20px;
+  color: var(--var);
+}
+
+.dk-me {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: var(--hartie);
+  background-image: var(--tex-paper);
+  border-top: var(--line-mid) solid var(--ocru);
+  box-shadow: 0 -4px 0 var(--ink);
+  margin: 0 -18px -10px;
+  padding: 8px 18px 6px;
+  color: var(--ink);
+}
+
+.dk-me__post {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: stretch;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.dk-me__hint {
+  margin-left: auto;
+  font-family: var(--text);
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--pe-hartie-slab);
+}
+
+.dk-log {
+  background-color: var(--hartie-2);
+  background-image: var(--tex-paper);
+  border: var(--line-mid) solid var(--ink);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--ink-soft);
+  overflow: hidden;
+}
+
+.dk-log__title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border-bottom: var(--line-mid) solid var(--ink);
+  padding-bottom: 6px;
+}
+
+.dk-log__line {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+.dk-log__line.is-recent {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* short screens: three compact columns so the sheet fits the pond's row */
+@media (max-height: 600px) {
+  .sheet__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .sheet__who {
+    min-height: 48px;
+    grid-template-columns: 1fr;
+    padding: 4px 6px;
+  }
+  .sheet__who > svg:first-child {
+    display: none;
+  }
+  .sheet__name {
+    font-size: 12px;
+  }
+  .sheet__title {
+    margin-bottom: 6px;
+  }
 }
