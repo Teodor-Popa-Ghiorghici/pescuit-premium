@@ -73,9 +73,12 @@ describe('the rim, the drain and the light in the choreography', () => {
   it('the Tortoise\'s cards drop back the same way for any count: one back lifts toward the asker and returns', () => {
     const r = rec(50, view({ window: { type: 'TRANSFER_PENDING', askerId: 'a', targetId: 'b' } }), view(), [{ type: 'TORTOISE_BLOCK', playerId: 'b', rank: 'herring' }]);
     const b = choreograph(r, facts('c'), DEFAULT_OPTIONS).beats.find((x) => x.kind === 'block')!;
-    expect(b.flights).toHaveLength(2);
-    expect(b.flights[0]).toMatchObject({ what: 'back', from: { k: 'seat', id: 'b' }, to: { k: 'between', from: 'b', to: 'a' } });
-    expect(b.flights[1]).toMatchObject({ what: 'back', to: { k: 'seat', id: 'b' } });
+    // the shell drops onto the seat first; then one back lifts toward the asker, strikes it and drops back
+    expect(b.flights).toHaveLength(3);
+    expect(b.flights[0]).toMatchObject({ what: 'fx', sprite: 'shell', to: { k: 'seat', id: 'b' } });
+    const cards = b.flights.filter((x) => x.what === 'back');
+    expect(cards[0]).toMatchObject({ what: 'back', from: { k: 'seat', id: 'b' }, to: { k: 'between', from: 'b', to: 'a' } });
+    expect(cards[1]).toMatchObject({ what: 'back', to: { k: 'seat', id: 'b' } });
     // the same for every viewer, the owner included
     expect(summarize(choreograph(r, facts('b'), DEFAULT_OPTIONS))).toEqual(summarize(choreograph(r, facts('c'), DEFAULT_OPTIONS)));
   });

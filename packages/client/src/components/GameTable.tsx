@@ -12,6 +12,7 @@ import type { HandGroup } from '../game/handModel.js';
 import { cardSizeFor, useDesktop, useMedia, useWindowSize, WIDE_QUERY } from '../hooks/useViewport.js';
 import { useT } from '../i18n/useT.js';
 import { usePresenter } from '../hooks/usePresenter.js';
+import { presenter } from '../game/presenter.js';
 import { useGame } from '../state/store.js';
 import { Announcer } from './Announcer.js';
 import { AskSheet } from './AskSheet.js';
@@ -20,7 +21,7 @@ import { Hand } from './Hand.js';
 import { LogPanel } from './LogPanel.js';
 import { Pond } from './Pond.js';
 import { LaidRow } from './LaidSets.js';
-import { Chip, Post } from './Seats.js';
+import { Chip, Crown, Post, useLead } from './Seats.js';
 import { HeadphonesPrompt, MenuSheet, SoundSettings } from './Sheets.js';
 import { TopBar } from './TopBar.js';
 import { Plank, WindowBanner, windowKeyOf, tooLateText } from './Windows.js';
@@ -75,7 +76,8 @@ function liftFor(i: number, n: number): number {
 }
 
 export function GameTable() {
-  const { t, rank } = useT();
+  const { t, rank, locale } = useT();
+  presenter.locale = locale;
   const { view, playerId, status, sendAction, events, error, dismissError, leaveRoom } = useGame();
   const desktop = useDesktop();
   const wide = useMedia(WIDE_QUERY);
@@ -293,6 +295,7 @@ export function GameTable() {
 
   const me = view.players.find((p) => p.id === playerId)!;
   const myFacts = seatFacts(view, playerId);
+  const myLead = useLead(view, playerId);
   const opponents = opponentsInOrder(view, playerId);
   const current = view.players.find((p) => p.id === (shownTurn ?? view.currentPlayerId));
   const turnText = isGameOver ? t('game.gameOver') : shownMine ? t('game.yourTurn') : t('game.turnOf', { name: current?.name ?? '' });
@@ -352,7 +355,10 @@ export function GameTable() {
       )}
       <Mark id={markForSeat(view.turnOrder, playerId)} size={desktop ? 16 : 13} color="#17120e" />
       <span className="dock__name">{t('dock.me')}</span>
-      <span className="dock__score num">{me.score}</span>
+      {myLead.leads && <Crown tier={myLead.tier} size={desktop ? 1 : 0.85} />}
+      <span className="dock__score num" data-score-owner={playerId}>
+        <span className="score__now">{me.score}</span>
+      </span>
       <PowerPips unused={myFacts.unused} used={myFacts.used} />
       <LaidRow view={view} owner={playerId} className="laid--me" max={desktop ? undefined : 5} />
       <span className="dock__hand">

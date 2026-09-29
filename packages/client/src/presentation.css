@@ -489,3 +489,272 @@
     transform: none;
   }
 }
+
+/* ======================================================================================= power moments
+ * (§5.7) Cause travels to effect: the actor's seat gathers itself (the charge), the table dims to the seats
+ * involved (the focus), the power's embodiment flies from the actor to what it acts on (a sprite), a line or a
+ * beam joins them (the tether), the struck seat jolts, and the proclamation says in words what happened. */
+
+.flier__fx svg {
+  display: block;
+  overflow: visible;
+}
+
+/* the charge: a ring in the power's colour closes on the actor's seat */
+.charge {
+  border: 3px solid var(--accent, var(--ocru));
+  outline: 2px solid var(--ink);
+  outline-offset: -1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* the tethers */
+.tether {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.tether--line path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5px;
+}
+.tether--slack path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2px;
+  stroke-opacity: 0.7;
+}
+.tether--beam polygon {
+  fill: var(--ocru);
+  fill-opacity: 0.42;
+  stroke: var(--ocru);
+  stroke-width: 2px;
+}
+.tether--wake path {
+  fill: none;
+  stroke: #9fd3bf;
+  stroke-width: 4px;
+  stroke-linecap: round;
+  stroke-dasharray: 10 8;
+}
+
+/* the proclamation: a paper plate with a heavy ink rule, the seal in the power's colour, the name and the line */
+.callout {
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 8px;
+  color: var(--ink);
+  background-color: var(--hartie);
+  background-image: var(--tex-paper);
+  border: 3px solid var(--ink);
+  border-left: 10px solid var(--accent, var(--ocru));
+  box-shadow: 5px 5px 0 var(--ink);
+  transform-origin: 50% 50%;
+  opacity: 0;
+}
+.callout__seal {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  background: var(--accent, var(--ocru));
+  border: 3px solid var(--ink);
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+}
+.callout__seal > svg {
+  width: 34px;
+  height: 34px;
+  stroke: var(--ink);
+  color: var(--ink);
+}
+.callout__via {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  background: var(--hartie);
+  border: 2px solid var(--ink);
+}
+.callout__via svg {
+  width: 15px;
+  height: 15px;
+  stroke: var(--ink);
+  color: var(--ink);
+}
+.callout__text {
+  min-width: 0;
+}
+.callout__title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 23px;
+  line-height: 1.05;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.callout__line {
+  margin-top: 2px;
+  font-family: var(--text);
+  font-weight: 700;
+  font-size: 14.5px;
+  line-height: 1.25;
+}
+.callout--miss {
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.callout--miss .callout__title {
+  font-size: 19px;
+  opacity: 0.8;
+}
+.callout--clinch,
+.callout--breakaway {
+  border-width: 4px;
+  border-left-width: 12px;
+}
+.callout--clinch .callout__title {
+  font-size: 27px;
+}
+.callout--lead .callout__seal,
+.callout--tie .callout__seal,
+.callout--chase .callout__seal,
+.callout--breakaway .callout__seal,
+.callout--clinch .callout__seal {
+  background: var(--ink);
+}
+
+/* the focus: everything but the seats involved sinks into the dark for the moment of the power */
+:root[data-focus] :is([data-player-id], [data-me], .ph-hand, .dk-hand):not([data-spot]) {
+  filter: brightness(0.42) saturate(0.4);
+}
+[data-player-id],
+[data-me] {
+  transition: filter 120ms steps(2, end);
+}
+:root[data-focus] [data-spot] {
+  z-index: 4;
+  box-shadow: 0 0 0 3px var(--ink), 0 0 0 6px var(--ocru);
+}
+
+/* a struck seat: its border flashes red for a moment */
+[data-struck] {
+  border-color: #a8392a !important;
+  filter: brightness(1.35) !important;
+}
+
+/* the score keeps its old number until the set is pressed */
+.score__now {
+  display: inline;
+}
+[data-score-owner] {
+  display: inline-block;
+  transform-origin: 50% 60%;
+}
+[data-masked~='score'] .score__now {
+  display: none;
+}
+[data-masked~='score']::after {
+  content: attr(data-was);
+}
+
+/* ============================================================================ the score race
+ * The leader wears the crown: small and plain when shared, bigger by two, ringed by three or more, sealed once
+ * out of reach. The leading seat's frame follows the same tiers. */
+.crown {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  line-height: 0;
+}
+.chip > .crown {
+  top: -15px;
+  right: -9px;
+  transform: rotate(14deg);
+}
+.post-d > .crown {
+  top: -20px;
+  right: -12px;
+  transform: rotate(12deg);
+}
+.dk-me .crown,
+.ph-dock .crown {
+  position: relative;
+  top: -2px;
+}
+.crown[data-tier='0'] {
+  opacity: 0.75;
+}
+.crown[data-tier='3'] svg,
+.crown[data-tier='clinched'] svg {
+  filter: drop-shadow(0 0 0 var(--ink)) drop-shadow(2px 2px 0 var(--ink));
+}
+.crown[data-tier='clinched']::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2.5px solid var(--ocru);
+  border-radius: 50%;
+  outline: 2px solid var(--ink);
+}
+
+.chip[data-lead='2'],
+.post-d[data-lead='2'] {
+  border-color: var(--ocru);
+}
+.chip[data-lead='3']::after,
+.post-d[data-lead='3']::after,
+.chip[data-lead='clinched']::after,
+.post-d[data-lead='clinched']::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border: 3px solid var(--ocru);
+  outline: 2px solid var(--ink);
+  pointer-events: none;
+}
+.chip[data-lead='clinched']::after,
+.post-d[data-lead='clinched']::after {
+  border-style: double;
+  border-width: 6px;
+}
+
+/* ================================================================ states a power leaves behind
+ * Stunned: the jellyfish's sting hatched across the seat in its colour, over the burned plate. Protected: the
+ * shell is heavier and the seat's frame turns shell-green. Both are inked when the strike lands. */
+.chip.is-stunned:not([data-masked~='nostun'])::before,
+.post-d.is-stunned:not([data-masked~='nostun'])::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(-45deg, transparent 0 6px, rgba(213, 155, 180, 0.55) 6px 9px);
+}
+.chip.is-protected:not([data-masked~='noshield']),
+.post-d.is-protected:not([data-masked~='noshield']) {
+  border-color: #3d7a66;
+}
+[data-masked~='noshield'] :is(.chip__shell, .post-d__shell) {
+  display: none;
+}
+.chip__shell {
+  top: -12px !important;
+  height: 15px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-player-id],
+  [data-me] {
+    transition: none;
+  }
+}

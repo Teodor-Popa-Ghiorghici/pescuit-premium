@@ -203,18 +203,18 @@ body:has(.dk) {
 
 /* stunned is branded, not tinted: the plate is burned dark with the jellyfish seal, the wood
    darkens, and the score stays at full ink */
-.chip.is-stunned .chip__plate {
+.chip.is-stunned:not([data-masked~='nostun']) .chip__plate {
   background: var(--ink);
   background-image: none;
   color: var(--hartie);
 }
 
-.chip.is-stunned {
+.chip.is-stunned:not([data-masked~='nostun']) {
   background-color: #4a3421;
 }
 
-.chip.is-stunned .chip__row svg,
-.chip.is-stunned .chip__hand {
+.chip.is-stunned:not([data-masked~='nostun']) .chip__row svg,
+.chip.is-stunned:not([data-masked~='nostun']) .chip__hand {
   opacity: 0.6;
 }
 
@@ -1563,11 +1563,11 @@ body:has(.dk) {
   border-color: var(--ocru);
 }
 
-.post-d.is-stunned {
+.post-d.is-stunned:not([data-masked~='nostun']) {
   background-color: #4a3421;
 }
 
-.post-d.is-stunned .post-d__plate {
+.post-d.is-stunned:not([data-masked~='nostun']) .post-d__plate {
   background: var(--ink);
   background-image: none;
   color: var(--hartie);

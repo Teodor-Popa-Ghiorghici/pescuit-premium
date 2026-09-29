@@ -84,7 +84,7 @@ export type PublicEvent =
   | { type: 'POWER_GRANTED'; playerId: string; grantId?: string; rank?: string | null; sourceSetId?: string; unbound?: boolean }
   | { type: 'POWER_USED'; playerId: string; rank: string; viaClownfish?: boolean }
   | { type: 'CLOWNFISH_BOUND'; playerId: string; boundRank?: string }
-  | { type: 'SHARK_JUMP'; playerId: string; loserId?: string; fromId?: string; count?: number }
+  | { type: 'SHARK_JUMP'; playerId: string; loserId?: string; fromId?: string; count?: number; rank?: string }
   | { type: 'LANTERNFISH_REFLECT'; playerId: string; fromId: string; count?: number; rank?: string }
   | { type: 'TORTOISE_BLOCK'; playerId: string; rank?: string }
   | { type: 'JELLYFISH_STUN'; playerId: string; targetId: string }
@@ -145,7 +145,12 @@ export const BEAT = {
   gate: 300,
   gateOpen: 200,
   lastSet: 600,
-  effect: 450, // a power's effect, under its motif
+  effect: 450, // a power's effect, under its motif (Ascuns: after the reveal)
+  effectOpen: 300, // Mode Deschis: no reveal, but the actor still gathers itself before the strike
+  /** the windup's riser ends exactly on the strike */
+  windup: 250,
+  /** the score race's moment, after the lay's stamp (TIME.lead in the choreography) */
+  lead: 440,
   start: 2400, // the first turn after the call to the table
   /** when several seats stop the totem in one step (a stunned skip, a pass), each stop waits for the last one's cue */
   turnGap: 420,
@@ -202,7 +207,10 @@ export function cuesFor(record: PublicRecord, facts: SeatFacts): CueRequest[] {
 
   /* ---- events (they label the diff; structural windows are simply not in this list) ---- */
   const bonusFor = new Set(events.filter((e) => e.type === 'BONUS_TURN').map((e) => (e as { playerId: string }).playerId));
-  let usedAt: number | null = null;
+  // the strike: every effect lands here, with the table-top impact under it
+  const usedEv = events.find((e) => e.type === 'POWER_USED' && !!motifName(e.rank));
+  const strike = usedEv && mode !== 'ascuns' ? BEAT.effectOpen : BEAT.effect;
+  const impact = (weight: number) => add('table.impact', strike, { weight });
   let turnSlot = 0;
   for (const e of events) {
     switch (e.type) {
@@ -247,7 +255,8 @@ export function cuesFor(record: PublicRecord, facts: SeatFacts): CueRequest[] {
         add(e.isPowerSet ? 'table.lay.power' : 'table.lay', 0);
         break;
       case 'SET_DESTROYED':
-        add('power.mantis', usedAt ?? BEAT.effect);
+        add('power.mantis', strike);
+        impact(1);
         break;
       case 'POWER_GRANTED': {
         // Mode Deschis: the rank is public, so its motif plays - and Squid's motif is a rest.
@@ -269,9 +278,11 @@ export function cuesFor(record: PublicRecord, facts: SeatFacts): CueRequest[] {
         if (!m) break; // Squid has no motif, no reveal: silence
         const reveal = mode === 'ascuns';
         if (reveal) add('power.reveal', 0);
-        usedAt = reveal ? BEAT.effect : 0;
-        if (e.viaClownfish) add('power.used.clownfish', usedAt, { rank: m });
-        else add(`power.used.${m}`, usedAt);
+        // the motif is the power's call: after the reveal (Ascuns), at once (Deschis); the riser gathers into the strike
+        const call = reveal ? BEAT.effect : 0;
+        if (e.viaClownfish) add('power.used.clownfish', call, { rank: m });
+        else add(`power.used.${m}`, call);
+        add('power.windup', strike - BEAT.windup);
         break;
       }
       case 'CLOWNFISH_BOUND': {
@@ -283,25 +294,31 @@ export function cuesFor(record: PublicRecord, facts: SeatFacts): CueRequest[] {
         break;
       }
       case 'SHARK_JUMP':
-        add('power.shark', usedAt ?? BEAT.effect);
+        add('power.shark', strike);
+        impact(1);
         break;
       case 'LANTERNFISH_REFLECT':
-        add('power.lanternfish', usedAt ?? BEAT.effect, { seat: seat(e.fromId) });
+        add('power.lanternfish', strike, { seat: seat(e.fromId) });
+        impact(0.55);
         break;
       case 'TORTOISE_BLOCK':
-        add('power.tortoise', usedAt ?? BEAT.effect);
+        add('power.tortoise', strike);
+        impact(0.75);
         break;
       case 'JELLYFISH_STUN':
-        add('power.jellyfish', usedAt ?? BEAT.effect);
+        add('power.jellyfish', strike);
+        impact(0.7);
         break;
       case 'STICKLEBACK_STEAL':
-        add('power.stickleback', usedAt ?? BEAT.effect);
+        add('power.stickleback', strike);
+        impact(0.7);
         break;
       case 'STICKLEBACK_WASTED':
-        add('power.stickleback.miss', usedAt ?? BEAT.effect);
+        add('power.stickleback.miss', strike);
         break;
       case 'WHALE_SHUFFLE':
-        add('power.whale', usedAt ?? BEAT.effect);
+        add('power.whale', strike);
+        impact(0.9);
         break;
       case 'GAME_ENDED': {
         // the pips count up, one `table.tally` per pip, a step higher each: the same for everyone (the scores are public);
@@ -318,12 +335,45 @@ export function cuesFor(record: PublicRecord, facts: SeatFacts): CueRequest[] {
     }
   }
 
+  // the score race (public: every chip shows the scores): a new leader, a tie, a breakaway, a chase, out of reach
+  const race = raceOf(record);
+  if (race) add(race === 'clinch' ? 'table.clinch' : race === 'lead' || race === 'tie' ? 'table.lead' : race === 'breakaway' ? 'table.breakaway' : 'table.chase', BEAT.lead, race === 'tie' ? { count: 1 } : undefined);
+
   // the tally reaches 1: the last set in the pond
   const before1 = before?.setsPossible ?? null;
   if (after.setsPossible === 1 && before1 !== 1) add('mus.lastset', has('SET_LAID') ? BEAT.lastSet : 0);
 
   // the private tier is silent unless headphones mode is on: enforced here as well as in the engine
   return out.filter((c) => (cueDef(c.id)?.heard !== 'private' && !c.params?.private) || facts.headphones).sort((a, b) => a.at - b.at);
+}
+
+/** The score race's moment in one step, if there is one: the same rule the choreography draws (leadOf/leadTier
+ * there; kept here as plain arithmetic so cues.ts stays free of the choreography). */
+export function raceOf(record: PublicRecord): 'lead' | 'tie' | 'breakaway' | 'chase' | 'clinch' | null {
+  const { before, after, events } = record;
+  if (!before?.scores || !after.scores || events.some((e) => e.type === 'GAME_ENDED')) return null;
+  const lays = events.filter((e) => e.type === 'SET_LAID') as Array<{ playerId: string }>;
+  if (!lays.length) return null;
+  const order = after.players;
+  const lead = (sc: Readonly<Record<string, number>>, possible: number | null | undefined) => {
+    const top = Math.max(0, ...order.map((p) => sc[p] ?? 0));
+    const leaders = top > 0 ? order.filter((p) => (sc[p] ?? 0) === top) : [];
+    const margin = leaders.length === 1 ? top - Math.max(0, ...order.filter((p) => p !== leaders[0]).map((p) => sc[p] ?? 0)) : 0;
+    const tier = leaders.length !== 1 ? 0 : possible != null && margin > possible ? 9 : Math.min(3, margin);
+    return { leaders, margin, tier };
+  };
+  const top = (sc: Readonly<Record<string, number>>) => Math.max(0, ...order.map((p) => sc[p] ?? 0));
+  const a = lead(before.scores, before.setsPossible);
+  const b = lead(after.scores, after.setsPossible);
+  const scorer = lays[lays.length - 1].playerId;
+  const x = b.leaders.length === 1 ? b.leaders[0] : null;
+  const was = a.leaders.length === 1 ? a.leaders[0] : null;
+  if (x && b.tier === 9 && !(was === x && a.tier === 9)) return 'clinch';
+  if (x && x !== was) return 'lead';
+  if (!x && b.leaders.length > 1 && top(after.scores) >= 2 && was && b.leaders.includes(scorer) && scorer !== was) return 'tie';
+  if (x && x === was && b.tier !== 9 && a.tier !== 9 && b.tier > a.tier && b.tier >= 2) return 'breakaway';
+  if (x && x === was && scorer !== x && a.margin >= 2 && b.margin === 1) return 'chase';
+  return null;
 }
 
 /** The answering device's own close, at the press (§3.2): the same cue, earlier. The device then
@@ -371,6 +421,8 @@ export const SOUND_COLUMN: ReadonlyArray<{ signal: string; byDefault: string; he
   { signal: 'POWER_USED', byDefault: 'power.reveal (Ascuns), power.used.<rank>' },
   { signal: 'CLOWNFISH_BOUND', byDefault: 'Deschis: power.clownfish.bound', headphones: 'Ascuns, owner: power.clownfish.bound' },
   { signal: 'the effect events', byDefault: 'power.shark / lanternfish / tortoise / jellyfish / stickleback / stickleback.miss / whale' },
+  { signal: 'a power strikes', byDefault: 'power.windup (the riser into the strike), table.impact (its weight on the table top)' },
+  { signal: 'the score race: a new leader or a tie / a breakaway / a chase / out of reach', byDefault: 'table.lead / table.breakaway / table.chase / table.clinch' },
   { signal: 'the tally reaches 1', byDefault: 'mus.lastset' },
   { signal: 'the stall gate shuts / opens', byDefault: 'amb.gate' },
   { signal: 'GAME_ENDED', byDefault: 'mus.end.win / tie / lose (you); table.tally, one per pip counted up (everyone)' },

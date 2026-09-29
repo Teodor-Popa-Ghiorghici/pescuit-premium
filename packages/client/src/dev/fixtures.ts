@@ -10,7 +10,7 @@ import { NAMES } from './driver.js';
 export interface FixtureSpec {
   id: string;
   label: string;
-  build(n: number, seed: number, seat: number): Omit<DriverOptions, 'bots' | 'speed' | 'seed' | 'humanId'> & { seat: number };
+  build(n: number, seed: number, seat: number): Omit<DriverOptions, 'bots' | 'speed' | 'seed' | 'humanId'> & { seat: number; act?: (s: GameState) => Action };
 }
 
 const LONG = ['Alexandru-Constantin Pop', 'Bogdan-Gheorghe Ionescu-X', 'Cezara Maria Popescu-Vlad', 'Dumitrița Anastasia Rusu', 'Eugenia-Valentina Marinescu', 'Florentin Ștefănescu-Radu'].map((s) => s.slice(0, 24));
@@ -79,6 +79,15 @@ class Script {
   out(extra: Partial<DriverOptions> = {}) {
     return { state: this.state, events: this.events.slice(-8), humanId: this.me, ...extra };
   }
+}
+
+const grantOf = (s: GameState, owner: string, rank: Rank): string => s.powerGrants.find((g) => g.ownerId === owner && g.rank === rank && !g.used)!.id;
+
+/** a table where `pid` is to ask, with no window open */
+function turnOf(sc: Script, pid: string) {
+  sc.state.currentPlayerIndex = sc.state.players.findIndex((p) => p.id === pid);
+  sc.state.resume = { kind: 'AWAIT_REQUEST', playerId: pid };
+  return sc;
 }
 
 const POWERS: Rank[] = ['squid', 'shark', 'tortoise', 'jellyfish', 'lanternfish', 'stickleback', 'mantisShrimp', 'whale', 'clownfish'];
@@ -289,6 +298,157 @@ export const FIXTURES: FixtureSpec[] = [
       sc.deal({ [sc.me]: MY_HAND });
       toMyTurn(sc);
       return { ...sc.out(), seat };
+    },
+  },
+];
+
+/* ---- showcases (`?fixture=fx-*`): each stages ONE power or score moment, one action away. `window.__fxGo()`
+ * performs it; tools/fx-capture.cjs films it frame by frame. You are seat 0 ("Tu"). ---- */
+const scores = (sc: Script, s: number[]) => sc.state.players.forEach((p, i) => (p.score = s[i] ?? 0));
+
+export const SHOWCASES: FixtureSpec[] = [
+  {
+    id: 'fx-shark',
+    label: 'Showcase: Cezar jumps a successful ask with Shark (Bogdan had just paid Ana the herring)',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const [asker, target, shark] = [sc.id(1), sc.id(2), sc.id(3 % n)];
+      sc.deal({ [asker]: ['herring', 'carp', 'anchovy', 'mackerel', 'sardine', 'catfish', 'trout'], [target]: ['herring', 'herring', 'carp', 'perch', 'anchovy', 'sardine', 'mackerel'], [shark]: ['shark', 'shark', 'shark', 'shark', 'catfish', 'trout', 'perch'] });
+      sc.lay(shark, 'shark');
+      turnOf(sc, asker).do({ type: 'REQUEST', playerId: asker, targetId: target, rank: 'herring' }).do({ type: 'SKIP_WINDOW', playerId: target });
+      return { ...sc.out(), seat, act: (s) => ({ type: 'DECLARE_SHARK', playerId: shark, grantId: grantOf(s, shark, 'shark') }) };
+    },
+  },
+  {
+    id: 'fx-lanternfish',
+    label: 'Showcase: Ana asks Bogdan, who reflects it with Lanternfish',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const [asker, lan] = [sc.id(1), sc.id(2)];
+      sc.deal({ [asker]: ['herring', 'herring', 'carp', 'anchovy', 'mackerel', 'sardine', 'trout'], [lan]: ['lanternfish', 'lanternfish', 'lanternfish', 'lanternfish', 'catfish', 'trout', 'perch'] });
+      sc.lay(lan, 'lanternfish');
+      turnOf(sc, asker).do({ type: 'REQUEST', playerId: asker, targetId: lan, rank: 'herring' });
+      return { ...sc.out(), seat, act: (s) => ({ type: 'DECLARE_LANTERNFISH', playerId: lan, grantId: grantOf(s, lan, 'lanternfish') }) };
+    },
+  },
+  {
+    id: 'fx-tortoise',
+    label: 'Showcase: Ana asks Bogdan for herring; Bogdan shields them with Tortoise',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const [asker, tor] = [sc.id(1), sc.id(2)];
+      sc.deal({ [asker]: ['herring', 'carp', 'anchovy', 'mackerel', 'sardine', 'catfish', 'trout'], [tor]: ['tortoise', 'tortoise', 'tortoise', 'tortoise', 'herring', 'herring', 'perch'] });
+      sc.lay(tor, 'tortoise');
+      turnOf(sc, asker).do({ type: 'REQUEST', playerId: asker, targetId: tor, rank: 'herring' }).do({ type: 'SKIP_WINDOW', playerId: tor });
+      return { ...sc.out(), seat, act: (s) => ({ type: 'DECLARE_TORTOISE', playerId: tor, grantId: grantOf(s, tor, 'tortoise'), rank: 'herring' }) };
+    },
+  },
+  {
+    id: 'fx-jellyfish',
+    label: 'Showcase: Ana stuns Bogdan with Jellyfish',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const [jel, tgt] = [sc.id(1), sc.id(2)];
+      sc.deal({ [jel]: ['jellyfish', 'jellyfish', 'jellyfish', 'jellyfish', 'catfish', 'trout', 'perch'] });
+      sc.lay(jel, 'jellyfish');
+      turnOf(sc, sc.id(0)).failAsk(sc.id(0), tgt);
+      return { ...sc.out(), seat, act: (s) => (s.pendingWindow ? { type: 'USE_JELLYFISH', playerId: jel, grantId: grantOf(s, jel, 'jellyfish'), targetId: tgt } : { type: 'SKIP_WINDOW', playerId: jel }) };
+    },
+  },
+  {
+    id: 'fx-stickleback',
+    label: 'Showcase: Ana hooks Bogdan\'s herring with Stickleback',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const [st, tgt] = [sc.id(1), sc.id(2)];
+      sc.deal({ [st]: ['stickleback', 'stickleback', 'stickleback', 'stickleback', 'catfish', 'trout', 'perch'], [tgt]: ['herring', 'herring', 'carp', 'anchovy', 'mackerel', 'sardine', 'trout'] });
+      sc.lay(st, 'stickleback');
+      turnOf(sc, sc.id(0)).failAsk(sc.id(0), tgt);
+      return { ...sc.out(), seat, act: (s) => ({ type: 'USE_STICKLEBACK', playerId: st, grantId: grantOf(s, st, 'stickleback'), targetId: tgt, rank: 'herring' }) };
+    },
+  },
+  {
+    id: 'fx-stickleback-miss',
+    label: 'Showcase: Ana\'s Stickleback hook catches nothing',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const [st, tgt] = [sc.id(1), sc.id(2)];
+      sc.deal({ [st]: ['stickleback', 'stickleback', 'stickleback', 'stickleback', 'catfish', 'trout', 'perch'], [tgt]: ['carp', 'carp', 'anchovy', 'anchovy', 'mackerel', 'sardine', 'trout'] });
+      sc.lay(st, 'stickleback');
+      turnOf(sc, sc.id(0)).failAsk(sc.id(0), tgt);
+      return { ...sc.out(), seat, act: (s) => ({ type: 'USE_STICKLEBACK', playerId: st, grantId: grantOf(s, st, 'stickleback'), targetId: tgt, rank: 'herring' }) };
+    },
+  },
+  {
+    id: 'fx-mantis',
+    label: 'Showcase: Bogdan smashes Ana\'s new Whale set with Mantis Shrimp',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const [owner, man] = [sc.id(1), sc.id(2)];
+      sc.deal({ [man]: ['mantisShrimp', 'mantisShrimp', 'mantisShrimp', 'mantisShrimp', 'catfish', 'trout', 'perch'], [owner]: ['whale', 'whale', 'whale', 'whale', 'herring', 'carp', 'anchovy'] });
+      sc.lay(man, 'mantisShrimp');
+      sc.lay(owner, 'whale');
+      return { ...sc.out(), seat, act: (s) => ({ type: 'DECLARE_MANTIS', playerId: man, grantId: grantOf(s, man, 'mantisShrimp') }) };
+    },
+  },
+  {
+    id: 'fx-whale',
+    label: 'Showcase: Ana\'s Whale shuffles Bogdan\'s and Cezar\'s hands together',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const [wh, a, b] = [sc.id(1), sc.id(2), sc.id(3 % n)];
+      sc.deal({ [wh]: ['whale', 'whale', 'whale', 'whale', 'catfish', 'trout', 'perch'] });
+      sc.lay(wh, 'whale');
+      turnOf(sc, sc.id(0)).failAsk(sc.id(0), a);
+      return { ...sc.out(), seat, act: (s) => ({ type: 'USE_WHALE', playerId: wh, grantId: grantOf(s, wh, 'whale'), targetAId: a, targetBId: b, entropy: [1, 2, 3, 4] }) };
+    },
+  },
+  {
+    id: 'fx-lead',
+    label: 'Showcase: Ana breaks a tie and takes the lead',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const p = sc.id(1);
+      sc.deal({ [p]: ['herring', 'herring', 'herring', 'carp', 'anchovy', 'mackerel', 'trout'] });
+      turnOf(sc, p);
+      scores(sc, [1, 3, 3, 2]);
+      return { ...sc.out(), seat, act: (s) => ({ type: 'LAY_SET', playerId: p, rank: 'herring', cardIds: s.players[1].hand.filter((c) => c.rank === 'herring').map((c) => c.id) }) };
+    },
+  },
+  {
+    id: 'fx-breakaway',
+    label: 'Showcase: Ana, already leading, pulls three clear',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const p = sc.id(1);
+      sc.deal({ [p]: ['herring', 'herring', 'herring', 'carp', 'anchovy', 'mackerel', 'trout'] });
+      turnOf(sc, p);
+      scores(sc, [1, 4, 2, 2]);
+      return { ...sc.out(), seat, act: (s) => ({ type: 'LAY_SET', playerId: p, rank: 'herring', cardIds: s.players[1].hand.filter((c) => c.rank === 'herring').map((c) => c.id) }) };
+    },
+  },
+  {
+    id: 'fx-clinch',
+    label: 'Showcase: Ana\'s lay puts Ana out of reach',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      const p = sc.id(1);
+      sc.deal({ [p]: ['herring', 'herring', 'herring', 'carp', 'anchovy', 'mackerel', 'trout'] });
+      turnOf(sc, p);
+      scores(sc, [2, 6, 3, 1]);
+      const patch = (v: RedactedView): RedactedView => ({ ...v, sets: { ...v.sets, possible: (v.players.find((x) => x.id === p)?.score ?? 0) >= 7 ? 2 : 5 } });
+      return { ...sc.out(), seat, viewPatch: patch, act: (s) => ({ type: 'LAY_SET', playerId: p, rank: 'herring', cardIds: s.players[1].hand.filter((c) => c.rank === 'herring').map((c) => c.id) }) };
+    },
+  },
+  {
+    id: 'fx-you-lead',
+    label: 'Showcase: you take the lead',
+    build(n, seed, seat) {
+      const sc = fresh(n, seed, seat);
+      sc.deal({ [sc.me]: ['herring', 'herring', 'herring', 'carp', 'anchovy', 'mackerel', 'trout'] });
+      turnOf(sc, sc.me);
+      scores(sc, [3, 3, 2, 1]);
+      return { ...sc.out(), seat, act: (s) => ({ type: 'LAY_SET', playerId: sc.me, rank: 'herring', cardIds: s.players.find((x) => x.id === sc.me)!.hand.filter((c) => c.rank === 'herring').map((c) => c.id) }) };
     },
   },
 ];

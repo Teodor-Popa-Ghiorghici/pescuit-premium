@@ -7,7 +7,7 @@
  * It knows nothing of the game: no card ranks except the seal a chip is asked to bear, no view, no
  * events. It is told where to fly and when.
  */
-import type { Anchor, MaskTarget, VfxKind } from './choreography.js';
+import type { Anchor, MaskTarget, TetherStyle, VfxKind } from './choreography.js';
 import { flightMs } from './choreography.js';
 import { VFX_STEP_MS, vfxMs } from '../art/vfx.js';
 
@@ -56,6 +56,8 @@ export interface FlyOptions {
   scaleTo?: number;
   tiltFrom?: number;
   tiltTo?: number;
+  /** the arc's height in px (40-80 from the key when absent) */
+  lift?: number;
   /** ms to wait before taking off (a landing at a fixed moment: the rest of the nominal time) */
   delay?: number;
   onLand?: () => void;
@@ -136,6 +138,10 @@ export class Stage {
         const t = this.anchor({ k: 'seat', id: a.to }, role);
         return f && t ? { cx: f.cx + (t.cx - f.cx) * a.t, cy: f.cy + (t.cy - f.cy) * a.t, w: f.w, h: f.h } : null;
       }
+      case 'above': {
+        const b = this.anchor(a.of, role);
+        return b ? { ...b, cy: b.cy - a.dy } : null;
+      }
     }
   }
 
@@ -180,7 +186,7 @@ export class Stage {
     const dur = o.byDistance ? Math.min(o.dur, flightMs(dist)) : o.dur;
     const delay = Math.max(0, (o.delay ?? 0) + (o.dur - dur));
     const r = hash01(o.key);
-    const lift = o.straight ? 0 : 40 + r * 40;
+    const lift = o.straight ? 0 : (o.lift ?? 40 + r * 40);
     const flutter = (hash01(o.key + 'f') * 2 - 1) * 6;
     const tilt0 = o.tiltFrom ?? (hash01(o.key + 'a') * 2 - 1) * 4;
     const tilt1 = o.tiltTo ?? (hash01(o.key + 'b') * 2 - 1) * 3;
@@ -287,6 +293,7 @@ export class Stage {
 
   /** a stepped effect, centred on a box, gone when its last frame has been shown */
   vfx(kind: VfxKind, b: Box | null, sizePx = 64): void {
+    if (this.reduced && kind !== 'gateDoors' && kind !== 'inkBurst') sizePx = Math.min(sizePx, 64);
     if (!b) return;
     const el = this.spawn(`vfx:${kind}`);
     if (!el) return;
@@ -317,8 +324,15 @@ export class Stage {
     tally: () => '[data-tally]',
     lastnotch: () => '[data-tally]',
     podium: () => '[data-podium]',
+    stun: (r) => this.seatSel(r),
+    shield: (r) => this.seatSel(r),
+    crown: () => '[data-crown]',
+    score: (r) => `[data-score-owner="${CSS.escape((r ?? '').split(':')[0])}"]`,
   };
-  private static TOKEN: Record<MaskTarget, string> = { totem: 'hide', plank: 'soft', set: 'hide', crack: 'crack', tally: 'tally', lastnotch: 'nolast', podium: 'hide' };
+  private static seatSel(r?: string): string {
+    return r ? `[data-player-id="${CSS.escape(r)}"], [data-me="${CSS.escape(r)}"]` : '[data-none]';
+  }
+  private static TOKEN: Record<MaskTarget, string> = { totem: 'hide', plank: 'soft', set: 'hide', crack: 'crack', tally: 'tally', lastnotch: 'nolast', podium: 'hide', stun: 'nostun', shield: 'noshield', crown: 'hide', score: 'score' };
 
   private tokens(el: Element): string[] {
     return (el.getAttribute('data-masked') ?? '').split(' ').filter(Boolean);
@@ -334,6 +348,11 @@ export class Stage {
       if (on) t.push(token);
       this.setTokens(el, t);
       if (target === 'tally') this.keepNotches(el as HTMLElement, on ? ref : undefined);
+      // the score keeps its old number (drawn by CSS from data-was) until the set is pressed
+      if (target === 'score') {
+        if (on) el.setAttribute('data-was', (ref ?? '').split(':')[1] ?? '');
+        else el.removeAttribute('data-was');
+      }
     }
   }
   /** the notches that were just knocked out stay lit until the knock: `ref` is "from:to" */
@@ -505,7 +524,7 @@ export class Stage {
     const svg = seal.querySelector('svg')?.cloneNode(true) as SVGElement | undefined;
     seal.remove();
     const from = this.totemSpot(owner) ?? this.anchor({ k: 'center' }, 'from');
-    const mid = this.anchor({ k: 'center' }, 'to');
+    const mid = this.calloutSpot();
     if (!from || !mid) return;
     const plate = document.createElement('div');
     plate.className = 'flier reveal';
@@ -516,25 +535,26 @@ export class Stage {
     const W = 46;
     const H = 60;
     const at = (b: { cx: number; cy: number }, dy: number, s: number): string => `translate(${b.cx - W / 2}px, ${b.cy - H / 2 + dy}px) scale(${s})`;
-    const total = 1300;
+    // the plate flips on its owner's seat (0-283 ms), then flies to the pond's centre and bursts into the
+    // proclamation exactly on the strike (450 ms), where the banner takes its seal
+    const total = 640;
     const end = (): void => plate.remove();
     if (this.reduced || typeof plate.animate !== 'function') {
       plate.classList.add('is-face');
       plate.style.transform = at(mid, 0, 1.5);
       plate.style.opacity = '1';
-      setTimeout(end, 400);
+      setTimeout(end, 450);
       return;
     }
     plate.animate(
       [
-        { transform: at(from, 0, 0.5), opacity: 1, offset: 0 },
-        { transform: at(from, -14, 0.65), offset: 0.115 },
-        { transform: at(from, -14, 0.65), offset: 0.31 },
-        { transform: at(mid, 0, 1.5), offset: 0.54 },
-        { transform: at(mid, 0, 1.5), offset: 0.85 },
-        { transform: at(from, 0, 0.4), opacity: 0.2, offset: 1 },
+        { transform: at(from, 0, 0.6), opacity: 1, offset: 0 },
+        { transform: at(from, -18, 0.95), offset: 0.18 },
+        { transform: at(from, -18, 0.95), offset: 0.44 },
+        { transform: at(mid, 0, 1.6), opacity: 1, offset: 0.7 },
+        { transform: at(mid, 0, 2.4), opacity: 0, offset: 1 },
       ],
-      { duration: total, easing: 'steps(12, end)', fill: 'both' },
+      { duration: total, easing: 'steps(10, end)', fill: 'both' },
     ).onfinish = end;
     // three stepped frames: the back, the edge, the face
     const show = (sel: string, a: number, b: number): void => {
@@ -548,6 +568,226 @@ export class Stage {
   /** the podium waits for the last beat, then shows */
   carveIn(): void {
     this.carve();
+  }
+
+  /* ------------------------------------------------------ power moments */
+
+  private focusTimer: ReturnType<typeof setTimeout> | undefined;
+  /** the table dims to the seats a power (or the score race) involves, for `ms`; the pond stays lit */
+  focus(ids: readonly string[], ms: number): void {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    document.querySelectorAll('[data-spot]').forEach((el) => el.removeAttribute('data-spot'));
+    for (const id of ids) this.playerEl(id)?.setAttribute('data-spot', '');
+    root.setAttribute('data-focus', '');
+    clearTimeout(this.focusTimer);
+    this.focusTimer = setTimeout(() => this.unfocus(), Math.max(0, ms));
+  }
+  unfocus(): void {
+    clearTimeout(this.focusTimer);
+    if (typeof document === 'undefined') return;
+    document.documentElement.removeAttribute('data-focus');
+    document.querySelectorAll('[data-spot]').forEach((el) => el.removeAttribute('data-spot'));
+  }
+
+  /** the actor gathers itself: a ring in the power's colour closes on its seat, in stepped frames */
+  charge(id: string, color: string, ms: number): void {
+    const b = this.playerBox(id);
+    const layer = this.layer();
+    if (!b || !layer) return;
+    const el = document.createElement('div');
+    el.className = 'flier charge';
+    el.setAttribute('aria-hidden', 'true');
+    el.style.setProperty('--accent', color);
+    const w = b.w + 18;
+    const h = b.h + 18;
+    Object.assign(el.style, { width: `${w}px`, height: `${h}px`, transform: `translate(${b.cx - w / 2}px, ${b.cy - h / 2}px)` });
+    layer.appendChild(el);
+    if (this.reduced || typeof el.animate !== 'function') {
+      el.style.opacity = '1';
+      setTimeout(() => el.remove(), ms);
+      return;
+    }
+    const a = el.animate(
+      [
+        { scale: '1.9', opacity: 0, borderWidth: '2px' },
+        { scale: '1.35', opacity: 0.8, offset: 0.35 },
+        { scale: '1.05', opacity: 1, borderWidth: '5px', offset: 0.85 },
+        { scale: '1', opacity: 1, borderWidth: '7px' },
+      ],
+      { duration: ms, easing: 'steps(6, end)', fill: 'forwards' },
+    );
+    a.onfinish = () => {
+      const b2 = el.animate([{ scale: '1', opacity: 1 }, { scale: '1.5', opacity: 0 }], { duration: 180, easing: 'steps(3, end)', fill: 'forwards' });
+      b2.onfinish = () => el.remove();
+    };
+  }
+
+  /** a drawn connection between two anchors for `ms`: a fishing line, the lantern's beam, the whale's wake */
+  tether(from: Box | null, to: Box | null, style: TetherStyle, ms: number): void {
+    const layer = this.layer();
+    if (!from || !to || !layer || typeof document === 'undefined') return;
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', `flier tether tether--${style}`);
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('width', String(window.innerWidth));
+    svg.setAttribute('height', String(window.innerHeight));
+    svg.style.opacity = '1';
+    const dx = to.cx - from.cx;
+    const dy = to.cy - from.cy;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const path = document.createElementNS(NS, style === 'beam' ? 'polygon' : 'path');
+    if (style === 'beam') {
+      const w0 = 5;
+      const w1 = 34;
+      path.setAttribute('points', [
+        [from.cx + nx * w0, from.cy + ny * w0], [to.cx + nx * w1, to.cy + ny * w1], [to.cx - nx * w1, to.cy - ny * w1], [from.cx - nx * w0, from.cy - ny * w0],
+      ].map((p) => p.map((v) => v.toFixed(1)).join(',')).join(' '));
+    } else if (style === 'wake') {
+      const n = Math.max(4, Math.round(len / 28));
+      let d = `M${from.cx.toFixed(1)},${from.cy.toFixed(1)}`;
+      for (let i = 1; i <= n; i++) {
+        const t = i / n;
+        const side = i % 2 ? 1 : -1;
+        const mx = from.cx + dx * (t - 0.5 / n) + nx * 10 * side;
+        // the wake dips through the pond between the two seats
+        const dip = Math.max(90, len * 0.5);
+        const my = from.cy + dy * (t - 0.5 / n) + ny * 10 * side + Math.sin(Math.PI * (t - 0.5 / n)) * dip;
+        d += ` Q${mx.toFixed(1)},${my.toFixed(1)} ${(from.cx + dx * t).toFixed(1)},${(from.cy + dy * t + Math.sin(Math.PI * t) * dip).toFixed(1)}`;
+      }
+      path.setAttribute('d', d);
+    } else {
+      // a line with a sag; the slack line sags twice as far
+      const sag = style === 'slack' ? 46 : 18;
+      path.setAttribute('d', `M${from.cx.toFixed(1)},${from.cy.toFixed(1)} Q${(from.cx + dx / 2).toFixed(1)},${(from.cy + dy / 2 + sag).toFixed(1)} ${to.cx.toFixed(1)},${to.cy.toFixed(1)}`);
+    }
+    svg.appendChild(path);
+    layer.appendChild(svg);
+    const total = Math.max(1, ms);
+    if (this.reduced || typeof svg.animate !== 'function') {
+      setTimeout(() => svg.remove(), Math.min(total, 600));
+      return;
+    }
+    if (style === 'beam') {
+      svg.animate([{ opacity: 0 }, { opacity: 0.9, offset: 0.12 }, { opacity: 0.55, offset: 0.2 }, { opacity: 0.9, offset: 0.28 }, { opacity: 0.8, offset: 0.8 }, { opacity: 0 }], { duration: total, easing: 'steps(10, end)', fill: 'forwards' }).onfinish = () => svg.remove();
+      return;
+    }
+    // the line is paid out (drawn in) over the first third, held, then reeled in / let go
+    const L = (path as SVGPathElement).getTotalLength?.() ?? len;
+    path.setAttribute('stroke-dasharray', `${L} ${L}`);
+    path.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0, offset: 0.4 }, { strokeDashoffset: 0, offset: 0.75 }, { strokeDashoffset: style === 'slack' ? 0 : -L }], { duration: total, easing: 'steps(12, end)', fill: 'forwards' });
+    svg.animate([{ opacity: 1 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { duration: total, fill: 'forwards' }).onfinish = () => svg.remove();
+  }
+
+  /** where the proclamation stands: along the bottom of the pond - the seats and the pond's centre, where the
+   *  action is, stay clear - never over the hand or the plank */
+  private calloutSpot(h = 72): Box {
+    const pond = box(q('[data-pond]')) ?? box(q('[data-basin]'));
+    if (pond) return { cx: pond.cx, cy: pond.cy + pond.h / 2 - h / 2 - 6, w: pond.w, h };
+    return { cx: window.innerWidth / 2, cy: window.innerHeight * 0.45, w: 300, h };
+  }
+  private calloutEl: HTMLElement | null = null;
+  /**
+   * The proclamation: a banner slams in over the pond - the power's seal, its name, and in plain words what
+   * it did to whom - holds, and lifts away. Never catches a pointer; a newer one replaces it at once.
+   */
+  callout(o: { kind: string; title: string; line: string; seal: Element | null; via?: Element | null; accent: string; ms: number }): void {
+    const layer = this.layer();
+    if (!layer || typeof document === 'undefined') return;
+    this.calloutEl?.remove();
+    const el = document.createElement('div');
+    el.className = `flier callout callout--${o.kind}`;
+    el.setAttribute('aria-hidden', 'true');
+    el.style.setProperty('--accent', o.accent);
+    const seal = document.createElement('div');
+    seal.className = 'callout__seal';
+    if (o.seal) seal.appendChild(o.seal);
+    if (o.via) {
+      const v = document.createElement('span');
+      v.className = 'callout__via';
+      v.appendChild(o.via);
+      seal.appendChild(v);
+    }
+    const text = document.createElement('div');
+    text.className = 'callout__text';
+    const title = document.createElement('div');
+    title.className = 'callout__title';
+    title.textContent = o.title;
+    const line = document.createElement('div');
+    line.className = 'callout__line';
+    line.textContent = o.line;
+    text.append(title, line);
+    el.append(seal, text);
+    layer.appendChild(el);
+    this.calloutEl = el;
+    const w = Math.min(window.innerWidth - 24, 380);
+    el.style.width = `${w}px`;
+    const h = el.getBoundingClientRect().height || 72;
+    const spot = this.calloutSpot(h);
+    const x = Math.max(12, Math.min(window.innerWidth - w - 12, spot.cx - w / 2));
+    const y = Math.max(8, spot.cy - h / 2);
+    el.style.transform = `translate(${x}px, ${y}px)`;
+    el.style.opacity = '1';
+    const done = (): void => {
+      el.remove();
+      if (this.calloutEl === el) this.calloutEl = null;
+    };
+    if (this.reduced || typeof el.animate !== 'function') {
+      setTimeout(done, o.ms);
+      return;
+    }
+    const at = (s: number, r: number, dy = 0): string => `translate(${x}px, ${y + dy}px) rotate(${r}deg) scale(${s})`;
+    el.animate(
+      [
+        { transform: at(1.9, -7), opacity: 0, offset: 0 },
+        { transform: at(0.92, 2), opacity: 1, offset: 0.06 },
+        { transform: at(1.04, -1.5), offset: 0.1 },
+        { transform: at(1, -1.5), offset: 0.14 },
+        { transform: at(1, -1.5), opacity: 1, offset: 0.86 },
+        { transform: at(0.96, -1.5, -18), opacity: 0, offset: 1 },
+      ],
+      { duration: o.ms, easing: 'steps(40, end)', fill: 'forwards' },
+    ).onfinish = done;
+  }
+  clearCallout(): void {
+    this.calloutEl?.remove();
+    this.calloutEl = null;
+    this.unfocus();
+  }
+
+  /** a seat is struck: a hard, stepped shake of that seat alone, with a flash of its border */
+  jolt(el: Element | null | undefined): void {
+    if (!el || this.reduced || typeof (el as HTMLElement).animate !== 'function') return;
+    (el as HTMLElement).animate(
+      [{ translate: '0 0' }, { translate: '-7px 2px' }, { translate: '6px -3px' }, { translate: '-4px 1px' }, { translate: '3px 0' }, { translate: '-1px 0' }, { translate: '0 0' }],
+      { duration: 300, easing: 'steps(6, end)' },
+    );
+    el.setAttribute('data-struck', '');
+    setTimeout(() => el.removeAttribute('data-struck'), 260);
+  }
+
+  /** a score ticks up: the number is stamped in, big, and bumps back */
+  scorePop(owner: string): void {
+    const els = document.querySelectorAll<HTMLElement>(`[data-score-owner="${CSS.escape(owner)}"]`);
+    els.forEach((el) => {
+      if (this.reduced || typeof el.animate !== 'function') return;
+      el.animate([{ scale: '2.2', color: 'var(--ocru)' }, { scale: '0.85', offset: 0.4 }, { scale: '1.15', offset: 0.7 }, { scale: '1' }], { duration: 420, easing: 'steps(6, end)' });
+    });
+    const at = this.playerEl(owner)?.querySelector<HTMLElement>('[data-score-owner]') ?? els[0];
+    const b = box(at);
+    if (!b) return;
+    const plus = this.spawn('sprite:plus');
+    if (!plus) return;
+    const base = { w: 44, h: 30 };
+    if (this.reduced || typeof plus.animate !== 'function') {
+      plus.remove();
+      return;
+    }
+    const t = (dy: number, s: number): string => `translate(${b.cx - base.w / 2 + 14}px, ${b.cy - base.h / 2 + dy}px) scale(${s})`;
+    plus.animate([{ transform: t(0, 0.4), opacity: 0 }, { transform: t(-18, 1.25), opacity: 1, offset: 0.2 }, { transform: t(-26, 1), opacity: 1, offset: 0.7 }, { transform: t(-40, 0.9), opacity: 0 }], { duration: 900, easing: 'steps(12, end)', fill: 'forwards' }).onfinish = () => plus.remove();
   }
 
   /* --------------------------------------------------------------- misc */

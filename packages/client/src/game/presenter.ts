@@ -15,11 +15,14 @@
  */
 import type { RedactedView } from '@pescuit/engine';
 import type { WireEvent } from '@pescuit/shared';
+import { rankName, t as tr, type Locale } from '@pescuit/shared';
+import { LEAD_ACCENT, POWER_ACCENT } from '../art/accent.js';
+import { SPRITE_SIZE } from '../art/sprites.js';
 import { clockTarget, metaCue } from '../audio/cues.js';
 import { getEngine } from '../audio/engine.js';
 import { playHaptics } from '../audio/haptics.js';
 import { prefersReducedMotion, stamp } from '../motion.js';
-import { choreograph, TIME, type Anchor, type Beat, type Choreography, type Flight, type Mask, type Op } from './choreography.js';
+import { choreograph, TIME, type Anchor, type Beat, type Callout, type Choreography, type Flight, type Mask, type Op } from './choreography.js';
 import { announce } from './announce.js';
 import { metrics } from './metrics.js';
 import { getTableSpeed } from './presentationSettings.js';
@@ -73,6 +76,8 @@ export class Presenter {
   /** the count the light has been set for (the world's stage follows what the table has SHOWN) */
   private shownTally: number | null = null;
   private snapshotQueued = false;
+  /** the language the proclamations are written in */
+  locale: Locale = 'ro';
 
   /* ------------------------------------------------------------- state */
 
@@ -159,6 +164,7 @@ export class Presenter {
     for (const g of this.ghosts) g.remove();
     this.ghosts.clear();
     this.stage.clearFliers();
+    this.stage.clearCallout();
   }
 
   /* ------------------------------------------------------------- masks */
@@ -368,7 +374,7 @@ export class Presenter {
         if (beat.lane === 'table') ctx.pending++;
         this.sched(lead + vd + f.start, () => this.flight(f, ctx, origin, vd, beat.lane === 'table' ? landing : undefined), () => this.releaseCard(ctx.arrive.get(f.key)));
       }
-      for (const v of beat.vfx) this.sched(lead + vd + v.at, () => this.stage.vfx(v.kind, this.stage.anchor(v.anchor, 'to')));
+      for (const v of beat.vfx) this.sched(lead + vd + v.at, () => this.stage.vfx(v.kind, this.stage.anchor(v.anchor, 'to'), v.size));
       for (const op of beat.ops) {
         const isTurn = op.op === 'turnLanded';
         const counts = beat.lane === 'table' && (isTurn || op.op === 'settle');
@@ -452,7 +458,8 @@ export class Presenter {
     };
     const chipKey = f.what === 'chip' && f.from.k === 'seat' ? f.key : null;
     // no room in the air, reduced motion, or nowhere to fly from or to: the flight is its landing
-    const cannot = !from || !to || f.instant || !s.roomInAir || (f.from.k === 'chip' && !s.chip);
+    // the power's embodiment always flies (it is what says what happened); cards wait for room in the air
+    const cannot = !from || !to || f.instant || (f.what !== 'fx' && !s.roomInAir) || (f.from.k === 'chip' && !s.chip);
     if (cannot) {
       ghost?.remove();
       if (ghost) this.ghosts.delete(ghost);
@@ -478,6 +485,9 @@ export class Presenter {
     } else if (f.what === 'totem') {
       base = Stage.BASE.TOTEM;
       el = s.spawn('totem');
+    } else if (f.what === 'fx' && f.sprite) {
+      base = SPRITE_SIZE[f.sprite];
+      el = s.spawn(`sprite:${f.sprite}`);
     } else {
       base = Stage.BASE.BACK;
       el = ghost ?? s.spawn('back');
@@ -488,13 +498,13 @@ export class Presenter {
       return;
     }
     if (f.mirror) {
-      const inner = el.querySelector<HTMLElement>('.chip-token__in');
+      const inner = el.querySelector<HTMLElement>(f.what === 'fx' ? 'svg' : '.chip-token__in');
       if (inner) inner.style.transform = 'scaleX(-1)';
     }
     const dur = Math.max(1, f.land - f.start);
     const cardScale = (b: Box): number => Math.max(0.35, b.w / Stage.BASE.BACK.w);
-    const scaleFrom = f.what === 'back' ? cardScale(from!) : f.what === 'totem' ? 1 : 1;
-    const scaleTo = f.what === 'back' ? cardScale(to!) : f.end === 'dive' ? 0.35 : 1;
+    const scaleFrom = f.what === 'back' ? cardScale(from!) : f.scale ? f.scale[0] : 1;
+    const scaleTo = f.what === 'back' ? cardScale(to!) : f.scale ? f.scale[1] : f.end === 'dive' ? 0.35 : 1;
     s.fly(el, {
       key: f.key,
       base,
@@ -504,10 +514,11 @@ export class Presenter {
       byDistance: f.what === 'back',
       corner: f.corner,
       straight: f.straight,
+      lift: f.lift,
       scaleFrom,
       scaleTo,
-      tiltFrom: f.what === 'chip' ? (hash01(f.key) * 2 - 1) * 8 : undefined,
-      tiltTo: f.what === 'chip' ? -6 : undefined,
+      tiltFrom: f.what === 'chip' ? (hash01(f.key) * 2 - 1) * 8 : f.what === 'fx' ? 0 : undefined,
+      tiltTo: f.what === 'chip' ? -6 : f.what === 'fx' ? 0 : undefined,
       onLand: () => done(el),
     });
   }
@@ -536,6 +547,13 @@ export class Presenter {
           s.place(el, s.anchor({ k: 'basin' }, 'to') ?? { cx: 0, cy: 0, w: 0, h: 0 }, Stage.BASE.CHIP, 1, 9);
           this.sched(700, () => s.remove(el));
         }
+        break;
+      case 'fade':
+        if (el && typeof el.animate === 'function' && !s.reduced) {
+          el.getAnimations().forEach((a) => a.commitStyles?.());
+          el.getAnimations().forEach((a) => a.cancel());
+          el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: 'steps(3, end)', fill: 'forwards' }).onfinish = () => el.remove();
+        } else s.remove(el);
         break;
       case 'settle':
         s.remove(el);
@@ -639,7 +657,61 @@ export class Presenter {
       case 'stamp':
         stamp(document.querySelector('[data-ticker]'));
         break;
+      case 'focus':
+        s.focus(op.seats, op.until - op.at);
+        break;
+      case 'charge':
+        s.charge(op.seat, POWER_ACCENT[op.rank] ?? LEAD_ACCENT, Math.max(120, TIME.windup - 20));
+        break;
+      case 'tether':
+        s.tether(s.anchor(op.from, 'from'), s.anchor(op.to, 'to'), op.style, op.dur);
+        break;
+      case 'callout':
+        this.callout(op.callout, op.dur);
+        break;
+      case 'jolt':
+        s.jolt(op.anchor.k === 'seat' ? s.playerEl(op.anchor.id) : null);
+        break;
+      case 'scorePop':
+        this.releaseMasksOf('score');
+        s.scorePop(op.owner);
+        break;
     }
+  }
+
+  /* ------------------------------------------------------ the proclamation */
+
+  private nameOf(id: string | undefined): string {
+    if (!id) return '';
+    return this.last?.players.find((p) => p.id === id)?.name ?? id;
+  }
+
+  /** writes the proclamation in the table's language, from public facts only, and says it to the screen reader too */
+  private callout(c: Callout, ms: number): void {
+    const L = this.locale;
+    const cards = c.cardRank ? (c.count !== undefined ? `${c.count}× ${rankName(c.cardRank, L)}` : rankName(c.cardRank, L)) : '';
+    const second = c.actor && this.last ? Math.max(0, ...this.last.players.filter((p) => p.id !== c.actor).map((p) => p.score)) : 0;
+    const params: Record<string, string | number> = {
+      actor: this.nameOf(c.actor),
+      target: this.nameOf(c.target),
+      other: this.nameOf(c.other),
+      cards,
+      rank: c.cardRank ? rankName(c.cardRank, L) : '',
+      score: c.score ?? 0,
+      second: c.kind === 'lead' ? (c.count ?? second) : second,
+      margin: c.margin ?? 0,
+    };
+    const lineKey = `callout.${c.key}.line`;
+    const line = tr(L, lineKey, params);
+    const isPower = c.kind === 'power' || c.kind === 'guard' || c.kind === 'miss';
+    const powerName = c.rank ? rankName(c.rank, L).toUpperCase() : '';
+    const title = isPower ? (c.via ? `${rankName(c.via, L).toUpperCase()} \u2192 ${powerName}` : `${powerName}!`) : tr(L, `callout.${c.key}.title`, params);
+    const tpl = (sel: string): Element | null => document.querySelector(`[data-tpl="${sel}"] svg`)?.cloneNode(true) as Element | null;
+    const seal = isPower && c.rank ? tpl(`chip:${c.rank}`) : tpl('sprite:crown');
+    const via = c.via ? tpl(`chip:${c.via}`) : null;
+    const accent = isPower ? (POWER_ACCENT[c.rank ?? ''] ?? LEAD_ACCENT) : LEAD_ACCENT;
+    this.stage.callout({ kind: c.kind, title, line: line.charAt(0).toUpperCase() + line.slice(1), seal, via, accent, ms });
+    announce({ key: lineKey, params });
   }
 }
 
