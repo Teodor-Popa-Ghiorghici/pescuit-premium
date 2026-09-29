@@ -1,4 +1,5 @@
-import type { Action, Rank } from '@pescuit/engine';
+import type { Rank } from '@pescuit/engine';
+import type { ClientAction } from '@pescuit/shared';
 import { useMemo } from 'react';
 import { Seal } from '../art/seals.js';
 import { findLayableSets } from '../game/layable.js';
@@ -41,7 +42,7 @@ export function Hand({
 
   function lay(set: { rank: Rank; cardIds: string[] }) {
     play('stamp');
-    sendAction({ type: 'LAY_SET', playerId: playerId!, rank: set.rank, cardIds: set.cardIds } as Action);
+    sendAction({ type: 'LAY_SET', playerId: playerId!, rank: set.rank, cardIds: set.cardIds } as ClientAction);
   }
 
   return (

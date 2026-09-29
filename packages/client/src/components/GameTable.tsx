@@ -1,4 +1,5 @@
-import type { Action, Rank } from '@pescuit/engine';
+import type { Rank } from '@pescuit/engine';
+import type { ClientAction } from '@pescuit/shared';
 import { LOCALES } from '@pescuit/shared';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useEventBeats } from '../game/beats.js';
@@ -69,7 +70,7 @@ export function GameTable() {
 
   function askPlayer(targetId: string, rank: Rank) {
     play('stamp');
-    sendAction({ type: 'REQUEST', playerId: playerId!, targetId, rank } as Action);
+    sendAction({ type: 'REQUEST', playerId: playerId!, targetId, rank } as ClientAction);
     setSelectedTargetId(null);
     setHoverTargetId(null);
     setAskRank(null);

@@ -40,3 +40,15 @@ two were confirmed against the code before this log was written.
    fall under the seat-step bar, and escape only because the check compares cues
    moment by moment. "The only three-onset figure in the game" is false by the
    harness's own table.
+
+## Status of item 1 after M0 (engine side)
+
+The Deschis defect is fixed in the engine: a laid set's rank counts as public when the set is
+face up **or the game is in Mode Deschis**, so the count no longer forgets a rank the table
+already knows, never rises, and equals the omniscient count in Deschis (property test over
+seeded bot games; `packages/engine/test/endCheckProperty.test.ts`). It is still an upper bound
+in both modes, so "at most k sets" wording (`game.setsAtMost*`) and the stall ending's design
+remain client work; "the last set is always announced" is still an observation, not a
+guarantee. Item 2 (an absent player's own turn) is unchanged: the room waits. See
+`DECISIONS.md`, "Deciding the game" and "Absent players".
+

@@ -6,7 +6,7 @@ import { GameEvent } from '../types.js';
 export function formatEvent(e: GameEvent): string | null {
   switch (e.type) {
     case 'GAME_STARTED':
-      return `== Game started: ${e.playerIds.join(', ')} (seed ${e.seed}) ==`;
+      return `== Game started: ${e.playerIds.join(', ')} ==`;
     case 'TURN_STARTED':
       return `-- Turn ${e.turn}: ${e.playerId} --`;
     case 'TURN_SKIPPED_STUNNED':
@@ -56,7 +56,7 @@ export function formatEvent(e: GameEvent): string | null {
     case 'BONUS_TURN':
       return `${e.playerId} takes a bonus turn.`;
     case 'GAME_ENDED':
-      return `== Game over. Scores: ${JSON.stringify(e.scores)}. Winner(s): ${e.winners.join(', ')} ==`;
+      return `== Game over. Scores: ${JSON.stringify(e.scores)}. Winner(s): ${e.winners.join(', ')} (${e.reason}) ==`;
     default:
       return null;
   }

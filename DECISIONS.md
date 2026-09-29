@@ -105,8 +105,9 @@ the shipped engine actually behaves.
 - Adjacency is computed over `turnOrder` (fixed seating), circularly, including the
   wrap-around pair. The acting player may be one of the two chosen seats.
 - Tortoise-protected cards are excluded from the shuffle and dealt back untouched;
-  everything else is combined, shuffled with the engine's seeded RNG, and dealt back
-  preserving each player's *original* card count.
+  everything else is combined, shuffled with the 128 bits of entropy the driver
+  attached to the action (see "Randomness never reaches the wire" below), and dealt
+  back preserving each player's *original* card count.
 
 ## Clownfish
 
@@ -211,16 +212,171 @@ Ascuns, where grants are otherwise invisible to opponents), a timing tell rule
 Every response now takes the same shape regardless, so the mere presence of the
 window leaks nothing.
 
+*Follow-up (FEEL_VISUAL_SOUND_PLAN §6.2, finding A2).* That last sentence was true
+of the *view* but not of the *events*: `handleDeclareSquid` nulled `pendingWindow`
+itself, so a Squid deny or claim emitted the same stream as an honest "no" minus its
+leading `WINDOW_CLOSED(RESPONSE_PENDING)` — a tell in the shape of what every client
+received. It now closes the window through `closeWindow`, the path an honest answer
+takes, so the "no", the Squid deny and the Squid claim emit exactly
+`WINDOW_CLOSED(RESPONSE_PENDING) › REQUEST_FAILED › DREW_FROM_POOL › TURN_STARTED`
+(tests: `powers/squid.test.ts`, `presentation-leak.test.ts`). There is still no
+`POWER_USED` for Squid. What remains is a rules-level tell: a *third player's* Clownfish
+that binds to a silently used Squid learns (owner only) that one was used.
+
 ## Game end & scoring
 
-- End condition: the pool is empty **and** every player's hand contains no
+- End condition ("exhausted"): the pool is empty **and** every player's hand contains no
   non-egg card. This is the simplest state that provably implies "no player can
   make a legal request" (eggs are never askable), without trying to prove the
   stronger, harder-to-compute claim that no *combination* of remaining cards could
-  ever match between two hands.
+  ever match between two hands. Two more end conditions were added on top of it:
+  the 2N no-progress streak (reported as `reason: 'streak'`, see "Turn flow" above)
+  and the public end check ("decided", next section). `GAME_ENDED` now carries
+  `reason: 'decided' | 'streak' | 'exhausted'`, and the view carries `endReason`.
 - Tie-break: highest score, then most completed power sets (destroyed ones still
   count — the spec ties this to "completed," not "currently active"), then shared
   victory. Directly as specified in rule 2.7.
+
+## Deciding the game: the public end check (FEEL_VISUAL_SOUND_PLAN §3.9, §11.2)
+
+95–97 % of well-played games used to end with a run of asks that could no longer change
+the score (a median of 6 at three players, 12 at six), because each egg substituted into
+a set strands a real card and the game then ran on until the 2N streak rule. The engine
+now ends the game as soon as no set can still be laid — judged **only from the public
+record**.
+
+- **The rule.** At the end of every `reduce`, if the status is `IN_PROGRESS` and no window
+  is open, the engine computes `publicSetsPossible(state)`. When it is 0 no set can ever
+  be laid again, so neither the score nor the power-set tie-break can move, and the game
+  ends with `GAME_ENDED { reason: 'decided' }`. It waits for rest (no window) so the last
+  lay's windows finish. A Mantis cannot change a score (a destroyed set still counts,
+  RULES §7), so this is about finishing the last lay's choreography, not correctness.
+- **What the count is** (`packages/engine/src/setsPossible.ts`). The most sets that *any*
+  assignment of ranks to the face-down power sets consistent with the public record could
+  still yield, if every unlaid card, in hands and in the pool, could be gathered into one
+  hand. Inputs: the deck's composition, the rank of every set whose rank is public, and
+  the real/egg counts of every laid set (public for all sets, face down or not). It starts
+  at 18 and is sent in the view as `sets: { possible, start }`, the same for every viewer.
+- **It is an upper bound, and that is the point.** It ignores who holds what, turn order
+  and every rule of play, so it can be larger than what can really still be laid: a game
+  can sit at k > 0 with nothing left to lay (a stall) and then ends on the 2N streak rule
+  (`endPressure: { misses, limit }` is the countdown for that). It is never *smaller* than
+  the truth, so 0 means "provably nothing left" and the rule can never cut a game that
+  could still change. Player-facing copy must therefore say "at most k sets" (i18n
+  `game.setsAtMost*`), never "k more sets"; "the last set" is only a promise the count
+  cannot make. "The count reaches 1 before every decided game" is an observation from bot
+  games, not a guarantee: one lay can take it from 2 to 0.
+- **Why the public record and not the server's knowledge.** A check that read true ranks
+  ends one of two identical-looking endgames and lets the other play on, telling the table
+  what the hidden sets are (Squid included). The "endgame pair" (two face-down 2+2 power
+  sets, Squid+Squid vs Squid+Whale) is a test: `sets.possible` and the end timing are
+  identical (`test/endCheck.test.ts`, `test/presentation-leak.test.ts`). The price of
+  secrecy is that in Mode Ascuns the public check fires in a little fewer games than an
+  omniscient one would.
+- **Mode Deschis, and the round-4 caveat.** Round 4 of the plan review found that in Mode
+  Deschis a used power set turns face down (`recordPowerUsed`, RULES §4), the redacted
+  view stops naming its rank, and a check reading ranks only from `faceUp` sets *forgets*
+  a rank the table already knows: the count rose 13 times in 300 games and ended later
+  than the omniscient one. The implementation therefore defines a laid set's rank to be
+  public when it is face up **or the game is in Mode Deschis** (every set is laid face up
+  there, so its rank is in the public `SET_LAID` event). In Mode Ascuns `faceUp` only ever
+  goes false→true (a set is laid face down and turns up on use or destruction; Squid never
+  does), so it is exactly "ever public". This reads nothing hidden: it recovers only what
+  was already on the public record. Result: the count never rises in either mode (property
+  test over seeded bot games) and in Deschis equals the omniscient count. It remains an
+  upper bound in both modes. The view itself is unchanged: a spent Deschis set still shows
+  `rank: null` to non-owners.
+- **What is not guaranteed.** The count is an upper bound, never exact, in Ascuns *and*
+  Deschis. Malformed records (hand-built test states with empty sets) are ignored, which
+  only loosens the bound. The check does not run while a window is open, so a window that
+  exists only because of hidden holdings (a Mantis/Shark/Lanternfish/Tortoise holder,
+  FEEL_VISUAL_SOUND_PLAN §6.6) delays the end by that window's length — a known rules-level
+  tell, not one this rule adds.
+- **Reasons.** The existing 2N rule (and the "nobody can act" safety valve) now report
+  `reason: 'streak'`; "pool empty and no real card" reports `'exhausted'`.
+
+## Randomness never reaches the wire (FEEL_VISUAL_SOUND_PLAN §6.3, findings A3, A4)
+
+The old deal was `mulberry32(seed)` with a 32-bit seed sent to every client in
+`GAME_STARTED`: brute-forceable from one's own seven cards, and every card id
+(`c12_squid`) encoded its rank. Now:
+
+- **The engine keeps no random state.** `GameState` has no `seed` or `rngState`;
+  `createGame(players, deck, config)` takes the *ordered deck* (deal: seven rounds of one
+  card per player from the front, the rest is the pool, drawn from the back). A `number`
+  in place of the deck deals `seededDeck(seed)` — for engine tests and bot sims only.
+  `USE_WHALE` carries `entropy` (four uint32 words), and the Whale shuffle is a pure
+  function of the hands and that entropy (`shuffleWithEntropy`, unbiased rejection
+  sampling); an action without it is refused. Seeded generators (`rng.ts`) remain for
+  tests, and bots supply entropy from their own generator, so simulations replay.
+- **The server** (`packages/server/src/random.ts`) shuffles with `crypto.randomInt`
+  Fisher–Yates, gives every card a `crypto.randomUUID()` (independent of rank and shuffle
+  position), and attaches 128 fresh `crypto.randomBytes` bits to every Whale action before
+  `reduce`. A client-supplied `entropy` is discarded. Nothing seeded persists between
+  actions and nothing here is ever serialized.
+- **Test.** `packages/server/test/wire.test.ts` plays whole bot games through the real
+  `Room` and checks every serialized message: no `seed`/`rngState`/`entropy` key, every
+  card id a v4 UUID, no other player's or the pool's card id in a viewer's bytes, grant ids
+  only to their owners. (The plan's "no field equal to an engine-RNG output in a seeded
+  replay" is vacuous here: the server never runs the engine's seeded generators.)
+- Room codes now use `crypto.randomInt` too (they gate joining).
+
+## Per-viewer event redaction (FEEL_VISUAL_SOUND_PLAN §6.1, findings A1, A4, A5)
+
+`view` was redacted per player but `events` went out verbatim: in Mode Ascuns every log
+read "Ana lays down a set of Squid". `redactEventsForPlayer(state, events, viewerId)`
+(and `redactEventsForSpectator`, the public record) in `redact.ts` uses the same
+concealment predicate as the view and is applied per player in `Room.broadcastState`. The
+`PublicEvent` type is what a client may import. Rules: `GAME_STARTED` has no seed;
+`DREW_FROM_POOL.cardId` only for the drawer; `SET_LAID.rank` and `POWER_GRANTED.rank` are
+`null` while the set is concealed; `POWER_GRANTED.unbound` is `false` for a viewer who may
+not see the rank (it would otherwise announce a hidden Clownfish); `grantId` only for the
+owner on `POWER_GRANTED`/`POWER_USED`/`CLOWNFISH_BOUND`; `CLOWNFISH_BOUND` is owner-only in
+Ascuns and public in Deschis; `WINDOW_OPENED` carries `youAreEligible` instead of
+`eligiblePlayerIds`, and its `SET_COMPLETED` context loses a concealed rank. Events dropped
+for a viewer leave a gap in their `seq`, never a placeholder, so two non-owners receive
+byte-identical streams (`presentation-leak.test.ts`, test 1).
+
+## Action binding and who may close a window (FEEL_VISUAL_SOUND_PLAN §6.4, finding A9)
+
+- The server overwrites `action.playerId` with the socket's player (`bindAction`), never
+  accepts `entropy`, and accepts only client action types.
+- `SKIP_WINDOW` now carries a `playerId`, and the engine refuses it unless that player is
+  eligible in the open window. The room's timeout submits a separate, server-only
+  `SERVER_SKIP_WINDOW`, which a socket cannot send. Bots and tests were updated.
+- Left as it was: a window with several eligible players (`SET_COMPLETED` with two Mantis
+  holders, `TURN_END` with two Sharks) is closed by the *first* skip, for all of them. A
+  per-player pass list would be the rules-correct fix; it is not part of this change.
+
+## Sequence numbers, the window clock, reconnecting (FEEL_VISUAL_SOUND_PLAN §3.10, §4.2, §4.6)
+
+- The room stamps every event with a per-room, strictly increasing `seq` *before*
+  redaction (one event, one seq for everyone); every view carries `seq`, the seq of the last
+  event stamped. `ServerMessage.game_state.events` are `WireEvent`s (`PublicEvent & { seq }`).
+- `pendingWindow.deadlineAt` (server clock, ms) and `serverNow` are in the view. The engine
+  has no clock; `redactForPlayer(state, viewerId, { seq, serverNow, windowDeadlineAt })`
+  takes them from the driver. The deadline is fixed when the window opens and is not reset by
+  a reconnect (the old STATE_MACHINE text saying the countdown restarts on reconnect was not
+  what the code did).
+- A `rejoin` is answered with the current view flagged `snapshot: true` and no events: the
+  client must not replay choreography for what it missed. The client re-sends `rejoin` on
+  every socket open (finding A15), and ignores events whose `seq` it has already applied.
+  A stale socket closing after its player rejoined on a new one no longer marks them absent.
+- `endPressure: { misses, limit }` in the view is `staleRequestStreak` and `2N`: the stall
+  gate's countdown.
+
+## Absent players (FEEL_VISUAL_SOUND_PLAN §4.4, §4.6)
+
+- **In a window,** an absent (disconnected) player is answered for by the server once the
+  window's `windowTimeoutMs` elapses: the server-only skip closes it as an ordinary
+  truthful, non-declaring answer (for the answer window that is the honest "hand them over"
+  / "Pescuiește!"). This is the existing 12 s timeout, unchanged in length and applied to
+  connected and absent players alike; STATE_MACHINE.md's "the room simply waits" is
+  therefore true only of an absent player's own *turn*.
+- **On their own turn** the room still waits (no forced pass, no turn timer). Round 4 of the
+  plan review flags this as a hole in a phone game (a dropped player freezes the table);
+  the decision between a turn timer with an auto-pass and a visible "the table waits" is
+  still open and is a client-plaque matter for now.
 
 ## Localization
 

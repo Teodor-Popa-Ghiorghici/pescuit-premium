@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import type { RoomConfig } from '@pescuit/shared';
 import { Room } from './room.js';
 
@@ -26,7 +27,7 @@ export class RoomManager {
   private generateCode(): string {
     let s = '';
     for (let i = 0; i < CODE_LENGTH; i++) {
-      s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+      s += CODE_CHARS[randomInt(CODE_CHARS.length)];
     }
     return s;
   }

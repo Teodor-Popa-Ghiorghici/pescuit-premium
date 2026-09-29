@@ -16,10 +16,14 @@ packages/
   client/   Vite + React thin client
 ```
 
-The server is **the only thing that ever knows the full game state**. It sends
-each player a redacted view (`packages/engine/src/redact.ts`) after every event —
-a client never receives another player's cards, and Squid is never mentioned in
-any message to anyone but its owner.
+The server is **the only thing that ever knows the full game state**. After every
+action it sends each player a redacted view *and* a redacted slice of the events
+(`packages/engine/src/redact.ts`), each stamped with a per-room `seq` — a client never
+receives another player's cards, and Squid is never mentioned in any message to anyone
+but its owner. The deal comes from the OS CSPRNG (random UUID card ids, Whale entropy
+attached by the server); no seed or generator state ever leaves the server. The view also
+carries the public tally of sets still possible (`sets`), the stall countdown
+(`endPressure`) and the window's server-clock deadline; see `DECISIONS.md`.
 
 ## Local development
 
@@ -44,7 +48,7 @@ play a full game.
 The engine is a standalone package — this is deliberate, per the spec:
 
 ```bash
-npm run test               # full rules-engine test suite (vitest)
+npm run test               # rules-engine and server test suites (vitest)
 npm run sim                # play one full game with scripted bots, print the log
 npm run sim -- 42 5        # seed 42, 5 players
 npm run sim:many           # 1000 random bot games; asserts no illegal states, no deadlocks
@@ -95,6 +99,10 @@ the process locally would.
   (M5 polish).
 
 ## Known scope limitations
+
+- The end-of-game check ("no set can still be laid") reads only the public record and is an
+  **upper bound**, not an exact count: a stalled game can show "at most 3 sets" with none
+  left to lay and then ends on the 2N streak rule. See `DECISIONS.md`, "Deciding the game".
 
 - The in-app Rules panel renders `RULES.md` verbatim (in English) regardless of
   the UI language toggle; translating the full rulebook was out of scope for

@@ -7,14 +7,14 @@
  * Squid is absent from GameEvent by construction (see DECISIONS.md), so no beat
  * here can leak it — there is nothing to leak.
  */
-import type { GameEvent } from '@pescuit/engine';
+import type { PublicEvent } from '@pescuit/engine';
 import { useEffect, useRef, type RefObject } from 'react';
 import { DUR, shake } from '../motion.js';
 import { buzz, play, type Cue } from '../sound.js';
 
 const BEAT_GAP = 320;
 
-function cueFor(e: GameEvent): { cue: Cue; shakePx?: number } | null {
+function cueFor(e: PublicEvent): { cue: Cue; shakePx?: number } | null {
   switch (e.type) {
     case 'REQUEST_SUCCEEDED':
       return { cue: 'stamp', shakePx: 1 };
@@ -44,7 +44,7 @@ function cueFor(e: GameEvent): { cue: Cue; shakePx?: number } | null {
  * for the shakes. Never replays history: on first run it only marks where the log
  * had got to, so a reconnecting player is not hit by forty stamps at once.
  */
-export function useEventBeats(events: GameEvent[], tableRef: RefObject<HTMLElement>) {
+export function useEventBeats(events: PublicEvent[], tableRef: RefObject<HTMLElement>) {
   const seen = useRef<number | null>(null);
   const timers = useRef<number[]>([]);
 

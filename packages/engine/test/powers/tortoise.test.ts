@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { reduce } from '../../src/engine.js';
-import { card, cards, findPlayer, makeState } from '../helpers.js';
+import { card, cards, findPlayer, makeState, skipWindow } from '../helpers.js';
 import { grantPower } from './grantHelper.js';
 
 describe('tortoise', () => {
@@ -14,7 +14,7 @@ describe('tortoise', () => {
     const grantId = grantPower(state, 'b', 'tortoise');
     const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
     // b holds no squid: responds truthfully via SKIP_WINDOW before TRANSFER_PENDING opens.
-    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' });
+    const { state: s1 } = skipWindow(sReq);
     expect(s1.pendingWindow?.type).toBe('TRANSFER_PENDING');
     const { state: s2, events } = reduce(s1, {
       type: 'DECLARE_TORTOISE',
@@ -42,7 +42,7 @@ describe('tortoise', () => {
     const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
     // b holds no squid: still must answer RESPONSE_PENDING truthfully...
     expect(sReq.pendingWindow?.type).toBe('RESPONSE_PENDING');
-    const { state: s1, events } = reduce(sReq, { type: 'SKIP_WINDOW' });
+    const { state: s1, events } = skipWindow(sReq);
     // ...but the standing protection then blocks automatically, no TRANSFER_PENDING window needed
     expect(s1.pendingWindow).toBeNull();
     expect(findPlayer(s1, 'b').hand.filter((c) => c.rank === 'herring')).toHaveLength(2);
@@ -58,7 +58,7 @@ describe('tortoise', () => {
     state.tortoiseProtections.push({ id: 'tp1', ownerId: 'b', rank: 'herring', expiresAtNextTurnOf: 'b' });
     // a asks b for mackerel (b has none) -> fails -> turn passes to b -> b's turn begins -> protection clears
     const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'mackerel' });
-    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' }); // b truthfully says "Pescuiește!"
+    const { state: s1 } = skipWindow(sReq); // b truthfully says "Pescuiește!"
     expect(s1.currentPlayerIndex).toBe(1);
     expect(s1.tortoiseProtections).toHaveLength(0);
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { reduce, IllegalActionError } from '../../src/engine.js';
-import { card, cards, findPlayer, makeState } from '../helpers.js';
+import { card, cards, findPlayer, makeState, skipWindow } from '../helpers.js';
 import { grantPower } from './grantHelper.js';
 
 describe('jellyfish', () => {
@@ -42,7 +42,7 @@ describe('jellyfish', () => {
     // a fails an ask against c (c has no mackerel) -> turn should pass to b, but b is stunned -> skip to c
     const { state: sReq, events: eReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'c', rank: 'mackerel' });
     // c holds no squid: responds truthfully via SKIP_WINDOW.
-    const { state: s1, events: eSkip } = reduce(sReq, { type: 'SKIP_WINDOW' });
+    const { state: s1, events: eSkip } = skipWindow(sReq);
     const events = [...eReq, ...eSkip];
     expect(events.some((e) => e.type === 'TURN_SKIPPED_STUNNED' && e.playerId === 'b')).toBe(true);
     expect(findPlayer(s1, 'b').stunned).toBe(false); // stun cleared once skipped

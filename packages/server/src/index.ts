@@ -53,8 +53,9 @@ wss.on('connection', (ws: WebSocket) => {
   });
 
   ws.on('close', () => {
-    if (room && playerId) {
-      room.disconnect(playerId);
+    // only if this socket is still the player's current one: a stale socket closing after the
+    // player has already rejoined on a new one must not mark them absent
+    if (room && playerId && room.disconnect(playerId, ws)) {
       room.broadcastRoomUpdate();
       room.broadcastState([]);
     }
@@ -107,7 +108,8 @@ wss.on('connection', (ws: WebSocket) => {
         playerId = player.id;
         send(ws, { type: 'joined', roomCode: found.code, playerId: player.id, token: player.token });
         found.broadcastRoomUpdate();
-        if (found.state) found.broadcastState([]);
+        // a rejoin gets the current view and its seq, flagged as a snapshot: no choreography is replayed
+        if (found.state) found.broadcastState([], player.id);
         return;
       }
       case 'start_game': {
@@ -115,7 +117,8 @@ wss.on('connection', (ws: WebSocket) => {
         return;
       }
       case 'action': {
-        requireRoom().applyAction(msg.action);
+        // the action is bound to this socket's player inside the room; a claimed playerId is ignored
+        requireRoom().applyAction(requirePlayer(), msg.action);
         return;
       }
       case 'set_locale': {
@@ -127,6 +130,11 @@ wss.on('connection', (ws: WebSocket) => {
         return;
       }
     }
+  }
+
+  function requirePlayer(): string {
+    if (!playerId) throw new Error('Not in a room');
+    return playerId;
   }
 
   function requireRoom(): Room {

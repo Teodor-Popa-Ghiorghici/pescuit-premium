@@ -71,7 +71,9 @@ rank — you can't ask for them, and they never make a rank askable by themselve
 Each turn moves through named windows. When a window opens, the server tells only
 the players who actually hold something playable in it, and gives them up to 12
 seconds to respond before moving on. If nobody has anything playable, the window
-closes immediately with no delay.
+closes immediately with no delay. A player who does not answer in time — or who has
+dropped off the connection — is answered for by the server: the window closes as an
+ordinary, truthful, non-declaring answer.
 
 ```
 TURN_START        -> stun check; you may use one active power here, on your own turn
@@ -158,7 +160,22 @@ use it.
 ## 7. Ending the game
 
 Play continues even with an empty pool — you simply stop drawing on a failed ask.
-The game is over once no player holds a single real (non-egg) card left to name.
+The game ends as soon as **any** of these is true, checked whenever play is at rest
+(no window open):
+
+1. **Nothing left to name.** The pool is empty and no player holds a single real
+   (non-egg) card.
+2. **Decided.** No set can still be laid, judged only from what everyone at the table
+   can see: the ranks of the sets already laid face up, how many real cards and eggs each
+   face-down set holds, and the deck's makeup. The table's tally — *at most* how many sets
+   could still be formed if every card not yet laid could be gathered in one hand — has
+   reached 0, so the score and the tie-break can never change. The tally is an upper
+   bound: it never says a set is impossible when one is possible, but it can say "at most
+   3" when no player can really form another set. In Mode B (Deschis) the rank of a used,
+   face-down power set still counts as known, since it was announced when it was laid.
+3. **Stalled.** Twice as many asks as there are players in a row (2N) capture and draw
+   nothing, so no further progress is possible.
+
 Score is total sets laid (1 point each, power or normal or eggs, no bonus for the
 power itself). Highest score wins; a tie is broken by whoever completed more power
 sets (a set Mantis Shrimp later destroyed still counts — you still completed it);

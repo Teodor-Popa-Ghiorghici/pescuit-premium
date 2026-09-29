@@ -4,3 +4,4 @@ export * from './rng.js';
 export * from './engine.js';
 export * from './queries.js';
 export * from './redact.js';
+export * from './setsPossible.js';

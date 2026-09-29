@@ -1,5 +1,13 @@
-import type { Action, GameEvent, RedactedView } from '@pescuit/engine';
-import type { ClientMessage, Locale, RoomConfig, RoomPlayerSummary, ServerMessage } from '@pescuit/shared';
+import type { RedactedView } from '@pescuit/engine';
+import type {
+  ClientAction,
+  ClientMessage,
+  Locale,
+  RoomConfig,
+  RoomPlayerSummary,
+  ServerMessage,
+  WireEvent,
+} from '@pescuit/shared';
 import { DEFAULT_LOCALE } from '@pescuit/shared';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient, type ConnectionStatus, type WsClient } from '../net/client.js';
@@ -16,7 +24,7 @@ interface GameState {
   started: boolean;
   config: RoomConfig;
   view: RedactedView | null;
-  events: GameEvent[];
+  events: WireEvent[];
   error: string | null;
   joining: boolean;
 }
@@ -26,7 +34,7 @@ interface GameApi extends GameState {
   createRoom: (name: string, config: RoomConfig) => void;
   joinRoom: (roomCode: string, name: string) => void;
   startGame: () => void;
-  sendAction: (action: Action) => void;
+  sendAction: (action: ClientAction) => void;
   dismissError: () => void;
   leaveRoom: () => void;
 }
@@ -59,19 +67,21 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   });
 
   const clientRef = useRef<WsClient | null>(null);
-  const pendingRejoinRoom = useRef<string | null>(roomCodeFromUrl());
+  /** the room this tab is in (or was opened for by URL): what to rejoin whenever a socket opens */
+  const activeRoom = useRef<string | null>(roomCodeFromUrl());
+  /** the highest event seq already applied: a resent or replayed event is never applied twice */
+  const lastSeq = useRef(0);
 
   useEffect(() => {
-    const client = createClient(onMessage, onStatus);
-    clientRef.current = client;
-
-    const roomCode = pendingRejoinRoom.current;
-    if (roomCode) {
+    // Rejoin on EVERY socket open, not just at mount (A15): a dropped socket that comes back
+    // must re-attach to its seat, or the player is frozen out of the game.
+    const client = createClient(onMessage, onStatus, (sendNow) => {
+      const roomCode = activeRoom.current;
+      if (!roomCode) return;
       const session = loadSession(roomCode);
-      if (session) {
-        client.send({ type: 'rejoin', roomCode: session.roomCode, token: session.token });
-      }
-    }
+      if (session) sendNow({ type: 'rejoin', roomCode: session.roomCode, token: session.token });
+    });
+    clientRef.current = client;
 
     return () => client.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,6 +96,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       case 'joined': {
         saveSession({ roomCode: msg.roomCode, token: msg.token, playerId: msg.playerId, name: '' });
         setRoomInUrl(msg.roomCode);
+        if (activeRoom.current !== msg.roomCode) lastSeq.current = 0; // seq is per room
+        activeRoom.current = msg.roomCode;
         setState((s) => ({ ...s, roomCode: msg.roomCode, playerId: msg.playerId, error: null, joining: false }));
         return;
       }
@@ -94,10 +106,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       case 'game_state': {
+        // apply only events newer than the last one seen; a resync (rejoin) carries none, and
+        // the missed lines are not replayed as choreography
+        const fresh = msg.events.filter((e) => e.seq > lastSeq.current);
+        for (const e of fresh) lastSeq.current = Math.max(lastSeq.current, e.seq);
         setState((s) => ({
           ...s,
           view: msg.view,
-          events: [...s.events, ...msg.events].slice(-MAX_EVENTS),
+          events: fresh.length ? [...s.events, ...fresh].slice(-MAX_EVENTS) : s.events,
         }));
         return;
       }
@@ -106,6 +122,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       case 'room_closed': {
+        activeRoom.current = null;
+        lastSeq.current = 0;
         setState((s) => ({ ...s, error: msg.reason, roomCode: null, view: null, started: false }));
         return;
       }
@@ -140,6 +158,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       sendAction: (action) => send({ type: 'action', action }),
       dismissError: () => setState((s) => ({ ...s, error: null })),
       leaveRoom: () => {
+        activeRoom.current = null;
+        lastSeq.current = 0;
         setRoomInUrl(null);
         setState((s) => ({ ...s, roomCode: null, playerId: null, view: null, started: false, players: [] }));
       },

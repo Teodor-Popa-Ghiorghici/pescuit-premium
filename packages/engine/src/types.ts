@@ -123,9 +123,15 @@ export interface GameConfig {
   windowTimeoutMs: number;
 }
 
+export type EndReason =
+  /** no set can still be laid, judged from the public record alone (DECISIONS.md, "Deciding the game") */
+  | 'decided'
+  /** 2N consecutive requests captured and drew nothing (or nobody could act) */
+  | 'streak'
+  /** the pool is empty and nobody holds a real card */
+  | 'exhausted';
+
 export interface GameState {
-  seed: number;
-  rngState: number;
   players: PlayerState[];
   turnOrder: string[];
   pool: Card[];
@@ -145,29 +151,52 @@ export interface GameState {
   idCounter: number;
   /** consecutive requests resolved with zero effect (no capture, no draw); see DECISIONS.md */
   staleRequestStreak: number;
+  /** why the game ended; null while it is in progress */
+  endReason: EndReason | null;
 }
 
 // ---- Actions ----
 
-export type Action =
+/** 128 bits of fresh entropy, as four uint32 words. The server draws it from the OS CSPRNG and
+ *  attaches it to a USE_WHALE action before `reduce`; the engine never invents randomness. */
+export type WhaleEntropy = readonly number[];
+
+/** What a player (or a bot) may submit. Every `playerId` is bound to the submitter by the driver. */
+export type PlayerAction =
   | { type: 'REQUEST'; playerId: string; targetId: string; rank: Rank }
   | { type: 'LAY_SET'; playerId: string; rank: Rank; cardIds: string[] }
   | { type: 'USE_JELLYFISH'; playerId: string; grantId: string; targetId: string }
   | { type: 'USE_STICKLEBACK'; playerId: string; grantId: string; targetId: string; rank: NormalRank }
-  | { type: 'USE_WHALE'; playerId: string; grantId: string; targetAId: string; targetBId: string }
+  | {
+      type: 'USE_WHALE';
+      playerId: string;
+      grantId: string;
+      targetAId: string;
+      targetBId: string;
+      /** attached by the server before reduce; a client-supplied value is always overwritten */
+      entropy: WhaleEntropy;
+    }
   | { type: 'DECLARE_LANTERNFISH'; playerId: string; grantId: string }
   | { type: 'DECLARE_SQUID'; playerId: string; grantId: string; lie: 'deny' | 'claim' }
   | { type: 'DECLARE_TORTOISE'; playerId: string; grantId: string; rank: Rank }
   | { type: 'DECLARE_MANTIS'; playerId: string; grantId: string }
   | { type: 'DECLARE_SHARK'; playerId: string; grantId: string }
-  | { type: 'SKIP_WINDOW' };
+  /** a truthful answer / a pass. Must come from a player who is eligible in the open window. */
+  | { type: 'SKIP_WINDOW'; playerId: string };
+
+/** Submitted only by the driver (the room's timeout), never accepted from a client. */
+export type ServerAction = { type: 'SERVER_SKIP_WINDOW' };
+
+export type Action = PlayerAction | ServerAction;
 
 // ---- Events (authoritative, full-information log kept by the engine) ----
+// These carry secrets (seed-free, but still: card ids, grant ids, concealed ranks). They never
+// reach a client as they are: see PublicEvent and redactEventsForPlayer in redact.ts.
 // Squid is deliberately absent from this union: no event of any kind is ever
 // emitted for a squid declaration. See DECISIONS.md.
 
 export type GameEvent =
-  | { type: 'GAME_STARTED'; playerIds: string[]; seed: number }
+  | { type: 'GAME_STARTED'; playerIds: string[] }
   | { type: 'TURN_STARTED'; playerId: string; turn: number }
   | { type: 'TURN_SKIPPED_STUNNED'; playerId: string }
   | { type: 'HAND_REFILLED'; playerId: string; count: number }
@@ -190,4 +219,4 @@ export type GameEvent =
   | { type: 'STICKLEBACK_WASTED'; playerId: string; targetId: string; rank: Rank }
   | { type: 'WHALE_SHUFFLE'; playerId: string; targetAId: string; targetBId: string }
   | { type: 'BONUS_TURN'; playerId: string }
-  | { type: 'GAME_ENDED'; scores: Record<string, number>; winners: string[] };
+  | { type: 'GAME_ENDED'; scores: Record<string, number>; winners: string[]; reason: EndReason };

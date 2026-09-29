@@ -114,6 +114,9 @@ const ro: Dict = {
   'log.bonusTurn': '{player} joacă din nou.',
   'log.turnSkippedStunned': '{player} e amețit și sare peste rând.',
   'log.gameEnded': 'Joc terminat.',
+  'log.gameEndedDecided': 'Joc terminat: nu se mai poate forma niciun set.',
+  'log.gameEndedStreak': 'Joc terminat: nimeni nu mai poate câștiga nimic.',
+  'log.setLaidHidden': '{player} pune jos un set de putere (ascuns) pentru 1 punct.',
 
   'lobby.host': 'gazdă',
   'lobby.free': 'liber',
@@ -133,6 +136,13 @@ const ro: Dict = {
   'game.you': 'tu',
   'game.eggBonus': '+{count} icre',
   'game.eggBonusOne': '+1 icră',
+  // The tally is an UPPER BOUND on the sets still possible (DECISIONS.md, "Deciding the game"):
+  // the copy says "at most", never "k more".
+  'game.setsAtMost': 'cel mult {count} seturi',
+  'game.setsAtMostOne': 'poate încă un set',
+  'game.setsNone': 'niciun set nu se mai poate forma',
+  'game.stallGate': '{count} încercări până se închide balta',
+  'game.stallGateOne': 'o încercare până se închide balta',
 
   'rules.title': 'Reguli',
   'lang.ro': 'Română',
@@ -221,6 +231,9 @@ const en: Dict = {
   'log.bonusTurn': '{player} takes a bonus turn.',
   'log.turnSkippedStunned': '{player} is stunned and skips their turn.',
   'log.gameEnded': 'Game over.',
+  'log.gameEndedDecided': 'Game over: no set can be laid any more.',
+  'log.gameEndedStreak': 'Game over: nobody can gain anything any more.',
+  'log.setLaidHidden': '{player} lays a power set (hidden) for 1 point.',
 
   'lobby.host': 'host',
   'lobby.free': 'free',
@@ -240,6 +253,13 @@ const en: Dict = {
   'game.you': 'you',
   'game.eggBonus': '+{count} eggs',
   'game.eggBonusOne': '+1 egg',
+  // The tally is an UPPER BOUND on the sets still possible (DECISIONS.md, "Deciding the game"):
+  // the copy says "at most", never "k more".
+  'game.setsAtMost': 'at most {count} sets',
+  'game.setsAtMostOne': 'maybe one more set',
+  'game.setsNone': 'no set can be formed any more',
+  'game.stallGate': '{count} tries until the pond closes',
+  'game.stallGateOne': 'one try until the pond closes',
 
   'rules.title': 'Rules',
   'lang.ro': 'Romanian',

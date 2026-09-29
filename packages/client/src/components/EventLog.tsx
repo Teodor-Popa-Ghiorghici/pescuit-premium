@@ -1,4 +1,4 @@
-import type { GameEvent } from '@pescuit/engine';
+import type { PublicEvent } from '@pescuit/engine';
 import { useMemo, useRef, useEffect } from 'react';
 import { Seal } from '../art/seals.js';
 import { useT } from '../i18n/useT.js';
@@ -6,7 +6,7 @@ import { useGame } from '../state/store.js';
 
 /** Which seal stands at the head of a line. Every event that a power caused is
  *  marked with that power's sigil; the rest fall back to the rank in play. */
-function sealFor(e: GameEvent): string | null {
+function sealFor(e: PublicEvent): string | null {
   switch (e.type) {
     case 'REQUEST_MADE':
     case 'REQUEST_SUCCEEDED':
@@ -46,7 +46,7 @@ function sealFor(e: GameEvent): string | null {
 }
 
 function entryFor(
-  e: GameEvent,
+  e: PublicEvent,
   nameOf: (id: string) => string,
   rankLabel: (r: string) => string,
 ): { key: string; params: Record<string, string | number> } | null {
@@ -63,11 +63,14 @@ function entryFor(
     case 'HAND_REFILLED':
       return { key: 'log.handRefilled', params: { player: nameOf(e.playerId), count: e.count } };
     case 'SET_LAID':
-      return { key: 'log.setLaid', params: { player: nameOf(e.playerId), rank: rankLabel(e.rank) } };
+      // rank is null while the set is concealed from this viewer (Mode Ascuns, not the owner)
+      return e.rank === null
+        ? { key: 'log.setLaidHidden', params: { player: nameOf(e.playerId) } }
+        : { key: 'log.setLaid', params: { player: nameOf(e.playerId), rank: rankLabel(e.rank) } };
     case 'SET_DESTROYED':
       return { key: 'log.setDestroyed', params: {} };
     case 'POWER_GRANTED':
-      return e.unbound
+      return e.unbound || e.rank === null
         ? { key: 'log.powerGrantedHidden', params: { player: nameOf(e.playerId) } }
         : { key: 'log.powerGranted', params: { player: nameOf(e.playerId), rank: rankLabel(e.rank) } };
     case 'POWER_USED':
@@ -103,7 +106,10 @@ function entryFor(
     case 'TURN_SKIPPED_STUNNED':
       return { key: 'log.turnSkippedStunned', params: { player: nameOf(e.playerId) } };
     case 'GAME_ENDED':
-      return { key: 'log.gameEnded', params: {} };
+      return {
+        key: e.reason === 'decided' ? 'log.gameEndedDecided' : e.reason === 'streak' ? 'log.gameEndedStreak' : 'log.gameEnded',
+        params: {},
+      };
     default:
       return null;
   }

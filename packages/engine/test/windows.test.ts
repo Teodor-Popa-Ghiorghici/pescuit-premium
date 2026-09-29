@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { reduce, IllegalActionError } from '../src/engine.js';
-import { card, cards, findPlayer, makeState } from './helpers.js';
+import { card, cards, findPlayer, makeState, skipWindow } from './helpers.js';
 import { grantPower } from './powers/grantHelper.js';
 
 describe('windows', () => {
@@ -14,7 +14,7 @@ describe('windows', () => {
     // themselves), but no lanternfish/tortoise/shark exist anywhere, so once b responds
     // truthfully the rest of the chain resolves with no further window ever open.
     expect(sReq.pendingWindow?.type).toBe('RESPONSE_PENDING');
-    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' });
+    const { state: s1 } = skipWindow(sReq);
     expect(s1.pendingWindow).toBeNull();
   });
 
@@ -28,7 +28,7 @@ describe('windows', () => {
     const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
     expect(sReq.pendingWindow?.type).toBe('RESPONSE_PENDING');
     // b holds no squid, so they respond truthfully via SKIP_WINDOW before TRANSFER_PENDING opens.
-    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' });
+    const { state: s1 } = skipWindow(sReq);
     expect(s1.pendingWindow?.type).toBe('TRANSFER_PENDING');
     // shark cannot act while the transfer window (not yet the turn-end window) is open
     expect(() => reduce(s1, { type: 'DECLARE_SHARK', playerId: 'c', grantId: sGrant })).toThrow(IllegalActionError);
@@ -41,8 +41,8 @@ describe('windows', () => {
     });
     const tGrant = grantPower(state, 'b', 'tortoise');
     const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
-    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' }); // b's truthful RESPONSE_PENDING answer
-    const { state: s2 } = reduce(s1, { type: 'SKIP_WINDOW' }); // b's TRANSFER_PENDING skip
+    const { state: s1 } = skipWindow(sReq); // b's truthful RESPONSE_PENDING answer
+    const { state: s2 } = skipWindow(s1); // b's TRANSFER_PENDING skip
     expect(s2.pendingWindow).toBeNull();
     expect(() => reduce(s2, { type: 'DECLARE_TORTOISE', playerId: 'b', grantId: tGrant, rank: 'herring' })).toThrow(
       IllegalActionError,
@@ -95,5 +95,33 @@ describe('mid-turn empty hand', () => {
     expect(findPlayer(s1, 'a').hand.length).toBe(0);
     expect(s1.currentPlayerIndex).toBe(1); // passed to b
     expect(s1.status).toBe('IN_PROGRESS'); // b still has a real card, game continues
+  });
+
+  describe('who may close a window (§6.4)', () => {
+    const asked = () => {
+      const state = makeState({
+        playerIds: ['a', 'b', 'c'],
+        hands: { a: [card('herring')], b: [card('mackerel')], c: [card('trout')] },
+        pool: [card('carp')],
+      });
+      return reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' }).state;
+    };
+
+    it('SKIP_WINDOW from a player who is not eligible is refused (the asker and bystanders cannot answer for the target)', () => {
+      const s = asked();
+      expect(s.pendingWindow?.eligiblePlayerIds).toEqual(['b']);
+      for (const id of ['a', 'c', 'nobody']) {
+        expect(() => reduce(s, { type: 'SKIP_WINDOW', playerId: id })).toThrow(IllegalActionError);
+      }
+      expect(() => reduce(s, { type: 'SKIP_WINDOW', playerId: 'b' })).not.toThrow();
+    });
+
+    it('the driver\'s timeout skip closes any window, and is the only skip that needs no eligible player', () => {
+      const s = asked();
+      const { state, events } = reduce(s, { type: 'SERVER_SKIP_WINDOW' });
+      expect(state.pendingWindow).toBeNull();
+      expect(events.some((e) => e.type === 'REQUEST_FAILED')).toBe(true);
+      expect(() => reduce(state, { type: 'SERVER_SKIP_WINDOW' })).toThrow(IllegalActionError); // no window open
+    });
   });
 });

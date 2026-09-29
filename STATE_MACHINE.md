@@ -9,8 +9,16 @@ games and folded back in here afterward.
 The pure engine never runs a clock. A "window" is just a value in
 `state.pendingWindow` naming who's eligible to act in it; the *driver* (CLI bots for
 M1, the WebSocket server for M2+) is responsible for actually waiting up to 12s and
-then submitting `SKIP_WINDOW` if nobody declares. Every state transition below is
-one `reduce(state, action)` call.
+then submitting a skip if nobody declares. Every state transition below is
+one `reduce(state, action)` call. The engine also keeps **no random state**: the deal
+is an ordered deck handed to `createGame`, and a Whale action carries its own entropy
+(DECISIONS.md, "Randomness never reaches the wire").
+
+`SKIP_WINDOW` names a `playerId` and is refused unless that player is eligible in the open
+window; the driver's timeout uses the separate, server-only `SERVER_SKIP_WINDOW`. At the end
+of every `reduce`, if no window is open, the **public end check** runs: when the public count
+of sets still possible is 0 the game ends with `GAME_ENDED { reason: 'decided' }`
+(DECISIONS.md, "Deciding the game").
 
 ## Top-level shape
 
@@ -87,7 +95,8 @@ returning control to wherever the main spine was resting — it never disturbs
 2. No lanternfish held by b → `REQUEST_DECLARED` window skipped automatically.
 3. `RESPONSE_PENDING` always opens for b, squid or not (see "Every response is a
    window" below) — b answers with `SKIP_WINDOW` (truthfully) or `DECLARE_SQUID`
-   (a lie, only if b holds an unused squid).
+   (a lie, only if b holds an unused squid). Every answer closes the window through the
+   same path, so all three emit `WINDOW_CLOSED(RESPONSE_PENDING) › REQUEST_FAILED › …`.
 4. b truly holds no herring → outcome `fail`, nothing to transfer →
    `TRANSFER_PENDING` skipped automatically (nothing to protect).
 5. Nothing moved → `TURN_END` skipped automatically (shark has nothing to take).
@@ -103,7 +112,7 @@ of a person across the table refusing your ask. The window now **always** opens 
 the target, whether or not they hold squid: a connected player answers within the
 usual `windowTimeoutMs` by submitting `SKIP_WINDOW` (their honest "here you go" or
 "Pescuiește!") or, if eligible, `DECLARE_SQUID` (a lie); a disconnected or slow one
-is defaulted to `SKIP_WINDOW` by the driver's timeout, exactly like any other window.
+is defaulted to a skip by the driver's timeout (`SERVER_SKIP_WINDOW`), exactly like any other window.
 Bots already handled this generically (`decideWindowAction`'s `RESPONSE_PENDING`
 case falls back to `SKIP_WINDOW` when they hold no grant), so no bot-layer change was
 needed. This also removes a pre-existing timing tell in Mode Ascuns: previously, a
@@ -173,9 +182,9 @@ while stunned.
 Happens entirely inside the `TURN_START` window, as one of the (at most one)
 active powers the player on turn may use. It does not open any further window —
 Whale has no reactive counterpart in the spec. Protected cards for both target
-players are set aside first; everything else is combined, shuffled with the
-engine's seeded RNG, and dealt back preserving each player's original *unprotected*
-card count, then the protected cards are added back untouched.
+players are set aside first; everything else is combined, shuffled with the 128 bits
+of entropy the driver attached to the action, and dealt back preserving each player's
+original *unprotected* card count, then the protected cards are added back untouched.
 
 If the reshuffle deals the player continuing their own turn a hand of nothing but
 eggs (bad luck of the draw — found by simulation), they'd otherwise be stuck with
@@ -236,17 +245,26 @@ surfaced once bots were run at scale, both resolved as documented in
 ### Player disconnect mid-window
 
 The pure engine has no concept of a live connection — `PlayerState.connected` is a
-flag the **server** (M2) sets on socket open/close and the engine leaves alone.
-Policy, enforced entirely at the driver layer:
+flag the **server** sets on socket open/close and the engine leaves alone. Policy,
+enforced entirely at the driver layer:
 
-- If a disconnected player is eligible in an open window when their 12s deadline
-  elapses, the server submits `SKIP_WINDOW` on their behalf — identical to a
-  connected player who simply didn't respond in time. No special engine path is
-  needed because "nobody declared in time" is already the normal timeout case.
-- If it becomes a disconnected player's `AWAIT_REQUEST` turn, the server has no
-  legal `REQUEST` to submit for them. Reconnection is by player token (M2): the
-  room simply waits (their 12s countdown restarts on reconnect for whichever window
-  is open, or the turn timer if it's their `AWAIT_REQUEST`) rather than the engine
-  inventing a forced pass — a human who steps away should come back to find their
-  turn untouched, unlike the bot-only "no legal move" cases above which are about
-  *structurally impossible* moves, not a slow human.
+- If a disconnected player is eligible in an open window, the server answers for them when
+  that window's deadline (`windowTimeoutMs`, 12 s by default) elapses, by submitting the
+  server-only `SERVER_SKIP_WINDOW` — an ordinary truthful, non-declaring answer, identical to
+  a connected player who simply did not respond in time. The deadline is sent to every client
+  (`pendingWindow.deadlineAt`, with `serverNow`) and is *not* restarted by a reconnect.
+- If it becomes a disconnected player's `AWAIT_REQUEST` turn, the server has no legal `REQUEST`
+  to submit for them. Reconnection is by player token: the room simply waits rather than the
+  engine inventing a forced pass — a human who steps away should come back to find their turn
+  untouched, unlike the bot-only "no legal move" cases above, which are about *structurally
+  impossible* moves, not a slow human. (There is no turn timer; see DECISIONS.md, "Absent
+  players".)
+- A rejoining client is sent the current view flagged as a snapshot (no events), and re-sends
+  `rejoin` on every socket open.
+
+### Game end
+
+At rest (no window open) after any action, the game ends if, in order: the pool is empty and
+nobody holds a real card (`exhausted`); 2N consecutive asks captured and drew nothing
+(`streak`); or the public count of sets still possible is 0 (`decided`). The count is an upper
+bound computed from the public record alone (DECISIONS.md, "Deciding the game").

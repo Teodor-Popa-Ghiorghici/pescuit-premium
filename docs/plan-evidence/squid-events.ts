@@ -16,7 +16,7 @@ const pool = () => [card('carp'), card('perch')];
 
 // 1. Honest "no": b holds no herring and answers truthfully.
 const honest = makeState({ playerIds: ['a', 'b', 'c'], hands: { a: [card('herring')], b: [card('mackerel')], c: [card('trout')] }, pool: pool() });
-console.log('honest no   :', answer(honest, () => ({ type: 'SKIP_WINDOW' })));
+console.log('honest no   :', answer(honest, () => ({ type: 'SKIP_WINDOW', playerId: 'b' })));
 
 // 2. Squid deny: b holds two herring and lies.
 const deny = makeState({ playerIds: ['a', 'b', 'c'], hands: { a: [card('herring')], b: cards('herring', 2), c: [card('trout')] }, pool: pool() });

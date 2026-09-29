@@ -17,6 +17,9 @@ function wsUrl(): string {
 export function createClient(
   onMessage: (msg: ServerMessage) => void,
   onStatus: (status: ConnectionStatus) => void,
+  /** called on EVERY socket open (the first and every reconnect), before queued messages are
+   *  flushed: the caller re-sends `rejoin` here so a dropped socket never freezes the player (A15) */
+  onOpen?: (send: (msg: ClientMessage) => void) => void,
 ): WsClient {
   let ws: WebSocket | null = null;
   let closed = false;
@@ -30,6 +33,7 @@ export function createClient(
     ws.onopen = () => {
       retryDelay = 500;
       onStatus('open');
+      onOpen?.((m) => ws!.send(JSON.stringify(m)));
       for (const m of queue.splice(0)) ws!.send(JSON.stringify(m));
     };
     ws.onmessage = (ev) => {

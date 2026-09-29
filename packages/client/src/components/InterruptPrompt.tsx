@@ -1,4 +1,5 @@
-import type { Action, NormalRank, PowerRank, Rank } from '@pescuit/engine';
+import type { NormalRank, PowerRank, Rank } from '@pescuit/engine';
+import type { ClientAction } from '@pescuit/shared';
 import { NORMAL_RANKS } from '@pescuit/engine';
 import { useEffect, useState } from 'react';
 import { NotchClock } from '../art/table.js';
@@ -94,7 +95,7 @@ export function InterruptPrompt() {
           {clock}
           <div className="interrupt-prompt__actions">
             <DeclareForm windowType={window_.type} context={ctx} grants={myGrants} myPlayerId={playerId!} onDeclare={sendAction} />
-            <button className="btn btn--ghost" onClick={() => sendAction({ type: 'SKIP_WINDOW' } as unknown as Action)}>
+            <button className="btn btn--ghost" onClick={() => sendAction({ type: 'SKIP_WINDOW' } as ClientAction)}>
               {t('window.decline')}
             </button>
           </div>
@@ -145,7 +146,7 @@ function ResponsePendingPrompt({
   squidGrant: { id: string; rank: string } | undefined;
   playerId: string;
   clock: React.ReactNode;
-  onDeclare: (a: Action) => void;
+  onDeclare: (a: ClientAction) => void;
 }) {
   const { t, rank } = useT();
   const iHaveIt = hand.some((c) => c.rank === rankAsked);
@@ -163,7 +164,7 @@ function ResponsePendingPrompt({
           className="btn btn--go"
           onClick={() => {
             play('stamp');
-            onDeclare({ type: 'SKIP_WINDOW' } as unknown as Action);
+            onDeclare({ type: 'SKIP_WINDOW' } as ClientAction);
           }}
         >
           {iHaveIt ? t('window.hereYouGo') : t('window.goFish')}
@@ -243,7 +244,7 @@ function DeclareForm({
   context: Record<string, string | undefined>;
   grants: { id: string; rank: string }[];
   myPlayerId: string;
-  onDeclare: (a: Action) => void;
+  onDeclare: (a: ClientAction) => void;
 }) {
   const { t, rank } = useT();
   const { view } = useGame();
@@ -255,7 +256,7 @@ function DeclareForm({
   if (grants.length === 0) return null;
   const others = (view?.players ?? []).filter((p) => p.id !== myPlayerId);
 
-  function declare(action: Action) {
+  function declare(action: ClientAction) {
     play('stamp');
     onDeclare(action);
   }

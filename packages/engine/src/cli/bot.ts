@@ -73,12 +73,12 @@ function decideWindowAction(state: GameState, windowType: string, rng: BotRng): 
   switch (windowType) {
     case 'TURN_START': {
       const playerId = w.eligiblePlayerIds[0];
-      if (rng.next() > declareChance) return { type: 'SKIP_WINDOW' };
+      if (rng.next() > declareChance) return { type: 'SKIP_WINDOW', playerId };
       const player = state.players.find((p) => p.id === playerId)!;
       const grants = state.powerGrants.filter(
         (g) => g.ownerId === playerId && g.bound && !g.used && ACTIVE_RANKS.includes(g.rank),
       );
-      if (grants.length === 0) return { type: 'SKIP_WINDOW' };
+      if (grants.length === 0) return { type: 'SKIP_WINDOW', playerId };
       const grant = pick(rng, grants);
       const others = state.players.filter((p) => p.id !== playerId);
       if (grant.rank === 'jellyfish') {
@@ -103,22 +103,24 @@ function decideWindowAction(state: GameState, windowType: string, rng: BotRng): 
           grantId: grant.id,
           targetAId: playerId,
           targetBId: state.turnOrder[neighborIdx],
+          // bot sims are replayable: the bot's own seeded generator supplies the Whale's entropy
+          entropy: [0, 1, 2, 3].map(() => Math.floor(rng.next() * 4294967296)),
         };
       }
-      return { type: 'SKIP_WINDOW' };
+      return { type: 'SKIP_WINDOW', playerId };
     }
     case 'REQUEST_DECLARED': {
       const playerId = w.eligiblePlayerIds[0];
-      if (rng.next() > declareChance) return { type: 'SKIP_WINDOW' };
+      if (rng.next() > declareChance) return { type: 'SKIP_WINDOW', playerId };
       const grant = state.powerGrants.find((g) => g.ownerId === playerId && g.rank === 'lanternfish' && !g.used);
-      if (!grant) return { type: 'SKIP_WINDOW' };
+      if (!grant) return { type: 'SKIP_WINDOW', playerId };
       return { type: 'DECLARE_LANTERNFISH', playerId, grantId: grant.id };
     }
     case 'RESPONSE_PENDING': {
       const playerId = w.eligiblePlayerIds[0];
-      if (rng.next() > 0.35) return { type: 'SKIP_WINDOW' };
+      if (rng.next() > 0.35) return { type: 'SKIP_WINDOW', playerId };
       const grant = state.powerGrants.find((g) => g.ownerId === playerId && g.rank === 'squid' && !g.used);
-      if (!grant) return { type: 'SKIP_WINDOW' };
+      if (!grant) return { type: 'SKIP_WINDOW', playerId };
       const target = state.players.find((p) => p.id === playerId)!;
       const rank = (w.context as any).rank;
       const trueHasCards = target.hand.some((c) => c.rank === rank);
@@ -126,27 +128,27 @@ function decideWindowAction(state: GameState, windowType: string, rng: BotRng): 
     }
     case 'TRANSFER_PENDING': {
       const playerId = w.eligiblePlayerIds[0];
-      if (rng.next() > declareChance) return { type: 'SKIP_WINDOW' };
+      if (rng.next() > declareChance) return { type: 'SKIP_WINDOW', playerId };
       const grant = state.powerGrants.find((g) => g.ownerId === playerId && g.rank === 'tortoise' && !g.used);
-      if (!grant) return { type: 'SKIP_WINDOW' };
+      if (!grant) return { type: 'SKIP_WINDOW', playerId };
       const rank = (w.context as any).rank;
       return { type: 'DECLARE_TORTOISE', playerId, grantId: grant.id, rank };
     }
     case 'SET_COMPLETED': {
       const playerId = pick(rng, w.eligiblePlayerIds);
-      if (rng.next() > declareChance) return { type: 'SKIP_WINDOW' };
+      if (rng.next() > declareChance) return { type: 'SKIP_WINDOW', playerId };
       const grant = state.powerGrants.find((g) => g.ownerId === playerId && g.rank === 'mantisShrimp' && !g.used);
-      if (!grant) return { type: 'SKIP_WINDOW' };
+      if (!grant) return { type: 'SKIP_WINDOW', playerId };
       return { type: 'DECLARE_MANTIS', playerId, grantId: grant.id };
     }
     case 'TURN_END': {
       const playerId = pick(rng, w.eligiblePlayerIds);
-      if (rng.next() > declareChance) return { type: 'SKIP_WINDOW' };
+      if (rng.next() > declareChance) return { type: 'SKIP_WINDOW', playerId };
       const grant = state.powerGrants.find((g) => g.ownerId === playerId && g.rank === 'shark' && !g.used);
-      if (!grant) return { type: 'SKIP_WINDOW' };
+      if (!grant) return { type: 'SKIP_WINDOW', playerId };
       return { type: 'DECLARE_SHARK', playerId, grantId: grant.id };
     }
     default:
-      return { type: 'SKIP_WINDOW' };
+      return { type: 'SKIP_WINDOW', playerId: w.eligiblePlayerIds[0] };
   }
 }

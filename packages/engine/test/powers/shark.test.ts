@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { reduce } from '../../src/engine.js';
-import { card, cards, findPlayer, makeState } from '../helpers.js';
+import { card, cards, findPlayer, makeState, skipWindow } from '../helpers.js';
 import { grantPower } from './grantHelper.js';
 
 describe('shark', () => {
@@ -12,7 +12,7 @@ describe('shark', () => {
     const grantId = grantPower(state, 'c', 'shark');
     const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
     // b holds no squid: responds truthfully via SKIP_WINDOW before TURN_END opens for the shark.
-    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' });
+    const { state: s1 } = skipWindow(sReq);
     expect(s1.pendingWindow?.type).toBe('TURN_END');
     const { state: s2, events } = reduce(s1, { type: 'DECLARE_SHARK', playerId: 'c', grantId });
     // shark takes only the cards that were just requested (b's 2), not a's original card
@@ -34,7 +34,7 @@ describe('shark', () => {
     });
     const grantId = grantPower(state, 'a', 'shark');
     const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
-    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' }); // b's truthful RESPONSE_PENDING answer
+    const { state: s1 } = skipWindow(sReq); // b's truthful RESPONSE_PENDING answer
     expect(() => reduce(s1, { type: 'DECLARE_SHARK', playerId: 'a', grantId })).toThrow();
   });
 
@@ -46,7 +46,7 @@ describe('shark', () => {
     const g1 = grantPower(state, 'c', 'shark');
     const g2 = grantPower(state, 'd', 'shark');
     const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
-    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' }); // b's truthful RESPONSE_PENDING answer
+    const { state: s1 } = skipWindow(sReq); // b's truthful RESPONSE_PENDING answer
     const { state: s2 } = reduce(s1, { type: 'DECLARE_SHARK', playerId: 'c', grantId: g1 });
     // window is closed now; d cannot also jump
     expect(s2.pendingWindow).toBeNull();
@@ -62,7 +62,7 @@ describe('shark', () => {
     grantPower(state, 'c', 'shark');
     const { state: sReq } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
     expect(sReq.pendingWindow?.type).toBe('RESPONSE_PENDING');
-    const { state: s1 } = reduce(sReq, { type: 'SKIP_WINDOW' }); // b truthfully says "Pescuiește!"
+    const { state: s1 } = skipWindow(sReq); // b truthfully says "Pescuiește!"
     expect(s1.pendingWindow).toBeNull();
   });
 });

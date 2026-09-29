@@ -94,4 +94,27 @@ describe('squid', () => {
     const { state: s1 } = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
     expect(() => reduce(s1, { type: 'DECLARE_SQUID', playerId: 'b', grantId: 'gsquid', lie: 'deny' })).toThrow();
   });
+
+  it('one event shape for every answer: an honest "no", a Squid deny and a Squid claim emit the same events (A2)', () => {
+    const shape = (events: { type: string; window?: string }[]) =>
+      events.map((e) => (e.window ? `${e.type}(${e.window})` : e.type)).join(' > ');
+    const answer = (state: ReturnType<typeof makeState>, respond: () => Parameters<typeof reduce>[1]) => {
+      const asked = reduce(state, { type: 'REQUEST', playerId: 'a', targetId: 'b', rank: 'herring' });
+      return shape(reduce(asked.state, respond()).events as any);
+    };
+    const pool = () => [card('carp'), card('perch')];
+    const honest = makeState({ playerIds: ['a', 'b', 'c'], hands: { a: [card('herring')], b: [card('mackerel')], c: [card('trout')] }, pool: pool() });
+    const deny = grantSquid(
+      makeState({ playerIds: ['a', 'b', 'c'], hands: { a: [card('herring')], b: cards('herring', 2), c: [card('trout')] }, pool: pool() }),
+      'b',
+    );
+    const claim = grantSquid(
+      makeState({ playerIds: ['a', 'b', 'c'], hands: { a: [card('herring')], b: [card('mackerel')], c: [card('trout')] }, pool: pool() }),
+      'b',
+    );
+    const expected = 'WINDOW_CLOSED(RESPONSE_PENDING) > REQUEST_FAILED > DREW_FROM_POOL > TURN_STARTED';
+    expect(answer(honest, () => ({ type: 'SKIP_WINDOW', playerId: 'b' }))).toBe(expected);
+    expect(answer(deny, () => ({ type: 'DECLARE_SQUID', playerId: 'b', grantId: 'gsquid', lie: 'deny' }))).toBe(expected);
+    expect(answer(claim, () => ({ type: 'DECLARE_SQUID', playerId: 'b', grantId: 'gsquid', lie: 'claim' }))).toBe(expected);
+  });
 });

@@ -1,10 +1,12 @@
-import { buildDeck, isNormalRank, isPowerRank, setSizeForRank } from './deck.js';
+import { deckProblem, isNormalRank, isPowerRank, seededDeck, setSizeForRank } from './deck.js';
 import { findLayableSets } from './queries.js';
-import { nextRandom, shuffle } from './rng.js';
+import { isEntropy, shuffleWithEntropy } from './rng.js';
+import { publicSetsPossible } from './setsPossible.js';
 import {
   Action,
   Card,
   EGGS,
+  EndReason,
   GameConfig,
   GameEvent,
   GameState,
@@ -33,18 +35,6 @@ function push(ctx: Ctx, e: GameEvent) {
 function genId(ctx: Ctx, prefix: string): string {
   ctx.s.idCounter += 1;
   return `${prefix}_${ctx.s.idCounter}`;
-}
-
-function rand(ctx: Ctx): number {
-  const { value, state } = nextRandom(ctx.s.rngState);
-  ctx.s.rngState = state;
-  return value;
-}
-
-function shuffleInPlace<T>(ctx: Ctx, arr: T[]): T[] {
-  const { result, state } = shuffle(arr, ctx.s.rngState);
-  ctx.s.rngState = state;
-  return result;
 }
 
 function getPlayer(ctx: Ctx, id: string): PlayerState {
@@ -108,18 +98,25 @@ function isAdjacentSeats(turnOrder: string[], aId: string, bId: string): boolean
 // Game creation
 // ---------------------------------------------------------------------------
 
+/**
+ * Starts a game. `deck` is EITHER the ordered deck to deal (the production path: the server
+ * shuffles with a CSPRNG and gives every card a random UUID, FEEL_VISUAL_SOUND_PLAN §6.3) OR a
+ * number, which deals `seededDeck(seed)` — a deterministic deal for engine tests and bot sims.
+ * Deal order: 7 rounds of one card per player, from the front; the rest is the pool, drawn from
+ * the back. The engine keeps no random state, so the game is a pure function of its inputs.
+ */
 export function createGame(
   players: { id: string; name: string }[],
-  seed: number,
+  deck: number | readonly Card[],
   configOverrides?: Partial<GameConfig>,
 ): { state: GameState; events: GameEvent[] } {
   if (players.length < 3 || players.length > 6) {
     throw new IllegalActionError('Pescuiește Extins requires 3 to 6 players');
   }
-  const deckUnshuffled = buildDeck();
+  const ordered: Card[] = typeof deck === 'number' ? seededDeck(deck) : deck.map((c) => ({ id: c.id, rank: c.rank }));
+  const problem = deckProblem(ordered);
+  if (problem) throw new IllegalActionError(`Invalid deck: ${problem}`);
   const initialState: GameState = {
-    seed,
-    rngState: seed | 0,
     players: players.map((p) => ({ id: p.id, name: p.name, hand: [], score: 0, connected: true, stunned: false })),
     turnOrder: players.map((p) => p.id),
     pool: [],
@@ -140,17 +137,17 @@ export function createGame(
     },
     idCounter: 0,
     staleRequestStreak: 0,
+    endReason: null,
   };
   const ctx: Ctx = { s: initialState, events: [] };
-  const deck = shuffleInPlace(ctx, deckUnshuffled);
   let idx = 0;
   for (let r = 0; r < 7; r++) {
     for (const p of ctx.s.players) {
-      p.hand.push(deck[idx++]);
+      p.hand.push(ordered[idx++]);
     }
   }
-  ctx.s.pool = deck.slice(idx);
-  push(ctx, { type: 'GAME_STARTED', playerIds: ctx.s.turnOrder, seed });
+  ctx.s.pool = ordered.slice(idx);
+  push(ctx, { type: 'GAME_STARTED', playerIds: ctx.s.turnOrder });
   beginTurn(ctx);
   return { state: ctx.s, events: ctx.events };
 }
@@ -166,6 +163,7 @@ export function reduce(inputState: GameState, action: Action): { state: GameStat
   const s: GameState = structuredClone(inputState);
   const ctx: Ctx = { s, events: [] };
   dispatch(ctx, action);
+  endIfDecided(ctx);
   return { state: ctx.s, events: ctx.events };
 }
 
@@ -192,6 +190,7 @@ function dispatch(ctx: Ctx, action: Action) {
     case 'DECLARE_SHARK':
       return handleDeclareShark(ctx, action);
     case 'SKIP_WINDOW':
+    case 'SERVER_SKIP_WINDOW':
       return handleSkipWindow(ctx, action);
     default:
       throw new IllegalActionError(`Unknown action type`);
@@ -214,7 +213,7 @@ function beginTurn(ctx: Ctx) {
       guard += 1;
       if (guard > n + 1) {
         // Safety valve: should be unreachable given power scarcity, but never hang forever.
-        finalizeGame(ctx);
+        finalizeGame(ctx, 'streak');
         return;
       }
       continue;
@@ -247,7 +246,7 @@ function beginTurn(ctx: Ctx) {
   }
 
   if (checkGameEnd(ctx)) {
-    finalizeGame(ctx);
+    finalizeGame(ctx, 'exhausted');
     return;
   }
 
@@ -402,8 +401,11 @@ function handleDeclareSquid(ctx: Ctx, action: Extract<Action, { type: 'DECLARE_S
   const { trueHasCards } = ctx.s.resume;
   if (action.lie === 'deny' && !trueHasCards) throw new IllegalActionError('Nothing to deny');
   if (action.lie === 'claim' && trueHasCards) throw new IllegalActionError('Nothing to claim falsely');
-  // No WINDOW_CLOSED/POWER_USED event for squid: absolute secrecy, no exceptions.
-  ctx.s.pendingWindow = null;
+  // Close the window through the very same path as an honest "no" (closeWindow), so that
+  // "no", a Squid deny and a Squid claim emit the same WINDOW_CLOSED(RESPONSE_PENDING) >
+  // REQUEST_FAILED > ... stream (FEEL_VISUAL_SOUND_PLAN §6.2). There is still no POWER_USED
+  // event for squid: absolute secrecy, no exceptions.
+  closeWindow(ctx, 'RESPONSE_PENDING');
   recordPowerUsed(ctx, grant);
   afterResponsePending(ctx, action.lie);
 }
@@ -608,8 +610,12 @@ function afterTurnEnd(ctx: Ctx, sharkJumped: boolean) {
 
   ctx.s.resume = { kind: 'NONE' };
 
-  if (checkGameEnd(ctx) || ctx.s.staleRequestStreak >= ctx.s.players.length * 2) {
-    finalizeGame(ctx);
+  if (checkGameEnd(ctx)) {
+    finalizeGame(ctx, 'exhausted');
+    return;
+  }
+  if (ctx.s.staleRequestStreak >= ctx.s.players.length * 2) {
+    finalizeGame(ctx, 'streak');
     return;
   }
 
@@ -677,6 +683,9 @@ function handleUseWhale(ctx: Ctx, action: Extract<Action, { type: 'USE_WHALE' }>
   }
   const a = getPlayer(ctx, action.targetAId);
   const b = getPlayer(ctx, action.targetBId);
+  if (!isEntropy(action.entropy)) {
+    throw new IllegalActionError('USE_WHALE needs 128 bits of entropy from the driver');
+  }
   closeWindow(ctx, 'TURN_START');
 
   const protectedRanks = (playerId: string) =>
@@ -689,7 +698,7 @@ function handleUseWhale(ctx: Ctx, action: Extract<Action, { type: 'USE_WHALE' }>
   const bProtected = b.hand.filter((c) => bProtectedRanks.has(c.rank));
   const bFree = b.hand.filter((c) => !bProtectedRanks.has(c.rank));
 
-  const combined = shuffleInPlace(ctx, [...aFree, ...bFree]);
+  const combined = shuffleWithEntropy([...aFree, ...bFree], action.entropy);
   const newAFree = combined.slice(0, aFree.length);
   const newBFree = combined.slice(aFree.length);
 
@@ -706,9 +715,14 @@ function handleUseWhale(ctx: Ctx, action: Extract<Action, { type: 'USE_WHALE' }>
   ensureCanContinueTurn(ctx, action.playerId);
 }
 
-function handleSkipWindow(ctx: Ctx, action: Extract<Action, { type: 'SKIP_WINDOW' }>) {
+function handleSkipWindow(ctx: Ctx, action: Extract<Action, { type: 'SKIP_WINDOW' | 'SERVER_SKIP_WINDOW' }>) {
   const w = ctx.s.pendingWindow;
   if (!w) throw new IllegalActionError('No window open to skip');
+  // A player may only close a window they are eligible in (A9). The driver's timeout skip is
+  // the one server-only way to close a window on somebody's behalf.
+  if (action.type === 'SKIP_WINDOW' && !w.eligiblePlayerIds.includes(action.playerId)) {
+    throw new IllegalActionError(`${action.playerId} is not eligible in this window`);
+  }
   switch (w.type) {
     case 'TURN_START': {
       const playerId = w.eligiblePlayerIds[0];
@@ -857,7 +871,7 @@ function ensureCanContinueTurn(ctx: Ctx, playerId: string) {
   }
 
   if (checkGameEnd(ctx)) {
-    finalizeGame(ctx);
+    finalizeGame(ctx, 'exhausted');
     return;
   }
   // No cards (the refill above can be all eggs when that's all the dwindling pool has
@@ -969,8 +983,21 @@ function checkGameEnd(ctx: Ctx): boolean {
   return ctx.s.players.every((p) => p.hand.every((c) => c.rank === EGGS));
 }
 
-function finalizeGame(ctx: Ctx) {
+/**
+ * The public end check (FEEL_VISUAL_SOUND_PLAN §11.2, DECISIONS.md "Deciding the game"): once an
+ * action has resolved with no window open, if the public count of sets still possible is 0, no
+ * set can ever be laid again, so neither the score nor the power-set tie-break can move. The
+ * game ends at once. The count reads the public record only (setsPossible.ts), so the moment
+ * this fires is the same in any two games with the same public record.
+ */
+function endIfDecided(ctx: Ctx) {
+  if (ctx.s.status !== 'IN_PROGRESS' || ctx.s.pendingWindow !== null) return;
+  if (publicSetsPossible(ctx.s) === 0) finalizeGame(ctx, 'decided');
+}
+
+function finalizeGame(ctx: Ctx, reason: EndReason) {
   ctx.s.status = 'ENDED';
+  ctx.s.endReason = reason;
   ctx.s.pendingWindow = null;
   ctx.s.resume = { kind: 'NONE' };
   const scores: Record<string, number> = {};
@@ -983,5 +1010,5 @@ function finalizeGame(ctx: Ctx) {
     contenders = contenders.filter((id) => powerSetCount(id) === maxPower);
   }
   ctx.s.winners = contenders;
-  push(ctx, { type: 'GAME_ENDED', scores, winners: contenders });
+  push(ctx, { type: 'GAME_ENDED', scores, winners: contenders, reason });
 }
