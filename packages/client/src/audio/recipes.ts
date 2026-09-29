@@ -9,7 +9,7 @@ import { renderedBuffer } from './bank.js';
 import { MOTIFS } from './motifs.js';
 import { RANK_TO_MOTIF, SILENT_RANKS } from './cuesheet.js';
 import { rng } from './util.js';
-import { type Ctx, env, filt } from './live/common.js';
+import { type Ctx, env, filt, harmonics, noiseSrc } from './live/common.js';
 import { paperLift, paperSlide } from './live/paper.js';
 import { doba, slap, stamp, thud, creak } from './live/tabletop.js';
 import { bubble, churn, plop, splash } from './live/water.js';
@@ -27,6 +27,8 @@ export interface CueParams {
   on?: boolean;
   pip?: number;
   open?: boolean;
+  /** the weight of a strike, 0..1 (table.impact) */
+  weight?: number;
   /** the backlog variant (§4.2) */
   short?: boolean;
   /** the request voices a private fact: dropped unless headphones mode is on */
@@ -196,6 +198,50 @@ export const RECIPES: Record<string, Recipe> = {
     RECIPES['table.lay'](c, o, t, s, sp, p);
     if (!p.short) doba(c, o, t + (sp ? 0.16 : 0.3), 0.7, rng(s + 3), sp ? 0.14 : 0.3);
   },
+  // the strike lands on the table top: a crack of splintering wood, a heavy skin whose pitch falls a long way, and
+  // under it a sub sweep (phones get its harmonics). `weight` 0..1 scales the depth and the body. Nothing rings.
+  'table.impact': (c, o, t, s, sp, p) => {
+    // three onsets no seat uses (a seat is one knock, or two 75 ms apart): the splinter crack, the body's boom
+    // 45 ms later, and the debris settling at 150 ms
+    const r = rng(s);
+    const w = Math.max(0.2, Math.min(1, p.weight ?? 0.8));
+    noiseSrc(c, t + 0.002, 0.03, r).connect(filt(c, 'highpass', 3200, 0.7)).connect(env(c, t + 0.002, 0.8 * w, 0.001, 0.022)).connect(o);
+    if (p.short) return thud(c, o, t + 0.045, 1.2 * w, r, 1.8);
+    const b = t + 0.045;
+    const sub = c.createOscillator();
+    sub.frequency.setValueAtTime(150 - 30 * w, b);
+    sub.frequency.exponentialRampToValueAtTime(38 + 8 * (1 - w), b + (sp ? 0.15 : 0.24));
+    const body = env(c, b, 1.1 * w, 0.003, sp ? 0.15 : 0.26);
+    sub.connect(body).connect(o);
+    harmonics(c, sub, body, -6);
+    sub.start(b);
+    sub.stop(b + (sp ? 0.2 : 0.32));
+    doba(c, o, b + 0.002, 0.9 * w, r, sp ? 0.1 : 0.18);
+    [0.15, 0.172, 0.19].forEach((dt, i) => noiseSrc(c, t + dt, 0.012, r).connect(filt(c, 'bandpass', 900 + 500 * i, 1.2)).connect(env(c, t + dt, 0.45 * w * (1 - 0.25 * i), 0.001, 0.012)).connect(o));
+  },
+  // the score race
+  'table.lead': (c, o, t, s, sp, p) => {
+    const r = rng(s);
+    playBuf(c, carve(c, o), t + 0.005, `lead.${sp || p.short ? 'spk' : 'full'}.${takeOf(s, 3)}`, 0.9);
+    doba(c, o, t + 0.01, 0.55, r, 0.18);
+  },
+  'table.breakaway': (c, o, t, s, sp, p) => {
+    const r = rng(s);
+    playBuf(c, carve(c, o), t + 0.005, `breakaway.${sp || p.short ? 'spk' : 'full'}`, 0.9);
+    doba(c, o, t + 0.01, 0.6, r, 0.12);
+    doba(c, o, t + (sp || p.short ? 0.13 : 0.3), 0.75, r, 0.16);
+  },
+  'table.chase': (c, o, t, s, sp, p) => {
+    const r = rng(s);
+    playBuf(c, carve(c, o), t + 0.005, `chase.${sp || p.short ? 'spk' : 'full'}`, 0.85);
+    if (!(sp || p.short)) [0.02, 0.3].forEach((dt) => thud(c, o, t + dt, 0.6, r, 1.2));
+  },
+  'table.clinch': (c, o, t, s, sp) => {
+    const r = rng(s);
+    playBuf(c, carve(c, o), t + 0.005, 'clinch.full', 0.9);
+    if (!sp) playBuf(c, carve(c, o), t + 0.02, 'tulnic.lastset', 0.5);
+    [0.01, 0.14, 0.27].forEach((dt, i) => doba(c, o, t + dt, 0.55 + 0.15 * i, r, i === 2 ? 0.4 : 0.14));
+  },
   'table.tally': (c, o, t, s, _sp, p) => wood(c, o, t, { plank: 'D', f0: 1200 * 2 ** (((p.pip ?? 0) * 2) / 12), damping: 0.4, gain: 0.7, seed: s }),
 
   /* ------------------------------------------------------------------- ceremony */
@@ -241,6 +287,22 @@ export const RECIPES: Record<string, Recipe> = {
   /* ------------------------------------------------------------------- powers */
   'power.granted': (c, o, t, s, sp, p) => granted(c, o, t, s, sp || !!p.short),
   'power.granted.mine': (c, o, t, s, sp, p) => motif(c, o, t, p.rank, sp || !!p.short, 0.6),
+  // the power gathers itself: filtered noise swelling up a band and a skin roll tightening, ending ON the strike
+  // (the request is placed `windup` ms before it). Short and under the call: it is anticipation, not an event.
+  'power.windup': (c, o, t, s, sp, p) => {
+    if (p.short) return;
+    const r = rng(s);
+    const d = 0.24;
+    const bp = filt(c, 'bandpass', 500, 1.4);
+    bp.frequency.setValueAtTime(500, t);
+    bp.frequency.exponentialRampToValueAtTime(sp ? 2600 : 3400, t + d);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.7, t + d - 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.012);
+    noiseSrc(c, t, d + 0.02, r).connect(bp).connect(g).connect(o);
+    [0, 0.09, 0.15, 0.19, 0.215].forEach((dt, i) => doba(c, o, t + dt, 0.18 + 0.08 * i, r, 0.03));
+  },
   // three plank-D clacks, then an ink stamp
   'power.reveal': (c, o, t, s, sp, p) => {
     const r = rng(s);

@@ -2,6 +2,8 @@ import type { RedactedPlayerView, RedactedView } from '@pescuit/engine';
 import { FanIcon, HookIcon, Mark, markForSeat, PowerPips } from '../art/marks.js';
 import { Seal } from '../art/seals.js';
 import { HandFan, Totem } from '../art/table.js';
+import { SpriteArt } from '../art/sprites.js';
+import { leadOf, leadTier } from '../game/choreography.js';
 import { seatFacts, shortName } from '../game/seatFacts.js';
 import { useT } from '../i18n/useT.js';
 import { LaidRow } from './LaidSets.js';
@@ -27,8 +29,25 @@ function useSeatLabel(view: RedactedView, p: RedactedPlayerView, current: boolea
   if (p.stunned) bits.push(t('game.stunned'));
   if (p.protectedRanks.length) bits.push(`${t('game.protected')}: ${p.protectedRanks.map((r) => rank(r)).join(', ')}`);
   if (!p.connected) bits.push(t('game.disconnected'));
-  void view;
+  const lead = useLead(view, p.id);
+  if (lead.leads) bits.push(t('game.leads'));
   return bits.join(', ');
+}
+
+/** The leader's crown (public: the scores are on every chip). Shared, it is small and plain; by two it grows; by
+ *  three it is ringed; out of reach it is sealed. Masked until the crown has flown there. */
+export function useLead(view: RedactedView, id: string): { tier: 0 | 1 | 2 | 3 | 'clinched'; leads: boolean } {
+  const l = leadOf(Object.fromEntries(view.players.map((p) => [p.id, p.score])), view.turnOrder);
+  if (!l.leaders.includes(id)) return { tier: 0, leads: false };
+  return { tier: leadTier(l, view.status === 'ENDED' ? null : view.sets.possible), leads: true };
+}
+
+export function Crown({ tier, size = 1 }: { tier: 0 | 1 | 2 | 3 | 'clinched'; size?: number }) {
+  return (
+    <span className="crown" data-crown data-tier={String(tier)} aria-hidden="true">
+      <SpriteArt sprite="crown" scale={size * (tier === 0 ? 0.55 : tier === 1 ? 0.7 : tier === 2 ? 0.82 : 0.95)} />
+    </span>
+  );
 }
 
 /** The shell of a protected player clamps over the top edge of a chip or a post. */
@@ -51,6 +70,7 @@ export function Chip({ view, player: p, current, hot, askable, target, onPick, o
   const facts = seatFacts(view, p.id);
   const label = useSeatLabel(view, p, current);
   const prot = p.protectedRanks[0];
+  const lead = useLead(view, p.id);
   const cls = ['chip', (hot ?? current) && 'is-current', p.stunned && 'is-stunned', !p.connected && 'is-offline', prot && 'is-protected', askable && 'is-askable', target && 'is-target']
     .filter(Boolean)
     .join(' ');
@@ -58,6 +78,7 @@ export function Chip({ view, player: p, current, hot, askable, target, onPick, o
     <div
       className={cls}
       data-player-id={p.id}
+      data-lead={lead.leads ? String(lead.tier) : undefined}
       data-askable={askable}
       role="group"
       aria-label={label}
@@ -71,12 +92,15 @@ export function Chip({ view, player: p, current, hot, askable, target, onPick, o
         </div>
       )}
       {prot && <Shell className="chip__shell" width={60} height={12} />}
+      {lead.leads && <Crown tier={lead.tier} />}
       <div className="chip__plate">
         <span className="chip__name">{shortName(p.name)}</span>
       </div>
       <div className="chip__row">
         <Mark id={markForSeat(view.turnOrder, p.id)} size={12} color="#e3d3b4" />
-        <span className="chip__score num">{p.score}</span>
+        <span className="chip__score num" data-score-owner={p.id}>
+          <span className="score__now">{p.score}</span>
+        </span>
         <PowerPips unused={facts.unused} used={facts.used} />
       </div>
       <div className="chip__row chip__row--foot">
@@ -99,6 +123,7 @@ export function Post({ view, player: p, current, hot, askable, target, lift, onP
   const facts = seatFacts(view, p.id);
   const label = useSeatLabel(view, p, current);
   const prot = p.protectedRanks[0];
+  const lead = useLead(view, p.id);
   const cls = ['post-d', (hot ?? current) && 'is-current', p.stunned && 'is-stunned', !p.connected && 'is-offline', prot && 'is-protected', askable && 'is-askable', target && 'is-target']
     .filter(Boolean)
     .join(' ');
@@ -107,6 +132,7 @@ export function Post({ view, player: p, current, hot, askable, target, lift, onP
       className={cls}
       style={{ marginTop: lift }}
       data-player-id={p.id}
+      data-lead={lead.leads ? String(lead.tier) : undefined}
       data-askable={askable}
       role={askable ? 'button' : 'group'}
       tabIndex={askable ? 0 : undefined}
@@ -122,13 +148,16 @@ export function Post({ view, player: p, current, hot, askable, target, lift, onP
         </div>
       )}
       {prot && <Shell className="post-d__shell" width={150} height={16} />}
+      {lead.leads && <Crown tier={lead.tier} size={1.25} />}
       <div className="post-d__plate">
         {p.stunned && <Seal rank="jellyfish" size={13} color="#efe2c8" />}
         <span className="post-d__name">{p.name}</span>
       </div>
       <div className="post-d__row">
         <Mark id={markForSeat(view.turnOrder, p.id)} size={16} color="#e3d3b4" />
-        <span className="post-d__score num">{p.score}</span>
+        <span className="post-d__score num" data-score-owner={p.id}>
+          <span className="score__now">{p.score}</span>
+        </span>
         <PowerPips unused={facts.unused} used={facts.used} />
       </div>
       <div className="post-d__row post-d__row--foot">

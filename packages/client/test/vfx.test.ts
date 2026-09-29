@@ -3,11 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { VFX_FRAMES, VFX_KINDS, VFX_STEP_MS, Vfx, vfxMs } from '../src/art/vfx.js';
 
-/** §5.5: the thirteen stepped effects, three or four hand-cut frames each, at most 2 KB each */
-const THIRTEEN = ['inkBurst', 'woodChips', 'waterRing', 'dustPuff', 'gateNotch', 'speedGrooves', 'shellClamp', 'bellStamp', 'mirrorGlint', 'barbedHook', 'spiralChips', 'roeBurst', 'gateDoors'];
+/** §5.5: the thirteen stepped effects, plus the strike's three (the shark's jaws, the shock ring every strike throws,
+ * the jellyfish's zap) - three or four hand-cut frames each, at most 2 KB each */
+const THIRTEEN = ['inkBurst', 'woodChips', 'waterRing', 'dustPuff', 'gateNotch', 'speedGrooves', 'shellClamp', 'bellStamp', 'mirrorGlint', 'barbedHook', 'spiralChips', 'roeBurst', 'gateDoors', 'jaws', 'shockRing', 'zap'];
 
 describe('stepped VFX (§4.3, §5.5)', () => {
-  it('there are thirteen, one for every row of the §5.5 table', () => {
+  it('there are sixteen: one for every row of the §5.5 table, and the strike\'s three', () => {
     expect([...VFX_KINDS].sort()).toEqual([...THIRTEEN].sort());
   });
 

@@ -220,38 +220,73 @@ describe('sets, powers, signature moments (§5.7, Appendix A)', () => {
     const r = rec(41, view({ handSizes: { a: 3, b: 6, c: 6, d: 3 } }), view({ handSizes: { a: 3, b: 6, c: 6, d: 3 } }), [{ type: 'POWER_USED', playerId: 'a', rank: 'whale' }, { type: 'WHALE_SHUFFLE', playerId: 'a', targetAId: 'b', targetBId: 'c' }]);
     const w = beat(ch(r), 'whale');
     expect(w.cls).toBe('heavy');
-    expect(w.flights.filter((f) => f.to.k === 'center')).toHaveLength(12);
-    expect(w.flights.filter((f) => f.from.k === 'center')).toHaveLength(12);
-    expect(w.vfx.map((v) => v.kind)).toEqual(['spiralChips']);
-    expect(w.juice).toMatchObject({ hitStopMs: 70, impact: true });
+    const backs = w.flights.filter((f) => f.what === 'back');
+    expect(backs.filter((f) => f.to.k === 'center')).toHaveLength(12);
+    expect(backs.filter((f) => f.from.k === 'center')).toHaveLength(12);
+    // the whale itself dives from one seat into the pond and surfaces at the other
+    expect(w.flights.filter((f) => f.what === 'fx').map((f) => [f.sprite, f.from, f.to])).toEqual([['whale', { k: 'seat', id: 'b' }, { k: 'center' }], ['whale', { k: 'center' }, { k: 'seat', id: 'c' }]]);
+    expect(w.vfx.map((v) => v.kind)).toEqual(['shockRing', 'spiralChips', 'waterRing']);
+    expect(w.juice).toMatchObject({ hitStopMs: 100, impact: true });
   });
 
-  it('the shark: cards turn at a hard corner at 55 % of their path; heavy with an impact frame', () => {
-    const r = rec(42, view(), view(), [{ type: 'POWER_USED', playerId: 'c', rank: 'shark' }, { type: 'SHARK_JUMP', playerId: 'c', fromId: 'a', count: 3 }]);
-    const s = beat(ch(r), 'shark');
+  it('the shark: the fin cuts across to the seat that was paid and lands ON the strike; the jaws snap; it drags the cards back in its wake', () => {
+    const r = rec(42, view(), view(), [{ type: 'POWER_USED', playerId: 'c', rank: 'shark' }, { type: 'SHARK_JUMP', playerId: 'c', fromId: 'a', count: 3, rank: 'herring' }]);
+    const c = ch(r);
+    const s = beat(c, 'shark');
     expect(s.cls).toBe('heavy');
-    expect(s.flights).toHaveLength(3);
-    expect(s.flights.every((f) => f.corner === 0.55 && f.from.k === 'seat' && (f.from as { id: string }).id === 'a' && (f.to as { id: string }).id === 'c')).toBe(true);
-    expect(s.juice!.impact).toBe(true);
+    const [fin, back, ...cards] = s.flights;
+    expect(fin).toMatchObject({ what: 'fx', sprite: 'fin', from: { k: 'seat', id: 'c' }, to: { k: 'seat', id: 'a' }, land: BEAT.effect });
+    expect(back).toMatchObject({ what: 'fx', sprite: 'fin', from: { k: 'seat', id: 'a' }, to: { k: 'seat', id: 'c' } });
+    expect(cards).toHaveLength(3);
+    expect(cards.every((f) => f.what === 'back' && (f.from as { id: string }).id === 'a' && (f.to as { id: string }).id === 'c' && f.start > back.start)).toBe(true);
+    expect(s.vfx.find((v) => v.kind === 'jaws')).toMatchObject({ at: BEAT.effect, anchor: { k: 'seat', id: 'a' } });
+    expect(s.juice).toMatchObject({ at: BEAT.effect, impact: true });
+    // the moment: the table dims to the two seats, the shark gathers itself, the proclamation names them and the cards
+    const m = beat(c, 'power');
+    expect(m.ops.find((o) => o.op === 'focus')).toMatchObject({ seats: ['c', 'a'] });
+    expect(m.ops.find((o) => o.op === 'charge')).toMatchObject({ seat: 'c', rank: 'shark', at: BEAT.effect - TIME.windup });
+    expect(m.ops.find((o) => o.op === 'callout')).toMatchObject({ at: BEAT.effect, callout: { kind: 'power', key: 'shark', rank: 'shark', actor: 'c', target: 'a', count: 3, cardRank: 'herring' } });
+    // the cues land with it: the riser ends on the strike, the bite and the impact are on it
+    const at = (id: string) => c.cues.find((x) => x.id === id)!.at;
+    expect(at('power.shark')).toBe(BEAT.effect);
+    expect(at('table.impact')).toBe(BEAT.effect);
+  });
+
+  it('a state a power leaves behind is inked when its strike lands, not when the view arrives', () => {
+    const stun = beat(ch(rec(44, view(), view(), [{ type: 'POWER_USED', playerId: 'c', rank: 'jellyfish' }, { type: 'JELLYFISH_STUN', playerId: 'c', targetId: 'a' }])), 'stun');
+    expect(stun.masks).toEqual([{ target: 'stun', ref: 'a', until: BEAT.effect }]);
+    expect(stun.flights[0]).toMatchObject({ sprite: 'bell', land: BEAT.effect });
+    const shell = beat(ch(rec(45, view({ currentPlayerId: 'a' }), view(), [{ type: 'POWER_USED', playerId: 'b', rank: 'tortoise' }, { type: 'TORTOISE_BLOCK', playerId: 'b', rank: 'herring' }])), 'block');
+    expect(shell.masks).toEqual([{ target: 'shield', ref: 'b', until: BEAT.effect }]);
+    // Deschis: no reveal, the strike comes sooner - but the windup still comes first
+    const d = ch(rec(46, view(), view(), [{ type: 'POWER_USED', playerId: 'c', rank: 'jellyfish' }, { type: 'JELLYFISH_STUN', playerId: 'c', targetId: 'a' }], 'deschis'));
+    expect(beat(d, 'stun').masks[0].until).toBe(BEAT.effectOpen);
+    expect(beat(d, 'power').ops.find((o) => o.op === 'charge')!.at).toBe(0);
   });
 
   it('the mantis: hit-stop, an impact frame, splinters; the crack stays (masked until the strike)', () => {
     const r = rec(43, laid(), laid(), [{ type: 'POWER_USED', playerId: 'c', rank: 'mantisShrimp' }, { type: 'SET_DESTROYED', setId: 's1', byPlayerId: 'c' }]);
     const m = beat(ch(r), 'mantis');
     expect(m.cls).toBe('heavy');
-    expect(m.vfx.map((v) => v.kind)).toEqual(['woodChips']);
-    expect(m.masks).toEqual([{ target: 'crack', ref: 's1', until: BEAT.effect + 40 }]);
-    expect(m.juice).toMatchObject({ hitStopMs: 70, impact: true, trauma: 0.6 });
+    expect(m.vfx.map((v) => v.kind)).toEqual(['woodChips', 'shockRing']);
+    expect(m.masks).toEqual([{ target: 'crack', ref: 's1', until: BEAT.effect }]);
+    expect(m.flights[0]).toMatchObject({ what: 'fx', sprite: 'club', from: { k: 'seat', id: 'c' }, to: { k: 'set', owner: 'a', id: 's1' }, land: BEAT.effect });
+    expect(m.juice).toMatchObject({ hitStopMs: 130, impact: true, trauma: 0.85 });
   });
 
-  it('lanternfish, tortoise, jellyfish, stickleback: one beat each, medium (a miss is light)', () => {
+  it('lanternfish, tortoise, jellyfish, stickleback: one beat each, heavy (a miss is medium)', () => {
     const used = (rank: string) => ({ type: 'POWER_USED', playerId: 'c', rank }) as PublicEvent;
     const one = (rank: string, e: PublicEvent) => ch(rec(50, view(), view(), [used(rank), e]));
-    expect(beat(one('lanternfish', { type: 'LANTERNFISH_REFLECT', playerId: 'c', fromId: 'a', count: 2, rank: 'herring' }), 'reflect').cls).toBe('medium');
+    expect(beat(one('lanternfish', { type: 'LANTERNFISH_REFLECT', playerId: 'c', fromId: 'a', count: 2, rank: 'herring' }), 'reflect').cls).toBe('heavy');
     expect(beat(one('tortoise', { type: 'TORTOISE_BLOCK', playerId: 'b', rank: 'herring' }), 'block').vfx[0].kind).toBe('shellClamp');
-    expect(beat(one('jellyfish', { type: 'JELLYFISH_STUN', playerId: 'c', targetId: 'a' }), 'stun').vfx[0].kind).toBe('bellStamp');
-    expect(beat(one('stickleback', { type: 'STICKLEBACK_STEAL', playerId: 'c', targetId: 'a', count: 2, rank: 'carp' }), 'steal').vfx[0].kind).toBe('barbedHook');
-    expect(beat(one('stickleback', { type: 'STICKLEBACK_WASTED', playerId: 'c', targetId: 'a', rank: 'carp' }), 'miss').cls).toBe('light');
+    expect(beat(one('jellyfish', { type: 'JELLYFISH_STUN', playerId: 'c', targetId: 'a' }), 'stun').vfx.map((v) => v.kind)).toContain('bellStamp');
+    const steal = beat(one('stickleback', { type: 'STICKLEBACK_STEAL', playerId: 'c', targetId: 'a', count: 2, rank: 'carp' }), 'steal');
+    expect(steal.vfx[0].kind).toBe('barbedHook');
+    // the line is cast from the actor to the target before the hook bites
+    expect(steal.ops.find((o) => o.op === 'tether')).toMatchObject({ from: { k: 'seat', id: 'c' }, to: { k: 'seat', id: 'a' }, style: 'line' });
+    const miss = one('stickleback', { type: 'STICKLEBACK_WASTED', playerId: 'c', targetId: 'a', rank: 'carp' });
+    expect(beat(miss, 'miss').cls).toBe('medium');
+    expect(beat(miss, 'power').ops.find((o) => o.op === 'callout')).toMatchObject({ callout: { kind: 'miss', key: 'sticklebackMiss' } });
   });
 
   it('Squid: nothing - no reveal, no motif, no effect beat, whatever the mode', () => {
@@ -291,7 +326,7 @@ describe('sets, powers, signature moments (§5.7, Appendix A)', () => {
 });
 
 describe('juice classes (§4.3)', () => {
-  it('light beats carry no juice; medium at most a 1 px shake; heavy beats hit-stop 60-80 ms, trauma 0.4-0.6 and at most one impact frame per step', () => {
+  it('light beats carry no juice; medium at most a 1 px shake; heavy beats hit-stop 60-130 ms, trauma 0.4-0.85 and at most one impact frame per step', () => {
     const steps = [askStep, yes(3), wet, dry, rec(1, view(), view(), [{ type: 'POWER_USED', playerId: 'c', rank: 'shark' }, { type: 'SHARK_JUMP', playerId: 'c', fromId: 'a', count: 2 }])];
     for (const r of steps) {
       const c = ch(r);
@@ -299,10 +334,13 @@ describe('juice classes (§4.3)', () => {
         if (b.cls === 'light') expect(b.juice?.hitStopMs, b.kind).toBeUndefined();
         if (b.cls === 'medium' && b.juice?.trauma) expect(b.juice.trauma ** 2 * 6, b.kind).toBeLessThanOrEqual(1);
         if (b.cls === 'heavy' && b.juice) {
-          expect(b.juice.hitStopMs).toBeGreaterThanOrEqual(60);
-          expect(b.juice.hitStopMs).toBeLessThanOrEqual(80);
+          // a power's strike is the rarest thing on the table and hits hardest (the user asked for more weight)
+          if (b.juice.hitStopMs !== undefined) {
+            expect(b.juice.hitStopMs).toBeGreaterThanOrEqual(60);
+            expect(b.juice.hitStopMs).toBeLessThanOrEqual(130);
+          }
           expect(b.juice.trauma).toBeGreaterThanOrEqual(0.4);
-          expect(b.juice.trauma).toBeLessThanOrEqual(0.6);
+          expect(b.juice.trauma).toBeLessThanOrEqual(0.85);
         }
       }
       expect(c.beats.filter((b) => b.juice?.impact).length).toBeLessThanOrEqual(1);

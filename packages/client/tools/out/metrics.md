@@ -26,6 +26,11 @@
 | `table.poolEmpty` | Table | S | 36 | 1032 (1200) | 186 | -6.5 | -24.5 | -22.7 | 2.4 | 0.3 | 16.2 / 14.2 / 12.1 | -25.9 / -10.7 |
 | `table.lay` | Table | T | 37 | 427 (450) | 207 | -3.5 | -22.9 | -23.0 | -0.5 | 0.1 | 19.4 / 16.1 / 12.1 | -14.4 / -12.2 |
 | `table.lay.power` | Table | T | 44 | 526 (450) | 252 | -2.1 | -19.4 | -18.3 | 6.4 | 0.0 | 17.3 / 15.6 / 12.1 | -20.3 / -7.1 |
+| `table.impact` | Table | T | 23 | 239 (380) | 195 | 2.5 | -14.2 | -16.4 | — | 0.0 | 16.7 / 15.2 / 12.1 | -21.2 / -7.6 |
+| `table.lead` | Table | S | 11 | 945 (950) | 217 | -3.7 | -26.5 | -22.8 | -10.7 | 0.1 | 19.1 / 16.1 / 12.1 | -15.8 / -8.9 |
+| `table.breakaway` | Table | S | 18 | 995 (1000) | 245 | -0.4 | -23.6 | -19.6 | 2.1 | 0.0 | 19.2 / 16.1 / 12.1 | -17.5 / -8.6 |
+| `table.chase` | Table | S | 18 | 790 (800) | 228 | -6.6 | -26.3 | -24.2 | -1.7 | 0.1 | 17.6 / 14.9 / 12.1 | -21.8 / -22.2 |
+| `table.clinch` | Table | S | 29 | 2195 (2200) | 2195 | 2.0 | -19.8 | -13.7 | 5.7 | 0.0 | 15.6 / 15.6 / 12.1 | -120.0 / -16.3 |
 | `table.tally` | Table | T | 10 | 50 (90) | 50 | -10.4 | -23.7 | -32.8 | — | 0.4 | 13.4 / 13.4 / 12.1 | -120.0 / -14.2 |
 | `mus.start` | Music | S | 6 | 2404 (3000) | 2404 | -6.7 | -15.2 | -13.1 | 11.9 | 0.0 | 6.4 / 6.4 / 6.4 | -120.0 / -120.0 |
 | `mus.lastset` | Music | S | 32 | 1538 (3000) | 1538 | 1.5 | -15.6 | -13.2 | 8.2 | 0.0 | 14.7 / 14.7 / 11.7 | -120.0 / -21.6 |
@@ -53,6 +58,7 @@
 | `power.used.stickleback` | Power | S | 4 | 873 (1200) | 198 | -9.3 | -16.4 | -14.7 | 8.6 | 0.0 | 5.4 / 5.4 / 12.1 | -120.0 / -13.2 |
 | `power.used.whale` | Power | S | 4 | 1100 (1200) | 226 | -7.5 | -14.1 | -12.8 | 4.6 | 0.0 | 5.3 / 5.3 / 12.1 | -120.0 / -13.1 |
 | `power.used.clownfish` | Power | S | 4 | 895 (1200) | 198 | -14.1 | -28.2 | -26.2 | 0.9 | 0.0 | 12.1 / 12.1 / 12.1 | -120.0 / -8.2 |
+| `power.windup` | Power | S | 38 | 245 (260) | 245 | -3.9 | -22.9 | -25.0 | — | 0.6 | 21.2 / 16.1 / 12.1 | -13.8 / -7.4 |
 | `power.reveal` | Power | T | 37 | 318 (400) | 194 | -3.6 | -21.9 | -22.9 | 3.9 | 0.0 | 18.4 / 16.1 / 12.1 | -16.8 / -9.2 |
 | `power.shark` | Power | T | 20 | 454 (460) | 454 | 2.0 | -15.0 | -14.4 | -29.9 | 0.1 | 16.9 / 15.4 / 12.1 | -21.8 / -10.9 |
 | `power.mantis` | Power | T | 60 | 292 (460) | 195 | 1.1 | -21.9 | -23.3 | -20.3 | 0.3 | 23.0 / 16.1 / 12.1 | -7.1 / -4.5 |
@@ -99,6 +105,11 @@ Level shift is the chain's effect on the cue's loudness against the same cue wit
 | `table.poolEmpty` | 0.0 | — | -120.0 | 0.0 | -5.3 |
 | `table.lay` | 0.0 | — | -120.0 | -0.1 | -1.5 |
 | `table.lay.power` | -0.0 | — | -51.2 | 0.0 | -2.5 |
+| `table.impact` | -0.1 | — | -48.5 | 0.0 | -3.2 |
+| `table.lead` | 0.0 | — | -120.0 | 0.0 | -6.4 |
+| `table.breakaway` | 0.0 | — | -120.0 | 0.0 | -7.3 |
+| `table.chase` | 0.0 | — | -120.0 | 0.0 | -9.0 |
+| `table.clinch` | 0.0 | -0.8 | -120.0 | 0.0 | -5.5 |
 | `table.tally` | 0.0 | — | -120.0 | 0.0 | -10.5 |
 | `mus.start` | 0.0 | 12.8 | -120.0 | 0.0 | -16.0 |
 | `mus.lastset` | 0.0 | 8.2 | -120.0 | 0.0 | -8.6 |
@@ -126,6 +137,7 @@ Level shift is the chain's effect on the cue's loudness against the same cue wit
 | `power.used.stickleback` | 0.0 | — | -120.0 | 0.0 | -15.5 |
 | `power.used.whale` | -0.0 | — | -48.2 | 0.0 | -15.0 |
 | `power.used.clownfish` | 0.0 | — | -120.0 | 0.0 | -8.8 |
+| `power.windup` | 0.0 | — | -120.0 | 0.0 | -9.8 |
 | `power.reveal` | -0.0 | — | -63.3 | -0.4 | -1.5 |
 | `power.shark` | 0.0 | -34.6 | -120.0 | -0.5 | -1.5 |
 | `power.mantis` | -0.6 | — | -27.9 | 0.0 | -3.0 |
@@ -197,6 +209,11 @@ Rhythm is the onsets in the first 300 ms; timbre is the log-mel pattern of the f
 | `table.poolEmpty` | 0 · 100 · 150 · 205 · 255 ms |
 | `table.lay` | 0 · 120 · 240 ms |
 | `table.lay.power` | 0 · 120 · 240 ms |
+| `table.impact` | 0 · 45 ms |
+| `table.lead` | 0 ms |
+| `table.breakaway` | 0 · 75 ms |
+| `table.chase` | 0 ms |
+| `table.clinch` | 0 · 130 · 260 ms |
 | `table.tally` | 0 ms |
 | `mus.start` | 0 · 25 · 55 · 80 ms |
 | `mus.lastset` | 0 · 105 · 130 · 155 · 185 · 225 ms |
@@ -224,6 +241,7 @@ Rhythm is the onsets in the first 300 ms; timbre is the log-mel pattern of the f
 | `power.used.stickleback` | 0 · 25 · 60 · 85 · 120 · 145 · 180 · 205 ms |
 | `power.used.whale` | 0 · 25 ms |
 | `power.used.clownfish` | 0 · 25 · 55 · 270 ms |
+| `power.windup` | 0 · 90 · 150 · 190 · 215 ms |
 | `power.reveal` | 0 · 80 · 160 · 260 ms |
 | `power.shark` | 0 · 35 ms |
 | `power.mantis` | 0 · 60 · 90 · 130 · 180 · 250 ms |
@@ -242,16 +260,16 @@ Rhythm is the onsets in the first 300 ms; timbre is the log-mel pattern of the f
 
 | Closest same-rhythm pairs with different meanings | Timbre distance dB |
 | --- | --- |
+| table.breakaway / seat A2 (headphones) | 20.0 |
 | ui.target / seat A1 (headphones) | 20.0 |
 | ui.target / seat A1 (speaker) | 20.0 |
+| table.lead / seat B1 (speaker) | 20.5 |
+| table.chase / seat C1 (headphones) | 20.6 |
+| table.lead / seat A1 (headphones) | 20.6 |
+| table.chase / seat C1 (speaker) | 20.6 |
 | table.turn / seat A2 (headphones) | 20.7 |
 | table.turn / seat A2 (speaker) | 20.7 |
-| meta.join / seat A2 (speaker) | 20.8 |
-| meta.join / seat A2 (headphones) | 20.8 |
-| table.bonus / seat A2 (headphones) | 20.9 |
-| table.bonus / seat A2 (speaker) | 20.9 |
-| meta.leave / seat A2 (headphones) | 23.7 |
-| meta.leave / seat A2 (speaker) | 23.7 |
+| table.breakaway / seat C2 (headphones) | 20.7 |
 
 ## Checks
 
@@ -264,7 +282,7 @@ Rhythm is the onsets in the first 300 ms; timbre is the log-mel pattern of the f
 - PASS — the clock: every Clock cue sounds at least 10 LU over the bed.
 - PASS — balance: the chain moves no cue more than 1 dB from its cue-sheet level, on either profile.
 
-- PASS — the committed calibration matches the fresh one.
+- STALE — the committed src/audio/calibration.ts differs from the fresh calibration in 2 entries (table.impact speaker; table.impact headphones). Run `node tools/audio-check.cjs --write-calibration`.
 
 
-Nodes: the heaviest cues are `power.mantis` 60, `table.lay.power` 44, `table.gofish.dry` 37, `table.lay` 37, `power.reveal` 37 (the plan's budget is per hit: ≤ 10 nodes plus the mastering shaper).
+Nodes: the heaviest cues are `power.mantis` 60, `table.lay.power` 44, `power.windup` 38, `table.gofish.dry` 37, `table.lay` 37 (the plan's budget is per hit: ≤ 10 nodes plus the mastering shaper).

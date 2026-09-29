@@ -11,7 +11,9 @@ import { GameProvider } from '../state/store.js';
 import '../styles.css';
 import { DevPanel } from './DevPanel.js';
 import { LocalDriver, NAMES } from './driver.js';
-import { FIXTURES } from './fixtures.js';
+import { FIXTURES as BASE_FIXTURES, SHOWCASES } from './fixtures.js';
+
+const FIXTURES = [...BASE_FIXTURES, ...SHOWCASES];
 
 const num = (v: string | null, d: number) => (v !== null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : d);
 
@@ -61,6 +63,9 @@ export function mountDev(params: URLSearchParams): void {
     const spec = FIXTURES.find((f) => f.id === fixtureId)!;
     const b = spec.build(n, seed, seat);
     driver = new LocalDriver({ ...b, humanId: `p${b.seat}`, bots: 'memory', speed: num(params.get('speed'), 0), seed, openAsSnapshot: true });
+    const act = b.act;
+    // a showcase: one action away from its moment; `__fxGo()` performs it (tools/fx-capture.cjs films it)
+    if (act) (window as unknown as { __fxGo: () => void }).__fxGo = () => driver.act(act(driver.state));
   } else {
     const names = NAMES.slice();
     const players = Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: i === seat ? 'Tu' : (names.shift() ?? `P${i}`) }));

@@ -7,7 +7,7 @@
  * facts (plus the private tier, gated by its toggle); `playHaptics` is the only side effect.
  */
 
-import { BEAT, type PublicRecord, type SeatFacts } from './cues.js';
+import { BEAT, raceOf, type PublicRecord, type SeatFacts } from './cues.js';
 
 export type HapticTier = 'public' | 'private';
 
@@ -31,6 +31,8 @@ export const PATTERNS = {
   stunned: [40],
   setDestroyed: [20, 30, 40],
   whale: [20],
+  /** you take the lead, or put yourself out of reach */
+  lead: [14, 50, 28],
 } as const;
 
 export function hapticsFor(record: PublicRecord, facts: SeatFacts): HapticRequest[] {
@@ -42,6 +44,9 @@ export function hapticsFor(record: PublicRecord, facts: SeatFacts): HapticReques
   const bonus = new Set(events.filter((e) => e.type === 'BONUS_TURN').map((e) => (e as { playerId: string }).playerId));
   const base = events.some((e) => e.type === 'GAME_STARTED') ? BEAT.start : BEAT.turn;
   let turnSlot = 0; // the same stops as cuesFor: each seat the totem visits waits for the last one
+  // a power's effect is felt on its strike: after the reveal in Ascuns, sooner in Deschis (cuesFor's rule)
+  const powered = events.some((e) => e.type === 'POWER_USED' && e.rank !== 'squid');
+  const S = powered && record.mode !== 'ascuns' ? BEAT.effectOpen : BEAT.effect;
   for (const e of events) {
     switch (e.type) {
       case 'TURN_STARTED': {
@@ -67,26 +72,31 @@ export function hapticsFor(record: PublicRecord, facts: SeatFacts): HapticReques
         break;
       case 'SHARK_JUMP':
         // the engine's SHARK_JUMP names the player the cards were jumped away from as `fromId`
-        if ((e.fromId ?? e.loserId) === me) add('cardsTaken', PATTERNS.cardsTaken, 450);
+        if ((e.fromId ?? e.loserId) === me) add('cardsTaken', PATTERNS.cardsTaken, S);
         break;
       case 'LANTERNFISH_REFLECT':
-        if (e.fromId === me) add('cardsTaken', PATTERNS.cardsTaken, 450);
+        if (e.fromId === me) add('cardsTaken', PATTERNS.cardsTaken, S);
         break;
       case 'STICKLEBACK_STEAL':
-        if (e.targetId === me) add('cardsTaken', PATTERNS.cardsTaken, 450);
+        if (e.targetId === me) add('cardsTaken', PATTERNS.cardsTaken, S);
         break;
       case 'JELLYFISH_STUN':
-        if (e.targetId === me) add('stunned', PATTERNS.stunned, 450);
+        if (e.targetId === me) add('stunned', PATTERNS.stunned, S);
         break;
       case 'SET_DESTROYED':
-        if (e.ownerId === me) add('setDestroyed', PATTERNS.setDestroyed, 450);
+        if (e.ownerId === me) add('setDestroyed', PATTERNS.setDestroyed, S);
         break;
       case 'WHALE_SHUFFLE':
-        if (e.playerId === me || e.targetAId === me || e.targetBId === me) add('whale', PATTERNS.whale, 450);
+        if (e.playerId === me || e.targetAId === me || e.targetBId === me) add('whale', PATTERNS.whale, S);
         break;
       default:
         break; // Squid has no event and no haptic
     }
+  }
+  const race = raceOf(record);
+  if ((race === 'lead' || race === 'clinch' || race === 'breakaway') && after.scores) {
+    const top = Math.max(...Object.values(after.scores));
+    if ((after.scores[me] ?? 0) === top && Object.values(after.scores).filter((v) => v === top).length === 1) add('lead', PATTERNS.lead, BEAT.lead);
   }
   const w = after.window;
   const was = before?.window;

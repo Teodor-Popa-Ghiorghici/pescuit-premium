@@ -1,6 +1,7 @@
 import { NORMAL_RANKS, POWER_RANKS } from '@pescuit/engine';
 import { Seal } from '../art/seals.js';
 import { Totem } from '../art/table.js';
+import { SPRITES, SpriteArt } from '../art/sprites.js';
 import { VFX_KINDS, Vfx } from '../art/vfx.js';
 import { CardBack } from './Card.js';
 
@@ -28,6 +29,11 @@ export function FlightLayer() {
           <div key={r} data-tpl={`chip:${r}`} className="chip-token">
             <span className="flier__lift" />
             <div className="chip-token__in">{r ? <Seal rank={r} size={20} color="#efe2c8" /> : <span className="chip-token__blank" />}</div>
+          </div>
+        ))}
+        {SPRITES.map((k) => (
+          <div key={k} data-tpl={`sprite:${k}`} className={`flier__fx flier__fx--${k}`}>
+            <SpriteArt sprite={k} />
           </div>
         ))}
         {VFX_KINDS.map((k) => (

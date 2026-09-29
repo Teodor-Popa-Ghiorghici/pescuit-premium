@@ -63,6 +63,15 @@ const cloud = (r: number, o: number): ReactElement[] => [
   </g>,
 ];
 
+/** a row of teeth: a jaw edge at y, pointing down (dir 1) or up (-1) */
+const teeth = (y: number, dir: 1 | -1, key: string): ReactElement => (
+  <path key={key} d={`M4,${y} ${Array.from({ length: 6 }, (_, i) => `L${9 + i * 9},${y + dir * 9} L${13 + i * 9},${y}`).join(' ')} L60,${y} L60,${y - dir * 6} L4,${y - dir * 6} Z`} fill={PAPER} stroke={INK} strokeWidth="2" />
+);
+/** a jagged bolt from (x, y) heading by (dx, dy) */
+const bolt = (x: number, y: number, dx: number, dy: number, key: string, w = 3): ReactElement => (
+  <path key={key} d={`M${x},${y} l${dx * 0.4},${dy * 0.25} l${-dy * 0.18},${dx * 0.18} l${dx * 0.6},${dy * 0.75}`} fill="none" stroke={WATER} strokeWidth={w} strokeLinejoin="miter" />
+);
+
 /** The frames of every effect. */
 export const VFX_FRAMES: Record<VfxKind, ReactElement[][]> = {
   // the stamp: an ink burst, then its spatter
@@ -129,6 +138,26 @@ export const VFX_FRAMES: Record<VfxKind, ReactElement[][]> = {
   ],
   // score: roe bursts
   roeBurst: [ring(6, 5, 3, OCHRE), ring(14, 7, 3.4, OCHRE, 0.3), ring(22, 9, 3, OCHRE, 0.6), ring(28, 9, 2, OCHRE, 0.9)],
+  // Shark: the jaws snap shut on the seat, and the water goes red
+  jaws: [
+    [teeth(10, 1, 'u'), teeth(54, -1, 'l')],
+    [teeth(20, 1, 'u'), teeth(44, -1, 'l')],
+    [teeth(28, 1, 'u'), teeth(36, -1, 'l'), <polygon key="s" points={star(32, 32, 6, 16, 7)} fill={RED} stroke={INK} strokeWidth="1.5" />],
+    [...ring(20, 8, 3, RED, 0.3), <polygon key="s" points={star(32, 32, 4, 9, 7, 0.4)} fill={RED} />],
+  ],
+  // every strike: a shock ring of ink and ochre, thrown outwards
+  shockRing: [
+    [<circle key="a" cx="32" cy="32" r="7" fill={OCHRE} stroke={INK} strokeWidth="3" />],
+    [<circle key="a" cx="32" cy="32" r="16" fill="none" stroke={INK} strokeWidth="5" />, <circle key="b" cx="32" cy="32" r="11" fill="none" stroke={OCHRE} strokeWidth="3" />],
+    [<circle key="a" cx="32" cy="32" r="24" fill="none" stroke={INK} strokeWidth="3.5" />, <circle key="b" cx="32" cy="32" r="19" fill="none" stroke={OCHRE} strokeWidth="2" strokeDasharray="5 4" />],
+    [<circle key="a" cx="32" cy="32" r="30" fill="none" stroke={INK} strokeWidth="1.5" strokeDasharray="3 5" />],
+  ],
+  // Jellyfish: the sting crackles over the seat
+  zap: [
+    [bolt(10, 8, 18, 22, 'a'), bolt(54, 10, -16, 24, 'b')],
+    [bolt(6, 26, 22, 12, 'a', 4), bolt(58, 30, -22, 10, 'b', 4), bolt(30, 4, 6, 26, 'c', 4), <circle key="d" cx="32" cy="36" r="6" fill={PAPER} stroke={INK} strokeWidth="2" />],
+    [bolt(12, 50, 18, -16, 'a'), bolt(52, 52, -18, -18, 'b'), <circle key="d" cx="32" cy="36" r="3" fill={WATER} />],
+  ],
   // start and end: the gate doors, closing. Each leaf is half the plate; the gap is what is left.
   gateDoors: [
     [<rect key="a" x="0" y="8" width="20" height="48" fill={RED} stroke={INK} strokeWidth="2.5" />, <rect key="b" x="44" y="8" width="20" height="48" fill={RED} stroke={INK} strokeWidth="2.5" />],

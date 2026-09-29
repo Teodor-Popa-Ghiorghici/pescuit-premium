@@ -108,6 +108,13 @@ export const CUES: readonly CueDef[] = [
   row({ id: 'table.poolEmpty', bus: 'Table', heard: 'all', plays: [1, 1], levelDb: 2, prio: 4, variation: 1, maxLenMs: 1200, short: 'gurgle', env: 'src', cls: 'S' }),
   row({ id: 'table.lay', bus: 'Table', heard: 'all', plays: [6, 9], levelDb: 0, prio: 3, variation: 4, maxLenMs: 450, short: 'stamp', env: 'src' }),
   row({ id: 'table.lay.power', bus: 'Table', heard: 'all', plays: [6, 9], levelDb: 0, prio: 3, variation: 3, maxLenMs: 450, short: 'stamp', env: 'src' }),
+  // the weight of a power's strike on the table top: a heavy skin, a crack, a sub that phones can hear as harmonics
+  row({ id: 'table.impact', bus: 'Table', heard: 'all', plays: [3, 7], levelDb: 0, prio: 4, variation: 3, maxLenMs: 380, short: 'boom', env: 'src' }),
+  // the score race: a new leader (or a tie), a breakaway, a chase, out of reach
+  row({ id: 'table.lead', bus: 'Table', heard: 'all', plays: [3, 12], levelDb: -3, prio: 3, variation: 3, maxLenMs: 950, short: '2 notes', env: 'src', cls: 'S' }),
+  row({ id: 'table.breakaway', bus: 'Table', heard: 'all', plays: [0, 2], levelDb: -2, prio: 3, variation: 1, maxLenMs: 1000, short: '4 notes', env: 'src', cls: 'S' }),
+  row({ id: 'table.chase', bus: 'Table', heard: 'all', plays: [0, 2], levelDb: -3, prio: 3, variation: 1, maxLenMs: 800, short: '2 notes', env: 'src', cls: 'S' }),
+  row({ id: 'table.clinch', bus: 'Table', heard: 'all', plays: [0, 1], levelDb: -1, prio: 4, variation: 1, maxLenMs: 2200, env: 'src', cls: 'S' }),
   row({ id: 'table.tally', bus: 'Table', heard: 'all', plays: null, levelDb: -6, prio: 2, inst: 2, cooldownMs: 60, variation: 'live', maxLenMs: 90, short: 'same' }),
 
   // ceremony
@@ -127,6 +134,8 @@ export const CUES: readonly CueDef[] = [
   ...MOTIF_RANKS.map((r) => P(r, 'granted')),
   row({ id: 'power.granted.mine', bus: 'Power', heard: 'private', plays: [0, 1], levelDb: -4, prio: 4, variation: 1, maxLenMs: 1000, short: '2 notes', env: 'src', cls: 'S' }),
   ...MOTIF_RANKS.map((r) => P(r, 'used')),
+  // the power gathers itself: a swell that ends exactly on the strike
+  row({ id: 'power.windup', bus: 'Power', heard: 'all', plays: [3, 7], levelDb: -5, prio: 4, variation: 3, maxLenMs: 260, short: 'none', env: 'src', cls: 'S' }),
   row({ id: 'power.reveal', bus: 'Power', heard: 'all', plays: [1, 6], levelDb: 0, prio: 4, variation: 3, maxLenMs: 400, short: 'clacks', env: 'src' }),
   row({ id: 'power.shark', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 0, prio: 4, variation: 2, maxLenMs: 460, short: 'bite', env: 'src' }),
   row({ id: 'power.mantis', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: -2, prio: 4, variation: 2, maxLenMs: 460, short: 'club', env: 'src' }),
@@ -176,7 +185,7 @@ export const ANCHOR_LUFS: Record<Profile, number> = { speaker: -21, headphones: 
 export const MASTER_CAP_DB: Record<Profile, number> = { speaker: 12, headphones: 16 };
 
 /** Cues exempt from the 250 ms echo budget: heard once a game (§3.4). */
-export const ECHO_EXEMPT: ReadonlySet<string> = new Set(['mus.start', 'mus.lastset', 'mus.end.win', 'mus.end.tie', 'mus.end.lose']);
+export const ECHO_EXEMPT: ReadonlySet<string> = new Set(['mus.start', 'mus.lastset', 'mus.end.win', 'mus.end.tie', 'mus.end.lose', 'table.clinch']);
 
 /** Squid has no cue and no motif: any request naming it is silence. */
 export const SILENT_RANKS: ReadonlySet<string> = new Set(['squid']);

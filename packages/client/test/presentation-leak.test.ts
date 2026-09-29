@@ -159,7 +159,8 @@ describe('presentation leak, test 1: same public record, same presentation', () 
     expectSamePresentation(ranks.map(world), ['a', 'c'], ['a', 'b', 'c']);
     const lay = shown(world('squid'), 'a')[0];
     expect(lay.ch.beats.map((b) => b.kind)).toEqual(expect.arrayContaining(['lay', 'grant']));
-    expect(lay.cues.map((c) => c.id)).toEqual(['table.lay.power', 'power.granted']);
+    // the first set of the game also crowns a leader: public (the score is on the chip), the same for any rank
+    expect(lay.cues.map((c) => c.id)).toEqual(['table.lay.power', 'power.granted', 'table.lead']);
   });
 
   it('a clownfish bound to different powers, in Ascuns: nothing for anyone but the owner, and the owner hears nothing without headphones', () => {

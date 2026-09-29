@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cuesFor, clockTarget, localAnswerCue, type CueRequest, type PublicEvent, type PublicRecord, type PublicView, type SeatFacts, type PowerMode } from '../src/audio/cues.js';
+import { BEAT, cuesFor, clockTarget, localAnswerCue, type CueRequest, type PublicEvent, type PublicRecord, type PublicView, type SeatFacts, type PowerMode } from '../src/audio/cues.js';
 import { CUES, cueDef } from '../src/audio/cuesheet.js';
 
 /* Three players at a table, a, b, c. Steps are built the way the UI's adapter will build them: the
@@ -235,12 +235,40 @@ describe('what each event sounds like (Appendix A, the sound column)', () => {
     const last = rec(73, view({ window: RP(), poolCount: 1 }), view({ poolCount: 0 }), [{ type: 'REQUEST_FAILED', askerId: 'a', targetId: 'b' }, { type: 'DREW_FROM_POOL', playerId: 'a', poolEmpty: true }]);
     expect(ids(cuesFor(last, f))).toEqual(['clock.close', 'table.gofish', 'table.poolEmpty']);
   });
-  it('powers: reveal then motif in Ascuns, motif only in Deschis; the effect cue under it', () => {
+  it('powers: reveal then motif in Ascuns, motif only in Deschis; a riser into the strike; the effect and its weight on the strike', () => {
     const used = (mode: PowerMode) => rec(74, view(), view(), [{ type: 'POWER_USED', playerId: 'a', rank: 'mantisShrimp' }, { type: 'SET_DESTROYED', ownerId: 'b' }], mode);
-    expect(ids(cuesFor(used('ascuns'), f))).toEqual(['power.reveal', 'power.used.mantis', 'power.mantis']);
-    expect(ids(cuesFor(used('deschis'), f))).toEqual(['power.used.mantis', 'power.mantis']);
+    expect(ids(cuesFor(used('ascuns'), f))).toEqual(['power.reveal', 'power.windup', 'power.used.mantis', 'power.mantis', 'table.impact']);
+    expect(ids(cuesFor(used('deschis'), f))).toEqual(['power.used.mantis', 'power.windup', 'power.mantis', 'table.impact']);
+    const at = (mode: PowerMode, id: string) => cuesFor(used(mode), f).find((c) => c.id === id)!.at;
+    // the riser ends exactly on the strike; the effect and the impact land together
+    expect(at('ascuns', 'power.windup') + BEAT.windup).toBe(BEAT.effect);
+    expect(at('ascuns', 'power.mantis')).toBe(BEAT.effect);
+    expect(at('ascuns', 'table.impact')).toBe(BEAT.effect);
+    expect(at('deschis', 'power.used.mantis')).toBe(0);
+    expect(at('deschis', 'power.mantis')).toBe(BEAT.effectOpen);
+    expect(at('deschis', 'power.windup') + BEAT.windup).toBe(BEAT.effectOpen);
     const shark = rec(75, view(), view(), [{ type: 'POWER_USED', playerId: 'a', rank: 'shark' }, { type: 'SHARK_JUMP', playerId: 'a' }], 'deschis');
-    expect(ids(cuesFor(shark, f))).toEqual(['power.used.shark', 'power.shark']);
+    expect(ids(cuesFor(shark, f))).toEqual(['power.used.shark', 'power.windup', 'power.shark', 'table.impact']);
+    // a miss has no weight
+    const miss = rec(76, view(), view(), [{ type: 'POWER_USED', playerId: 'a', rank: 'stickleback' }, { type: 'STICKLEBACK_WASTED', playerId: 'a', targetId: 'b' }]);
+    expect(ids(cuesFor(miss, f))).not.toContain('table.impact');
+  });
+
+  it('the score race: a new leader, a tie from two up, a breakaway, a chase, out of reach - public, the same for everyone', () => {
+    const sc = (a: number, b: number, c = 0, d = 0) => ({ a, b, c, d });
+    const lay = (who: string, s0: Record<string, number>, s1: Record<string, number>, p0 = 10, p1 = 9) =>
+      rec(90, view({ scores: s0, setsPossible: p0 }), view({ scores: s1, setsPossible: p1 }), [{ type: 'SET_LAID', playerId: who, isPowerSet: false, setId: 'x', rank: 'carp' }]);
+    const race = (r: PublicRecord) => cuesFor(r, f).filter((c) => /^table\.(lead|breakaway|chase|clinch)$/.test(c.id)).map((c) => c.id);
+    expect(race(lay('a', sc(0, 0), sc(1, 0)))).toEqual(['table.lead']);
+    expect(race(lay('b', sc(2, 1), sc(2, 2)))).toEqual(['table.lead']); // a tie from two up
+    expect(race(lay('b', sc(1, 0), sc(1, 1)))).toEqual([]); // 1-1 is too early to call
+    expect(race(lay('a', sc(3, 2), sc(4, 2)))).toEqual(['table.breakaway']);
+    expect(race(lay('b', sc(4, 2), sc(4, 3)))).toEqual(['table.chase']);
+    expect(race(lay('a', sc(6, 3), sc(7, 3), 5, 2))).toEqual(['table.clinch']);
+    expect(race(lay('c', sc(6, 3), sc(6, 3, 1)))).toEqual([]);
+    // the same for every viewer
+    const r = lay('a', sc(3, 2), sc(4, 2));
+    expect(cuesFor(r, facts('b'))).toEqual(cuesFor(r, facts('d')));
   });
   it('Deschis: the rank is public, so a grant plays its motif; Ascuns plays the uniform cue whatever the event carries', () => {
     const g = (mode: PowerMode, rank: string | null) => rec(76, view(), view(), [{ type: 'POWER_GRANTED', playerId: 'a', rank }], mode);
