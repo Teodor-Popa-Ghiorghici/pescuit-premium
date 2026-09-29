@@ -2,6 +2,7 @@ import { LOCALES } from '@pescuit/shared';
 import { useSyncExternalStore } from 'react';
 import { audioStatus, onAudioStatus } from '../audio/context.js';
 import { getEngine } from '../audio/engine.js';
+import { softPress } from '../audio/ui.js';
 import type { AudioSettings } from '../audio/mixer.js';
 import { getTableSpeed, setTableSpeed, subscribeTableSpeed } from '../game/presentationSettings.js';
 import { useDialog } from '../hooks/useDialog.js';
@@ -69,7 +70,14 @@ export function SoundSettings({ onClose }: { onClose: () => void }) {
       <div ref={dialog} className="modal sheet-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t('settings.title')} data-settings>
         <div className="modal__header">
           <h2>{t('settings.title')}</h2>
-          <button className="btn modal__close" onClick={onClose} aria-label={t('nav.close')}>
+          <button
+            className="btn modal__close"
+            onClick={() => {
+              softPress();
+              onClose();
+            }}
+            aria-label={t('nav.close')}
+          >
             ×
           </button>
         </div>
@@ -130,7 +138,14 @@ export function MenuSheet({ onClose, onSound }: { onClose: () => void; onSound: 
       <div ref={dialog} className="modal sheet-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t('menu.title')} data-menu>
         <div className="modal__header">
           <h2>{t('menu.title')}</h2>
-          <button className="btn modal__close" onClick={onClose} aria-label={t('nav.close')}>
+          <button
+            className="btn modal__close"
+            onClick={() => {
+              softPress();
+              onClose();
+            }}
+            aria-label={t('nav.close')}
+          >
             ×
           </button>
         </div>
@@ -144,7 +159,14 @@ export function MenuSheet({ onClose, onSound }: { onClose: () => void; onSound: 
             ))}
           </span>
         </div>
-        <button type="button" className="btn" onClick={onSound}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            softPress();
+            onSound();
+          }}
+        >
           {t('menu.soundSettings')}
         </button>
         {!local && (
@@ -175,6 +197,7 @@ export function HeadphonesPrompt({ onDone }: { onDone: () => void }) {
         type="button"
         className="hp-prompt__btn"
         onClick={() => {
+          softPress();
           onDone();
         }}
       >
@@ -184,6 +207,7 @@ export function HeadphonesPrompt({ onDone }: { onDone: () => void }) {
         type="button"
         className="hp-prompt__btn"
         onClick={() => {
+          softPress();
           getEngine().update({ profile: 'speaker' });
           onDone();
         }}

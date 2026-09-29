@@ -37,7 +37,8 @@ export type ClientMessage =
   | { type: 'start_game' }
   | { type: 'action'; action: ClientAction }
   | { type: 'set_locale'; locale: Locale }
-  | { type: 'ping' };
+  /** `t` is the sender's clock (ms); the server echoes it, so the round trip is measured without state */
+  | { type: 'ping'; t?: number };
 
 // ---- Server -> Client ----
 
@@ -58,7 +59,7 @@ export type ServerMessage =
     }
   | { type: 'error'; message: string; code?: string }
   | { type: 'room_closed'; reason: string }
-  | { type: 'pong' };
+  | { type: 'pong'; t?: number };
 
 /** A public event and its per-room sequence number: strictly increasing within a room. */
 export type WireEvent = PublicEvent & { seq: number };

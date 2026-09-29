@@ -132,11 +132,20 @@ export function visualDelayMs(manualOffsetMs = 0): number {
   return Math.max(0, outputLatencyMs() + manualOffsetMs);
 }
 
-/** Desktop stereo and headphones get seat panning; phones rely on signatures (§3.5). */
-export function panningAvailable(): boolean {
+/**
+ * Seat panning (§3.5): desktop stereo and headphones. A phone's speaker is one point, so phones rely on
+ * signatures - unless headphones mode is on: whatever the pointer, headphones are stereo.
+ */
+export function seatPanning(profile: Profile, coarsePointer: boolean): boolean {
+  return profile === 'headphones' || !coarsePointer;
+}
+
+export function panningAvailable(profile: Profile = 'speaker'): boolean {
+  let coarse = false;
   try {
-    return typeof matchMedia === 'function' ? !matchMedia('(pointer: coarse)').matches : true;
+    coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   } catch {
-    return true;
+    /* no media queries: treat as a fine pointer */
   }
+  return seatPanning(profile, coarse);
 }

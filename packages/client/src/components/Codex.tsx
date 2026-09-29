@@ -3,6 +3,7 @@ import { getEngine } from '../audio/engine.js';
 import { MOTIFS } from '../audio/motifs.js';
 import { RANK_TO_MOTIF } from '../audio/cuesheet.js';
 import { Seal } from '../art/seals.js';
+import { useCodexT } from '../i18n/codexStrings.js';
 import { useT } from '../i18n/useT.js';
 import { Card } from './Card.js';
 import './codex.css';
@@ -60,7 +61,8 @@ function Stave({ power }: { power: Power }) {
 }
 
 function PowerRow({ power }: { power: Power }) {
-  const { t, rank } = useT();
+  const { rank } = useT();
+  const t = useCodexT();
   const [playing, setPlaying] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -104,7 +106,7 @@ function PowerRow({ power }: { power: Power }) {
 /** §5.8 - the Codex: the nine powers, each with its carving, seal, one-line rule and its motif (a button to hear it;
  *  Squid shows the rest). Loaded with the Rules panel, so it costs the table nothing until it is opened. */
 export default function Codex() {
-  const { t } = useT();
+  const t = useCodexT();
   return (
     <div className="codex">
       <p className="codex__intro">{t('codex.intro')}</p>

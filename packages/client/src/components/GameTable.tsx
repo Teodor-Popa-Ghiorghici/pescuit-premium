@@ -3,6 +3,7 @@ import { EGGS } from '@pescuit/engine';
 import type { ClientAction } from '@pescuit/shared';
 import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { getEngine } from '../audio/engine.js';
+import { dropGroup } from '../audio/ui.js';
 import { Mark, markForSeat, PowerPips } from '../art/marks.js';
 import { Totem } from '../art/table.js';
 import { logLines } from '../game/logLines.js';
@@ -88,6 +89,8 @@ export function GameTable() {
   const [muted, setMuted] = useState(() => getEngine().settings.muted);
   const [headphones, setHeadphones] = useState(() => getEngine().headphones);
   const [picked, setPicked] = useState<Rank | null>(null);
+  const pickedRef = useRef<Rank | null>(null);
+  pickedRef.current = picked;
   const [kbTarget, setKbTarget] = useState<string | null>(null);
   const [dragTarget, setDragTarget] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -180,12 +183,21 @@ export function GameTable() {
   const pick = useCallback(
     (r: Rank) => {
       if (r === EGGS) return;
-      getEngine().play('ui.select', undefined, { afterPaint: true });
+      // picking the group that is already up puts it back
+      if (pickedRef.current === r) dropGroup();
+      else getEngine().play('ui.select', undefined, { afterPaint: true });
       setPicked((cur) => (cur === r ? null : r));
       setKbTarget(null);
     },
     [],
   );
+
+  /** the player puts the group back (the sheet's close, Escape): a pick cleared by hand, not by the table */
+  const putBack = useCallback(() => {
+    dropGroup();
+    setPicked(null);
+    setKbTarget(null);
+  }, []);
 
   const refuse = useCallback(() => getEngine().play('ui.error', undefined, { afterPaint: true }), []);
 
@@ -243,13 +255,12 @@ export function GameTable() {
         e.preventDefault();
         ask(kbTarget, picked);
       } else if (e.key === 'Escape' && picked) {
-        setPicked(null);
-        setKbTarget(null);
+        putBack();
       }
     };
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
-  }, [canAsk, picked, kbTarget, targets, pick, ask, refuse, showRules, showMenu, showSound]);
+  }, [canAsk, picked, kbTarget, targets, pick, ask, refuse, putBack, showRules, showMenu, showSound]);
 
   const onGroups = useCallback((g: HandGroup[]) => {
     groupsRef.current = g;
@@ -469,7 +480,7 @@ export function GameTable() {
         ))}
       </div>
       <div className="ph-mid" ref={tableRef} data-table-layer role="main" aria-label={t('a11y.table')}>
-        {sheetRank && <AskSheet view={view} me={playerId} rank={sheetRank} keyTarget={kbTarget} onAsk={(id) => ask(id, sheetRank)} onClose={() => setPicked(null)} />}
+        {sheetRank && <AskSheet view={view} me={playerId} rank={sheetRank} keyTarget={kbTarget} onAsk={(id) => ask(id, sheetRank)} onClose={putBack} />}
         {/* the pond stays mounted while the sheet takes its row (display: none): opening and closing the sheet is a style
             flip, not a rebuild of the basin, the pool stack and the tally on every tap (input -> visual, §4.4) */}
         <div className="ph-pond-slot" style={{ display: sheetRank ? 'none' : 'contents' }}>

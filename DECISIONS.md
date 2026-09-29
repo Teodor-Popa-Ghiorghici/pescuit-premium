@@ -601,6 +601,66 @@ dialog (focus in and back, Tab trapped, Escape closes).
 
 **Performance (§9.1).** See "Performance" below.
 
+## Uniform windows: decided and deferred (FEEL_VISUAL_SOUND_PLAN §11.1, §6.6, finding A6)
+
+The plan's §11.1 offers three ways to make the structural windows uniform. **Decision: (a) and (b) are deferred, (c) is
+left as a playtest A/B. Nothing here changes the rules, the engine or the wire.** What follows is what that costs, what
+still protects the table, and what would have to be true to revisit it.
+
+**The tell.** Five windows open only when someone can act in them - `TURN_START` (an active power), `REQUEST_DECLARED`
+(Lanternfish), `TRANSFER_PENDING` (Tortoise), `SET_COMPLETED` (Mantis Shrimp), `TURN_END` (Shark) - and the view shows a
+window to everyone. So *that a window opened*, and the pause it causes, tells the table that somebody holds the matching
+power. The answer window (`RESPONSE_PENDING`) is the one window that always opens (see the section above), which is why
+Squid leaks nothing this way. The tell is **structural: it lives in the rules, not in the presentation**, and no amount of
+sound design removes it (§6.6).
+
+**(a) Fold `TURN_START` into the turn (active powers offered in the dock before the ask, no window) - deferred.** The plan
+prices this at "cost: none". It is not free, and it was not cheap enough to do safely inside a fix pass:
+- The engine's one-active-power-per-turn rule is *implemented by the window*: `handleUseJellyfish/Stickleback/Whale` all
+  `requireWindow('TURN_START')` and close it, so the power is spent and the window cannot reopen. Without the window the
+  engine needs its own "an active power was used this turn" state, reset in `beginTurn`, and the actions become legal in
+  `AWAIT_REQUEST` with no window - i.e. `handleRequest`'s `pendingWindow !== null` guard, `settleAwaitRequest` (stunned
+  neighbours, no legal target), `ensureCanContinueTurn` (Whale can strand a hand of eggs) and the stall gate all have to be
+  re-derived for "a power may be used, or an ask may be made, in either order".
+- A turn timeout today is the driver's `SERVER_SKIP_WINDOW` on the window; with no window, an idle *turn* is a different
+  case in `room.ts` and the bots (`cli/bot.ts` `decideWindowAction` has a `TURN_START` case).
+- It is the engine's public contract: `STATE_MACHINE.md` and `RULES.md` (§ "TURN_START -> stun check") describe the window;
+  `windows.test`, `powers/{jellyfish,stickleback,whale,clownfish,squid}.test`, `createGame.test`,
+  `presentation-leak.test` (engine and client) and the client's choreography, cues, haptics and `Windows.tsx` all name it -
+  about 50 assertions to re-baseline, and the simulation's action mix would change (the bots would choose *when* to use a
+  power). Re-baselining that many tests honestly is a milestone, not a fix.
+- It removes one of the five tells only. The other four stay, so a table that watches windows still learns from the other
+  four. The value is real but partial.
+
+**(b) The single answer plank - deferred.** Folding the truth, the lie, the reflection and the protection onto the one plank
+also changes the rules (the Lanternfish and Tortoise windows disappear as separate steps; "after a reflection the asker
+always gets one short plank") and the Lanternfish/Tortoise holders' agency (they would act *inside* the answer window).
+That touches the request flow in `engine.ts` (`REQUEST_DECLARED`, `TRANSFER_PENDING`), the reflection and protection
+semantics, and every test around them. It saves waits, but it is a rules decision for the owner of the rules.
+
+**(c) Fixed-length beats for Mantis and Shark - left as a playtest A/B.** A 2.5-3 s beat after every power-set lay and
+every successful ask, ended early only by a declaration, would hide the *pause* but not the *banner*, and costs about
+**60-110 s a game** (about 6-9 power lays and 22-29 successful asks). It is the one option that trades game length for
+secrecy, so it belongs in playtest 1 as an A/B against accepting the group-level tell, not in the code by default.
+
+**What stays in place - the residual (§6.6).**
+- *Neutral banner:* everyone who cannot act sees the same words, `game.windowOpen` ("fereastră deschisă" / "window open"),
+  never the window's name or power (`WindowBanner` in `Windows.tsx`; the plank's own text is the eligible player's alone).
+- *Silent audio:* a structural window opening or closing makes no sound; the close is the same 220 ms visual for all, and
+  `clock.close` sounds only for the answer window (`cues.ts`; `presentation-leak.test.ts` "test 2" proves the erased-window
+  audio is identical, and a source guard keeps `Windows.tsx` from playing any `ui.*` cue - no `ui.press.soft`, no
+  `ui.drop`, no `ui.press` in a window).
+- *The pause:* the window's own duration - a hold to the deadline, or until the holder passes - is visible and is **not**
+  masked. It is the residual tell.
+- *The test that keeps us honest:* `packages/client/test/presentation-leak.test.ts`, "the rules-level tell (§6.6)", builds
+  the five windows (one scenario each) and states the property the plan wants - the public sequence of windows is the same
+  whether or not the power is held. Each is marked **`it.fails` (known-failing)** with a reference to §11.1, plus one
+  passing control proving each window really does open in the public view when its power is held and never when it is not.
+  When §11.1 lands, the `it.fails` flips red and must be deleted; until then the gap is a tested fact, not an unwritten one.
+
+**When to revisit.** After playtest 1: if the table reads windows ("he paused, he has a Shark"), do (a) first (the
+smallest engine change, one tell fewer), then (b), and A/B (c). The engine tests will need to be re-baselined, not patched.
+
 ## Performance (FEEL_VISUAL_SOUND_PLAN §9.1; M4 loose end d)
 
 `npm run perf:check --workspace=packages/client -- --seconds=200` (production bundle, phone 390 x 664, CPU throttled 4x,
@@ -633,9 +693,11 @@ browser's own style, layout and paint work - against ~1.2 s of React; the remain
 not measured here; a throttled desktop Chromium is a proxy. Next candidates: fewer nodes per hand card (the baked faces are
 paths, not the old polygons), and `content-visibility` on the log drawer.
 
-**Budgets (gzip, production build).** The lobby loads **107.0 KB** of JS (+ 10.1 KB CSS); the table (15.0 KB), the audio
-render catalog (2.9 KB) and the podium (1.2 KB) are lazy, so **a played game loads 126.0 KB - about 1 KB over the plan's
-125 KB** (65 KB + 60). The Rules panel and the Codex are 2.7 KB more, on demand; the dev tools and labs (18.3 KB) never reach a
-player. Before this pass main was 110.9 KB in one file. Textures 13 KB of 30; baked ink 8.7 KB inside the table chunk; audio
-downloads 0 KB. The 1 KB over is the i18n dictionary (RO + EN, now with the Codex text and the ticker's short lines); moving
-the Codex strings into the Codex chunk would recover it.
+**Budgets (gzip, production build).** *Updated after the verifier's pass.* The lobby loads **105.2 KB** of JS (+ 10.1 KB
+CSS); the table (15.1 KB), the audio render catalog (2.9 KB) and the podium (1.1 KB) are lazy, so **a played game loads
+124.4 KB, inside the plan's 125 KB** (main 105.23 + GameTable 15.07 + catalog 2.94 + Podium 1.14, as `vite build` reports;
+the same files gzipped at level 9 are 123.9 KB). It was 126.8 KB before this pass (main 107.71): the Codex's 21 strings per language now
+live in `client/src/i18n/codexStrings.ts` (read only by the Rules panel and the Codex, which are lazy; -1.2 KB), and the
+`?metrics=1` read-outs moved behind a facade (`game/metrics.ts`) that downloads `metricsImpl.ts` only when the URL or the
+perf script asks (-1.3 KB from main; a player never loads it). The Rules panel, the Codex and the metrics module are 2.3 +
+1.3 + 1.9 KB more, on demand; the dev tools and labs (18.3 KB) never reach a player. Textures 13 KB of 30; audio downloads 0 KB.

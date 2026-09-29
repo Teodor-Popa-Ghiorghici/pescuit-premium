@@ -4,6 +4,7 @@ import { CAL } from '../src/audio/calibration.js';
 import { getEngine, spawnVoice } from '../src/audio/engine.js';
 import { DEFAULT_SETTINGS, busGain, loadSettings, masterCurve, saveSettings } from '../src/audio/mixer.js';
 import { loadRendered } from '../src/audio/bank.js';
+import { panningAvailable, seatPanning } from '../src/audio/context.js';
 import { VoicePool } from '../src/audio/voices.js';
 import { fakeCtx } from './fakeaudio.js';
 
@@ -118,5 +119,26 @@ describe('spawnVoice', () => {
     const b = fakeCtx();
     spawnVoice({ ctx: b.ctx, buses, profile: 'headphones', pan: false }, 'table.turn', { seat: 5 }, 1, 0);
     expect(b.tally.byType.panner).toBeUndefined();
+  });
+});
+
+describe('seat panning (§3.5): desktop stereo and headphones', () => {
+  it('a coarse-pointer phone pans only in headphones mode; a fine pointer pans in both profiles', () => {
+    expect(seatPanning('speaker', true)).toBe(false); // a phone speaker: signatures only
+    expect(seatPanning('headphones', true)).toBe(true); // a phone with headphones: stereo
+    expect(seatPanning('speaker', false)).toBe(true);
+    expect(seatPanning('headphones', false)).toBe(true);
+  });
+  it('panningAvailable reads the pointer and the profile', () => {
+    const had = 'matchMedia' in g;
+    const prev = g.matchMedia;
+    g.matchMedia = (q: string) => ({ matches: q === '(pointer: coarse)' });
+    try {
+      expect(panningAvailable('speaker')).toBe(false);
+      expect(panningAvailable('headphones')).toBe(true);
+    } finally {
+      if (had) g.matchMedia = prev;
+      else delete g.matchMedia;
+    }
   });
 });

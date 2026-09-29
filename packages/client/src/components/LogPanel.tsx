@@ -1,5 +1,6 @@
 import type { RedactedView } from '@pescuit/engine';
 import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
+import { softPress } from '../audio/ui.js';
 import { Mark, markForSeat } from '../art/marks.js';
 import { Seal } from '../art/seals.js';
 import { SetPlate } from './LaidSets.js';
@@ -64,7 +65,15 @@ export function LogPanel({ onClose, className = '' }: { onClose?: () => void; cl
       <div className="dk-log__head">
         <h3 className="dk-log__title">{t('log.title')}</h3>
         {onClose && (
-          <button type="button" className="dk-log__close" onClick={onClose} aria-label={t('nav.close')}>
+          <button
+            type="button"
+            className="dk-log__close"
+            onClick={() => {
+              softPress();
+              onClose();
+            }}
+            aria-label={t('nav.close')}
+          >
             ×
           </button>
         )}

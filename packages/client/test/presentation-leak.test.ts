@@ -9,6 +9,8 @@
 //   Test 2 - structural erasure: histories whose public records differ ONLY by a structural window
 //            that opens and closes without a declaration sound the same - cue ids, parameters and
 //            order - the window adds only its pause.
+//   Rules-tell - the five structural windows: a window's EXISTENCE is public and tells the table what someone
+//            holds. Known-failing (`it.fails`) until FEEL_VISUAL_SOUND_PLAN §11.1 is decided (§6.6, DECISIONS.md).
 //   Guards - the client imports only PublicEvent; the choreography reads nothing private.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -17,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { cuesFor, type CueRequest } from '../src/audio/cues.js';
 import { hapticsFor, type HapticRequest } from '../src/audio/haptics.js';
 import { choreograph, DEFAULT_OPTIONS, summarize, type Choreography } from '../src/game/choreography.js';
-import { factsOf, recordOf } from '../src/game/record.js';
+import { factsOf, publicViewOf, recordOf } from '../src/game/record.js';
 import { endgame } from '../../engine/test/endgamePair.js';
 import { makeState } from '../../engine/test/helpers.js';
 import { grantPower } from '../../engine/test/powers/grantHelper.js';
@@ -282,6 +284,86 @@ describe('presentation leak, test 2: a structural window erased', () => {
   });
 });
 
+describe('the rules-level tell (§6.6): the five structural windows', () => {
+  // §11.1 (a)/(b) are deferred (DECISIONS.md, "Uniform windows"): a structural window opens only if someone can act in
+  // it, and the view shows it to everyone. Sound stays silent and the banner neutral (Test 2), but the window's
+  // EXISTENCE - and the pause it causes - is public. These tests state the property the plan wants (the public sequence
+  // of windows is the same whether or not a power is held) and are marked known-failing, so the day §11.1 lands the
+  // `it.fails` flips red and must be removed.
+  const STRUCTURAL = ['TURN_START', 'REQUEST_DECLARED', 'TRANSFER_PENDING', 'SET_COMPLETED', 'TURN_END'] as const;
+  type Structural = (typeof STRUCTURAL)[number];
+
+  /** the same public script in both worlds; every structural window is passed by whoever it is open to */
+  const drive = (script: Action[]) => {
+    let i = 0;
+    return (s: GameState): Action | null => {
+      const w = s.pendingWindow;
+      if (w) return { type: 'SKIP_WINDOW', playerId: w.type === 'RESPONSE_PENDING' ? (w.context as { targetId: string }).targetId : w.eligiblePlayerIds[0] };
+      return script[i++] ?? null;
+    };
+  };
+  const base = (over: { a: Card[]; b: Card[]; c: Card[] }) => makeState({ playerIds: ['a', 'b', 'c'], hands: over, pool: [mk('p1', 'perch'), mk('p2', 'anchovy')] });
+  const ask = (targetId: string): Action => ({ type: 'REQUEST', playerId: 'a', targetId, rank: 'herring' });
+
+  const SCENARIOS: Record<Structural, (held: boolean) => World> = {
+    // b's turn follows a's failed ask; b holds a Jellyfish
+    TURN_START: (held) => {
+      const st = base({ a: [mk('a1', 'herring'), mk('a2', 'trout')], b: [mk('b1', 'carp'), mk('b2', 'carp')], c: many('c', 'mackerel', 2) });
+      if (held) grantPower(st, 'b', 'jellyfish');
+      return play(st, drive([ask('c')]));
+    },
+    // a asks b, who holds a Lanternfish
+    REQUEST_DECLARED: (held) => {
+      const st = base({ a: [mk('a1', 'herring'), mk('a2', 'trout')], b: many('b', 'carp', 2), c: many('c', 'mackerel', 2) });
+      if (held) grantPower(st, 'b', 'lanternfish');
+      return play(st, drive([ask('b')]));
+    },
+    // b gives its herring and holds a Tortoise
+    TRANSFER_PENDING: (held) => {
+      const st = base({ a: [mk('a1', 'herring'), mk('a2', 'trout')], b: many('b', 'herring', 2), c: many('c', 'carp', 2) });
+      if (held) grantPower(st, 'b', 'tortoise');
+      return play(st, drive([ask('b')]));
+    },
+    // a lays a power set while b holds a Mantis Shrimp
+    SET_COMPLETED: (held) => {
+      const st = base({ a: many('as', 'shark', 4), b: many('b', 'carp', 2), c: many('c', 'mackerel', 2) });
+      if (held) grantPower(st, 'b', 'mantisShrimp');
+      return play(st, drive([{ type: 'LAY_SET', playerId: 'a', rank: 'shark', cardIds: ['as0', 'as1', 'as2', 'as3'] }]));
+    },
+    // a's ask succeeds and c holds a Shark
+    TURN_END: (held) => {
+      const st = base({ a: [mk('a1', 'herring'), mk('a2', 'trout')], b: many('b', 'herring', 2), c: many('c', 'carp', 2) });
+      if (held) grantPower(st, 'c', 'shark');
+      return play(st, drive([ask('b')]));
+    },
+  };
+
+  /** what a viewer without the power sees of the windows, step by step: the public view's window and nothing else */
+  const trail = (w: World): string[] =>
+    w.steps.map((st) => {
+      const v = publicViewOf(redactForPlayer(st.state, 'a', { seq: 1, serverNow: 0, windowDeadlineAt: st.state.pendingWindow ? 1e9 : null }));
+      return v.window ? `${v.window.type}` : '-';
+    });
+  const windowsSeen = (w: World): Set<string> => new Set(trail(w).filter((x) => x !== '-'));
+
+  it('control: each of the five windows really opens, in the public view, when its power is held - and never when it is not (the tell exists today)', () => {
+    for (const name of STRUCTURAL) {
+      expect(windowsSeen(SCENARIOS[name](true)).has(name), `${name} opens when held`).toBe(true);
+      expect(windowsSeen(SCENARIOS[name](false)).has(name), `${name} stays shut when not`).toBe(false);
+    }
+    // and the five are every structural window: the answer window is the only one that always opens
+    const all = new Set(STRUCTURAL.flatMap((n) => [...windowsSeen(SCENARIOS[n](true))]));
+    expect([...all].filter((n) => n !== 'RESPONSE_PENDING').sort()).toEqual([...STRUCTURAL].sort());
+  });
+
+  for (const name of STRUCTURAL) {
+    // KNOWN-FAILING until §11.1 (a)/(b) - see DECISIONS.md "Uniform windows". Remove `.fails` when it lands.
+    it.fails(`${name}: whether the window opens is invisible in the public view (KNOWN-FAILING, §11.1)`, () => {
+      expect(trail(SCENARIOS[name](true))).toEqual(trail(SCENARIOS[name](false)));
+    });
+  }
+});
+
 describe('the presentation reads only the public record', () => {
   const secret = { grantId: 'g-secret', cardId: 'card-xyz', eligiblePlayerIds: ['c'], context: { rank: 'squid', trueHasCards: true }, seed: 42, hand: [{ id: 'x', rank: 'squid' }] };
   it('stuffing every event and the seat facts with private fields moves no beat, no cue, no haptic', () => {
@@ -340,6 +422,19 @@ describe('guards (§6.5)', () => {
     const code = readFileSync(join(src, 'components/Windows.tsx'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     expect(code).not.toMatch(/play\(\s*['"]ui\./);
     expect(code).toMatch(/localAnswerCue/);
+  });
+
+  it('the two quiet interface cues are wired to the table\'s own controls - and never to a window (Law 1)', () => {
+    const read = (name: string) => readFileSync(join(src, name), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    // ui.drop: a group put back (the sheet's close, Escape, picking the group that is already up)
+    expect(read('components/GameTable.tsx')).toMatch(/dropGroup\(\)/);
+    // ui.press.soft: a secondary button
+    for (const f of ['components/Sheets.tsx', 'components/LogPanel.tsx', 'components/RulesPanel.tsx']) expect(read(f), f).toMatch(/softPress\(\)/);
+    // a window declares and passes in silence: it plays no ui cue, by any route
+    const windows = read('components/Windows.tsx');
+    expect(windows).not.toMatch(/softPress|dropGroup|audio\/ui\.js|press\.soft|ui\.drop/);
+    expect(read('audio/ui.ts')).toMatch(/'ui\.press\.soft'/);
+    expect(read('audio/ui.ts')).toMatch(/'ui\.drop'/);
   });
 
   it('choreography.ts and record.ts touch no private field: no hand, no card id, no grant id, no eligibility list', () => {

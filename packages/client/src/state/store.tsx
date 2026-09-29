@@ -13,9 +13,11 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { getEngine } from '../audio/engine.js';
 import { presenter } from '../game/presenter.js';
 import { createClient, type ConnectionStatus, type WsClient } from '../net/client.js';
+import { RttProbe } from '../net/rtt.js';
 import { loadSession, roomCodeFromUrl, saveSession, setRoomInUrl } from '../net/session.js';
+import { appendLog, takeFresh, type AwayMark } from './feed.js';
 
-const MAX_EVENTS = 300;
+export type { AwayMark } from './feed.js';
 
 interface GameState {
   status: ConnectionStatus;
@@ -31,12 +33,6 @@ interface GameState {
   away: AwayMark[];
   error: string | null;
   joining: boolean;
-}
-
-/** the events with `afterSeq < seq <= upToSeq` were not presented: they are in the log, under a divider */
-export interface AwayMark {
-  afterSeq: number;
-  upToSeq: number;
 }
 
 /**
@@ -105,6 +101,9 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
   const lastSeq = useRef(0);
 
   const sourceRef = useRef<LocalSource | undefined>(source);
+  /** the ping round trip feeds the engine's ServerClock (§3.10, A14) */
+  const rttRef = useRef<RttProbe | null>(null);
+  const statusRef = useRef<ConnectionStatus>('connecting');
 
   useEffect(() => {
     if (sourceRef.current) {
@@ -117,17 +116,31 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
     // must re-attach to its seat, or the player is frozen out of the game.
     const client = createClient(onMessage, onStatus, (sendNow) => {
       const roomCode = activeRoom.current;
-      if (!roomCode) return;
-      const session = loadSession(roomCode);
+      const session = roomCode ? loadSession(roomCode) : null;
       if (session) sendNow({ type: 'rejoin', roomCode: session.roomCode, token: session.token });
+      rttRef.current?.ping(); // on every open, then every 5 s (the probe's timer)
     });
     clientRef.current = client;
+    const probe = new RttProbe({
+      send: (m) => {
+        if (statusRef.current === 'open') client.send(m); // a closed socket must not queue pings
+      },
+      now: () => Date.now(),
+      onRtt: (ms) => getEngine().server.setRtt(ms),
+    });
+    rttRef.current = probe;
+    probe.start();
 
-    return () => client.close();
+    return () => {
+      probe.stop();
+      rttRef.current = null;
+      client.close();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function onStatus(status: ConnectionStatus) {
+    statusRef.current = status;
     setState((s) => ({ ...s, status }));
   }
 
@@ -150,26 +163,17 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
         return;
       }
       case 'game_state': {
-        // apply only events newer than the last one seen; a resync (rejoin) carries none, and
-        // the missed lines are not replayed as choreography
-        const fresh = msg.events.filter((e) => e.seq > lastSeq.current);
-        const seenBefore = lastSeq.current;
-        for (const e of fresh) lastSeq.current = Math.max(lastSeq.current, e.seq);
+        // apply only events newer than the last one seen (seq-based: the log's cap never limits what is
+        // presented); a resync (rejoin) carries none, and the missed lines are not replayed as choreography
+        const hidden = typeof document !== 'undefined' && document.hidden;
+        const t = takeFresh(lastSeq.current, msg, hidden);
+        lastSeq.current = t.lastSeq;
         // the window clock reads the server's time through the engine's ServerClock (§3.10)
         if (msg.view.serverNow > 0) getEngine().server.sample(msg.view.serverNow, Date.now());
         // a rejoin never replays choreography; the lines it carries (or the gap it leaves) go to the log
         // under "while you were away". So does whatever arrives while the tab is hidden.
-        const snapshot = !!msg.snapshot;
-        const hidden = typeof document !== 'undefined' && document.hidden;
-        const gapTo = snapshot ? Math.max(lastSeq.current, msg.view.seq) : hidden && fresh.length ? lastSeq.current : 0;
-        if (snapshot) lastSeq.current = Math.max(lastSeq.current, msg.view.seq);
-        presenter.present({ view: msg.view, events: fresh, snapshot });
-        setState((s) => ({
-          ...s,
-          view: msg.view,
-          events: fresh.length ? [...s.events, ...fresh].slice(-MAX_EVENTS) : s.events,
-          away: gapTo > seenBefore && seenBefore > 0 ? [...s.away, { afterSeq: seenBefore, upToSeq: gapTo }].slice(-8) : s.away,
-        }));
+        presenter.present({ view: msg.view, events: t.fresh, snapshot: t.snapshot });
+        setState((s) => ({ ...s, view: msg.view, ...appendLog(s.events, s.away, t) }));
         return;
       }
       case 'error': {
@@ -184,6 +188,7 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
         return;
       }
       case 'pong':
+        rttRef.current?.onMessage(msg);
         return;
     }
   }

@@ -126,7 +126,7 @@ wss.on('connection', (ws: WebSocket) => {
         return;
       }
       case 'ping': {
-        send(ws, { type: 'pong' });
+        send(ws, typeof msg.t === 'number' ? { type: 'pong', t: msg.t } : { type: 'pong' });
         return;
       }
     }

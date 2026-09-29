@@ -269,7 +269,7 @@ export class AudioEngine {
           profile: this.settings.profile,
           pool: this.pool,
           safetyFade: true,
-          pan: !this.settings.mono && panningAvailable(),
+          pan: !this.settings.mono && panningAvailable(this.settings.profile),
           full: q.full,
           onSource: (t) => m.bumpActivity(t),
           onCeremony: (t, s) => m.fadeAmbience(t, s),

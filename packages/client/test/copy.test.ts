@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { RANK_NAMES, t } from '@pescuit/shared';
 import * as shared from '@pescuit/shared';
 import { entryFor, logLines } from '../src/game/logLines.js';
+import { CODEX_STRINGS } from '../src/i18n/codexStrings.js';
 import type { PublicEvent } from '@pescuit/engine';
 
 const ro = (k: string, p?: Record<string, string | number>) => t('ro', k, p);
@@ -31,6 +32,23 @@ describe('the two languages', () => {
     expect(missing).toEqual([]);
     expect(mismatched).toEqual([]);
     expect(KEYS.length).toBeGreaterThan(100);
+  });
+});
+
+describe('the Codex strings (a lazy chunk, not the shared dictionaries)', () => {
+  it('carry the same keys and placeholders in both languages, and none of them is in the shared dictionaries', () => {
+    const ph = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',');
+    expect(Object.keys(CODEX_STRINGS.en).sort()).toEqual(Object.keys(CODEX_STRINGS.ro).sort());
+    for (const k of Object.keys(CODEX_STRINGS.ro)) {
+      expect(ph(CODEX_STRINGS.en[k]), k).toBe(ph(CODEX_STRINGS.ro[k]));
+      expect(k.startsWith('codex.'), k).toBe(true);
+      expect(KEYS, k).not.toContain(k);
+    }
+    // every rank of the Codex has its rule, in both languages
+    for (const p of ['squid', 'shark', 'tortoise', 'jellyfish', 'lanternfish', 'stickleback', 'mantisShrimp', 'whale', 'clownfish']) {
+      expect(CODEX_STRINGS.ro[`codex.${p}`], p).toBeTruthy();
+      expect(CODEX_STRINGS.en[`codex.${p}`], p).toBeTruthy();
+    }
   });
 });
 

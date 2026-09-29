@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { softPress } from '../audio/ui.js';
 import { useDialog } from '../hooks/useDialog.js';
+import { useCodexT } from '../i18n/codexStrings.js';
 import { useT } from '../i18n/useT.js';
 
 const Codex = lazy(() => import('./Codex.js'));
@@ -10,6 +12,7 @@ const Codex = lazy(() => import('./Codex.js'));
  *  rulebook was out of scope; the Codex is in both languages. */
 export default function RulesPanel({ onClose }: { onClose: () => void }) {
   const { t } = useT();
+  const tc = useCodexT();
   const [text, setText] = useState('');
   const [tab, setTab] = useState<'rules' | 'codex'>('rules');
 
@@ -27,15 +30,22 @@ export default function RulesPanel({ onClose }: { onClose: () => void }) {
     <div className="modal-overlay" onClick={onClose}>
       <div ref={dialog} className="modal rules-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t('rules.title')} data-rules>
         <div className="modal__header">
-          <h2>{tab === 'codex' ? t('codex.title') : t('rules.title')}</h2>
-          <button className="btn modal__close" onClick={onClose} aria-label={t('nav.close')}>
+          <h2>{tab === 'codex' ? tc('codex.title') : t('rules.title')}</h2>
+          <button
+            className="btn modal__close"
+            onClick={() => {
+              softPress();
+              onClose();
+            }}
+            aria-label={t('nav.close')}
+          >
             ×
           </button>
         </div>
         <div className="seg rules-tabs" role="tablist" aria-label={t('rules.title')}>
           {(['rules', 'codex'] as const).map((k) => (
             <button key={k} type="button" role="tab" aria-selected={tab === k} className={`seg__btn ${tab === k ? 'is-on' : ''}`} onClick={() => setTab(k)}>
-              {k === 'rules' ? t('codex.tabRules') : t('codex.tabCodex')}
+              {k === 'rules' ? tc('codex.tabRules') : tc('codex.tabCodex')}
             </button>
           ))}
         </div>
