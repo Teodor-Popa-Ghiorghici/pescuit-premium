@@ -120,6 +120,7 @@ export class AudioEngine {
   readonly windowClock: WindowClock;
   private world: Partial<AmbienceInputs> | null = null;
   private tracing = false;
+  private afterPaintTick = false;
 
   constructor() {
     this.settings = loadSettings();
@@ -202,7 +203,7 @@ export class AudioEngine {
   /* -------------------------------------------------------------- playing */
 
   /** Plays one cue, `delayMs` from now. Private-tier cues are dropped unless headphones mode is on. */
-  play(id: string, params?: CueParams, opts: { delayMs?: number; seed?: number; full?: boolean } = {}): boolean {
+  play(id: string, params?: CueParams, opts: { delayMs?: number; seed?: number; full?: boolean; afterPaint?: boolean } = {}): boolean {
     const def = cueDef(id);
     if (!def) return false;
     if ((def.heard === 'private' || params?.private) && !this.headphones) return false; // defence in depth (§3.2)
@@ -210,13 +211,26 @@ export class AudioEngine {
     void this.ensure();
     if (this.tracing) this.trace.push({ at: Date.now(), id, played: true });
     this.queue.push({ dueWall: performance.now() + (opts.delayMs ?? 0), id, params: params ?? {}, seed: opts.seed ?? (Math.random() * 2 ** 31) >>> 0, full: !!opts.full });
-    if (this.ready) this.tick();
+    if (!this.ready) return true;
+    if (opts.afterPaint && typeof requestAnimationFrame === 'function') {
+      // the sound of a press follows the frame that shows it: synthesising its voice (6-10 nodes) inside the input
+      // handler would delay that frame (input -> visual <= 50 ms, §4.4); it costs the sound one frame (input -> audio <= 80 ms)
+      if (!this.afterPaintTick) {
+        this.afterPaintTick = true;
+        requestAnimationFrame(() =>
+          setTimeout(() => {
+            this.afterPaintTick = false;
+            this.tick();
+          }, 0),
+        );
+      }
+    } else this.tick();
     return true;
   }
 
   /** Plays the cues `cuesFor` returned for one presentation step. */
-  playRequests(reqs: readonly CueRequest[], opts: { delayMs?: number } = {}): void {
-    for (const r of reqs) this.play(r.id, r.params, { delayMs: (opts.delayMs ?? 0) + r.at, seed: r.seed });
+  playRequests(reqs: readonly CueRequest[], opts: { delayMs?: number; afterPaint?: boolean } = {}): void {
+    for (const r of reqs) this.play(r.id, r.params, { delayMs: (opts.delayMs ?? 0) + r.at, seed: r.seed, afterPaint: opts.afterPaint });
   }
 
   playHaptics(reqs: readonly HapticRequest[], delayMs = 0): void {

@@ -98,6 +98,42 @@ the process locally would.
 - Additional house-rule toggles are tracked in `DECISIONS.md` as future work
   (M5 polish).
 
+## Client tools (dev and checks)
+
+The client (`packages/client`) ships with a handful of tools that run the real game in the browser or
+check it. Everything below is a query string on the dev server (`npm run dev:client`) or a script in
+`packages/client`; none of it is loaded by a normal game (each is a lazy chunk or a script).
+
+| Tool | What it does |
+|---|---|
+| `?table=bots&n=6&seed=42&seat=0&speed=1&bots=memory` | **the bot table**: runs the engine and a bot population in the tab and feeds seat 0's redacted record into the real store. Play or watch at 0.25-4x, with pause and step (`panel=1`). `bots=random` or `memory` (bots that learn only from the public record); `until=myturn\|answer\|dry\|end\|turn:N\|sets:N`; `auto=1` plays seat 0 too. |
+| `?fixture=<id>` | a **scenario fixture** (`?fixture=` lists them): `myturn`, `answer`, `answer-squid`, `shark`, `mantis`, `whale`, `actives`, `pool1`, `dry`, `tally1`, `stall`, `tenhand`, `twelvehand`, `names`, `chips`. Add `n=3..6`. |
+| `?lab=audio` | the **audio lab**: every cue in both profiles, before and after mastering, sliders, bus meters, an event to cue trace, the anchor loudness. |
+| `?lab=vfx` | the **VFX lab**: the thirteen stepped effects, frame by frame. |
+| `?metrics=1` | an overlay and `window.__metrics` for the playtests: answer time (median, p90), eligible and missed windows, tally-0 to podium, answer to rest, input to paint, fps, and **how many times the pond's bed was turned off** and whether sound is muted. |
+| `npm run layout:check --workspace=packages/client` | the **layout checks**: 103 frames and interactions in headless Chromium at 360x640, 390x664, 375x548 phones and 1280x800, 1024x768 desktops (nothing covered, everything on one screen, no page scroll). `--shots` writes a PNG per frame. |
+| `npm run audio:check --workspace=packages/client` | the **audio harness**: renders every cue and a three-minute scene per profile and fails on any of nine checks (plank grammar, confusability, echo budget, peaks, headroom, ambience, the clock, balance, calibration). Must stay 9/9. |
+| `npm run perf:check --workspace=packages/client` | the **performance gates**: builds, serves the production bundle, throttles the CPU 4x and plays a human at a six-player bot table: input to visual p95, answer to rest p95, fps in a whale. Reports honestly whether or not it hits the plan's targets. |
+| `npm run bake:textures`, `bake:ink`, `contrast:check` (client) | regenerate the paper, wood and water textures; re-bake the card ink (vertex jitter, seeded; `--check` fails when stale); re-audit contrast with the grain on. All three run in the test suite. |
+
+### Package budgets (FEEL_VISUAL_SOUND_PLAN §7.4)
+
+Measured on the production build (`npm run build`, gzip):
+
+| Budget | Limit | Now |
+|---|---|---|
+| JS the lobby loads (initial) | 125 KB (65 KB original + 60) | 107.0 KB (+ 10.1 KB CSS) |
+| JS a played game loads (initial + the table chunk + the podium and audio catalog) | 125 KB | 126.0 KB (107.0 + 14.9 table + 2.9 audio catalog + 1.2 podium): about 1 KB over |
+| Rules panel and Codex (lazy, on demand) | - | 2.7 KB (0.7 + 1.3 + 0.6 CSS) |
+| Dev tools (`?table=bots`, `?fixture=`, `?lab=`), lazy | not shipped to players | 18.3 KB (dev tools 12.9, audio lab 4.8, VFX lab 0.7) |
+| CSS | - | 10.1 KB (one file, lobby and table) |
+| Textures (paper, wood, water) | 30 KB | 13 KB |
+| Baked card ink (faces + back), inside the table chunk | - | 8.7 KB (7.5 faces + 1.3 back) |
+| Audio downloads | 220 KB | 0 KB (everything is synthesised) |
+
+The table (cards, hand, planks, the choreography's hands), the podium and the Codex are lazy chunks; the
+table is fetched while the lobby is idle, so joining never waits for it.
+
 ## Known scope limitations
 
 - The end-of-game check ("no set can still be laid") reads only the public record and is an
@@ -110,12 +146,12 @@ the process locally would.
   fully bilingual.
 - Spectator mode and a solo practice mode against the M1 bots (both listed under
   M5 in the original spec) are not implemented yet.
-- Sound is synthesised in the browser (short filtered noise bursts for the
-  stamp, the totem's knock, a splintering set) rather than played from recorded
-  assets, and there is a Sunet toggle in the table header to turn it off. No
-  audio files ship with the build.
-- The motion layer covers the stamp, the totem's travel between posts, the
-  burning-down window clock and the rising interrupt plank. The longer
-  per-event choreography of `DESIGN.md` §6.3 — cards flying between hands, the
-  whale's interleaved reshuffle, the shark reversing mid-flight — is not
-  animated; those events update the table and the log directly.
+- Sound is synthesised in the browser (live wood, table top, paper and water; the tonal motifs rendered
+  at load in plain JS) rather than played from recorded assets: the plan's recorded tier (real planks,
+  a fluier and caval player, a folk-music consultant) is a production task and is not in the build. There
+  is a mute tab in the top bar (a long press opens the mixer). No audio files ship.
+- The presentation timeline (`game/presenter.ts`, `game/choreography.ts`) plays the ask, the answer,
+  the flights, the powers' signature moments, the world arc and the podium. What it is measured against
+  and where it falls short is in `DECISIONS.md` ("The world arc and the ceremony", "Performance").
+- Not built: the recorded audio tier, the call rig and the listening tests (blindfold, mute, call, desk,
+  phone speaker), the real-Android performance confirmation, and the three playtests.

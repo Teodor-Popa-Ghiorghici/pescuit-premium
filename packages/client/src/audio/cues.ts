@@ -52,6 +52,8 @@ export interface PublicView {
   handSizes?: Readonly<Record<string, number>>;
   /** the game is over */
   ended?: boolean;
+  /** every seat's score: public (the chips show it); the podium counts them up (§5.7) */
+  scores?: Readonly<Record<string, number>>;
 }
 
 /** what any spectator can see of a laid set */
@@ -149,6 +151,9 @@ export const BEAT = {
   turnGap: 420,
   /** the beat the podium is shown after the last one: the last lay's stamp, one held beat, the gate doors */
   podium: 500,
+  /** the podium's pips count up: the first pip this long after the podium shows, then one every `tallyStep` (`table.tally` per pip) */
+  tallyStart: 900,
+  tallyStep: 110,
 } as const;
 
 /* --------------------------------------------------------------- the function */
@@ -299,6 +304,10 @@ export function cuesFor(record: PublicRecord, facts: SeatFacts): CueRequest[] {
         add('power.whale', usedAt ?? BEAT.effect);
         break;
       case 'GAME_ENDED': {
+        // the pips count up, one `table.tally` per pip, a step higher each: the same for everyone (the scores are public);
+        // `at` is from the podium showing (the choreography places it)
+        const top = Math.min(18, Math.max(0, ...Object.values(after.scores ?? {})));
+        for (let k = 0; k < top; k++) add('table.tally', BEAT.tallyStart + k * BEAT.tallyStep, { pip: k });
         if (!players.includes(me)) break; // a spectator has no result of their own
         const won = e.winners.includes(me);
         add(won ? (e.winners.length > 1 ? 'mus.end.tie' : 'mus.end.win') : 'mus.end.lose', 0);
@@ -364,6 +373,6 @@ export const SOUND_COLUMN: ReadonlyArray<{ signal: string; byDefault: string; he
   { signal: 'the effect events', byDefault: 'power.shark / lanternfish / tortoise / jellyfish / stickleback / stickleback.miss / whale' },
   { signal: 'the tally reaches 1', byDefault: 'mus.lastset' },
   { signal: 'the stall gate shuts / opens', byDefault: 'amb.gate' },
-  { signal: 'GAME_ENDED', byDefault: 'mus.end.win / tie / lose (you)' },
+  { signal: 'GAME_ENDED', byDefault: 'mus.end.win / tie / lose (you); table.tally, one per pip counted up (everyone)' },
   { signal: 'Squid, in any form', byDefault: 'silence' },
 ];

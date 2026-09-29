@@ -440,6 +440,73 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await expect(page, '[data-settings]', 'the long press did not open the mixer');
   });
 
+  /* ------------------------------------------------------ accessibility (§5.9) and the world (§3.9) */
+  await run('keyboard: every control is reachable by Tab and shows a focus ring', ph, true, '?fixture=myturn&n=4&panel=0', async (page) => {
+    const seen = new Map();
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press('Tab');
+      const f = await page.evaluate(() => {
+        const a = document.activeElement;
+        if (!a || a === document.body) return null;
+        const cs = getComputedStyle(a);
+        const ring = cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 2;
+        const key = a.className && typeof a.className === 'string' ? a.className.split(' ')[0] : a.tagName;
+        return { key, ring, label: (a.getAttribute('aria-label') || a.textContent || '').trim().slice(0, 20) };
+      });
+      if (f) seen.set(`${f.key}:${f.label}`, f.ring);
+    }
+    const keys = [...seen.keys()];
+    for (const need of ['ph-tab', 'hgroup']) if (!keys.some((k) => k.startsWith(need))) throw new Error(`Tab never reached a ${need}: ${keys.join(', ')}`);
+    const noRing = [...seen].filter(([, ring]) => !ring).map(([k]) => k);
+    if (noRing.length) throw new Error(`no visible focus ring on: ${noRing.join(', ')}`);
+  });
+  await run('an answer is announced aloud to a screen reader, not only by sound (aria-live)', ph, true, '?fixture=answer&n=4&panel=0', async (page) => {
+    await expect(page, '.plank--answer[aria-live="assertive"]', 'the answer plank is not a live region');
+    const live = await page.evaluate(() => ({ polite: !!document.querySelector('.sr-only [aria-live="polite"]'), assertive: !!document.querySelector('.sr-only [aria-live="assertive"]'), turn: !!document.querySelector('[data-topbar] [aria-live]') }));
+    if (!live.polite || !live.assertive || !live.turn) throw new Error(`missing live regions ${JSON.stringify(live)}`);
+    await page.waitForFunction(() => /./.test((document.querySelector('.sr-only [aria-live="assertive"]') || {}).textContent || ''), null, { timeout: 3000 }).catch(() => { throw new Error('nothing was said to the assertive region when the ask arrived'); });
+  });
+  await run('the light follows the tally: dusk, evening, night, the last set', ph, true, '?fixture=tally1&n=3&panel=0', async (page) => {
+    const light = () => page.evaluate(() => document.documentElement.dataset.light);
+    if ((await light()) !== 'last') throw new Error(`at one set the light is ${await light()}`);
+    const label = await page.locator('[data-tally] .tally__label').innerText();
+    if (!/ultimul set|last set/i.test(label)) throw new Error(`the last set is labelled "${label}"`);
+    if (!(await page.locator('.tally__notch.is-last').count())) throw new Error('the last notch is not inked');
+  });
+  await run('the pond at 18 sets is dusk, and the tally label reads "încă N seturi" with the honest title', ph, true, '?fixture=myturn&n=3&panel=0', async (page) => {
+    if ((await page.evaluate(() => document.documentElement.dataset.light)) !== 'dusk') throw new Error('not dusk at 18');
+    const label = await page.locator('[data-tally] .tally__label').innerText();
+    if (!/^(încă 18 seturi|18 sets to go)$/.test(label)) throw new Error(`label "${label}"`);
+    const title = await page.locator('[data-tally]').getAttribute('title');
+    if (!/cel mult|at most/.test(title || '')) throw new Error(`the title does not say it is an upper bound: ${title}`);
+  });
+  await run('the Rules panel has the Codex: nine powers, a motif button each, Squid a rest', ph, true, '?fixture=myturn&n=3&panel=0', async (page) => {
+    await page.locator('.ph-tab', { hasText: /Reguli|Rules/ }).click();
+    await expect(page, '[data-rules]', 'the rules panel did not open');
+    await page.locator('[role="tab"]').nth(1).click();
+    await expect(page, '[data-codex="whale"]', 'the Codex did not load');
+    if ((await page.locator('[data-codex]').count()) !== 9) throw new Error('the Codex does not list nine powers');
+    const squid = await page.locator('[data-codex="squid"] .codex__play').innerText();
+    if (!/pauz|rest/i.test(squid)) throw new Error(`Squid's button reads "${squid}"`);
+    await page.keyboard.press('Escape');
+    await gone(page, '[data-rules]', 'Escape did not close the panel');
+    const focus = await page.evaluate(() => (document.activeElement || {}).className || '');
+    if (!/ph-tab/.test(focus)) throw new Error(`focus did not return to the button that opened it (${focus})`);
+  });
+  await run('the podium: winners rise, pips count up, the reason has its own line', ph, true, '?table=bots&n=4&seed=9&seat=0&until=end&panel=0&bots=memory&speed=4&auto=1', async (page) => {
+    await expect(page, '[data-podium]', 'no podium', 60000);
+    await page.waitForFunction(() => !document.querySelector('[data-podium]').hasAttribute('data-masked'), null, { timeout: 8000 });
+    await page.waitForTimeout(3600);
+    const p = await page.evaluate(() => {
+      const posts = [...document.querySelectorAll('.gameover__post')];
+      const earned = [...document.querySelectorAll('.podium__pip.is-earned circle')];
+      return { posts: posts.length, winners: document.querySelectorAll('.gameover__post.is-winner').length, totems: document.querySelectorAll('.gameover__totem svg').length, filled: earned.filter((c) => getComputedStyle(c).fill !== 'none').length, earned: earned.length, reason: (document.querySelector('.gameover__reason') || {}).textContent };
+    });
+    if (p.winners < 1 || p.totems !== p.winners) throw new Error(`winners ${p.winners}, totems ${p.totems}`);
+    if (p.filled !== p.earned || p.earned === 0) throw new Error(`the count-up did not finish: ${p.filled}/${p.earned}`);
+    if (!/set|balt/i.test(p.reason || '')) throw new Error(`no reason line: ${p.reason}`);
+  });
+
   /* ------------------------------------------------------ the presentation (§4.1-§4.3) */
   await run('phone presentation settles: no flier, no mask left when the table is quiet', ph, true, '?table=bots&n=4&seed=7&seat=0&speed=2&bots=memory&auto=1&panel=0', async (page) => {
     await page.waitForTimeout(5000);

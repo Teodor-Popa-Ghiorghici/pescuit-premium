@@ -2,25 +2,29 @@ import { useRef } from 'react';
 import { HeadphonesIcon } from '../art/marks.js';
 import { useT } from '../i18n/useT.js';
 
+/* §5.8 - the icons are cut, not drawn: angular, mitred, square-ended, in the same hand as the seals (a 24 grid,
+ * a 2.6 stroke, no curves). */
+const CARVED = { fill: 'none', stroke: 'currentColor', strokeWidth: 2.6, strokeLinejoin: 'miter', strokeLinecap: 'square', 'aria-hidden': true } as const;
+
 const SpeakerIcon = ({ muted }: { muted: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
-    <path d="M4,9 H8 L13,5 V19 L8,15 H4 Z" fill="currentColor" />
-    {muted ? <path d="M16,9 L22,15 M22,9 L16,15" /> : <path d="M16,9 Q18,12 16,15 M18.5,7 Q22,12 18.5,17" />}
+  <svg width="20" height="20" viewBox="0 0 24 24" {...CARVED}>
+    <path d="M3,9 H7 L12,4 V20 L7,15 H3 Z" fill="currentColor" />
+    {muted ? <path d="M16,9 L22,15 M22,9 L16,15" /> : <path d="M16,9 L18,12 L16,15 M19,6 L22,12 L19,18" />}
   </svg>
 );
 const LogIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
-    <path d="M5,3 H19 V21 H5 Z M9,8 H15 M9,12 H15 M9,16 H13" />
+  <svg width="20" height="20" viewBox="0 0 24 24" {...CARVED}>
+    <path d="M5,3 H15 L19,7 V21 H5 Z M9,10 H15 M9,14 H15 M9,18 H13" />
   </svg>
 );
 const RulesIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
-    <path d="M4,5 Q8,3 12,6 Q16,3 20,5 V19 Q16,17 12,20 Q8,17 4,19 Z M12,6 V20" />
+  <svg width="20" height="20" viewBox="0 0 24 24" {...CARVED}>
+    <path d="M3,5 L12,7 L21,5 V19 L12,21 L3,19 Z M12,7 V21" />
   </svg>
 );
 const MenuIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
-    <path d="M4,7 H20 M4,12 H20 M4,17 H20" />
+  <svg width="20" height="20" viewBox="0 0 24 24" {...CARVED} strokeWidth="3">
+    <path d="M3,6 H21 M3,12 H17 M3,18 H21" />
   </svg>
 );
 

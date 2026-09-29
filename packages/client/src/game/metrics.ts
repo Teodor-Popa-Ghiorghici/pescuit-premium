@@ -6,6 +6,8 @@
  * asks: it never runs for a player who did not.
  */
 
+import { getEngine } from '../audio/engine.js';
+
 export interface MetricsState {
   /** ms from the answer window opening on you to your press */
   answerTimes: number[];
@@ -22,9 +24,15 @@ export interface MetricsState {
   frames: number[];
   /** what each step was: its beats, how long the table lane took, how far behind it started */
   steps: { kinds: string[]; tableMs: number; queuedMs: number; at: number }[];
+  /** the ambience opt-out (§3.9, §9.2: 5 or more of 15 switching it off ships it off): how many times this device
+   *  turned the pond's bed off, and whether it is off now. Per device; a playtest pools the devices' counts. */
+  ambienceOff: number;
+  ambienceIsOff: boolean;
+  /** the mute tab, for the same playtest ("muted by the end", ≤ 2 of 15) */
+  mutedNow: boolean;
 }
 
-const empty = (): MetricsState => ({ answerTimes: [], eligibleWindows: 0, missedWindows: 0, tallyToPodium: [], answerToRest: [], inputToPaint: [], frames: [], steps: [] });
+const empty = (): MetricsState => ({ answerTimes: [], eligibleWindows: 0, missedWindows: 0, tallyToPodium: [], answerToRest: [], inputToPaint: [], frames: [], steps: [], ambienceOff: 0, ambienceIsOff: false, mutedNow: false });
 
 function enabled(): boolean {
   try {
@@ -64,6 +72,22 @@ class Metrics {
     } catch {
       /* Event Timing is not everywhere */
     }
+    // the ambience opt-out: every switch of the pond's bed from on to off counts once
+    try {
+      const engine = getEngine();
+      let ambOn = engine.settings.ambience > 0;
+      this.state.ambienceIsOff = !ambOn;
+      this.state.mutedNow = engine.settings.muted;
+      engine.subscribe(() => {
+        const on = engine.settings.ambience > 0;
+        if (ambOn && !on) this.state.ambienceOff++;
+        ambOn = on;
+        this.state.ambienceIsOff = !on;
+        this.state.mutedNow = engine.settings.muted;
+      });
+    } catch {
+      /* no audio engine (a test): nothing to count */
+    }
     let last = performance.now();
     const loop = (t: number): void => {
       this.state.frames.push(t - last);
@@ -98,6 +122,7 @@ class Metrics {
       tallyToPodium: { n: s.tallyToPodium.length, last: s.tallyToPodium[s.tallyToPodium.length - 1] ?? NaN },
       answerToRest: { n: s.answerToRest.length, p50: pct(s.answerToRest, 50), p95: pct(s.answerToRest, 95) },
       inputToPaint: { n: s.inputToPaint.length, p95: pct(s.inputToPaint, 95) },
+      ambience: { turnedOff: s.ambienceOff, offNow: s.ambienceIsOff, muted: s.mutedNow },
       fps,
     };
   }
@@ -116,7 +141,7 @@ class Metrics {
     }
     const m = this.summary();
     const f = (n: number): string => (Number.isFinite(n) ? String(Math.round(n)) : '-');
-    this.overlay.textContent = `answer ${f(m.answerTime.median)}/${f(m.answerTime.p90)} ms (n${m.answerTime.n})  missed ${m.windows.missed}/${m.windows.eligible}\nrest p95 ${f(m.answerToRest.p95)} ms  input p95 ${f(m.inputToPaint.p95)} ms  ${f(m.fps)} fps\ntally0>podium ${f(m.tallyToPodium.last)} ms`;
+    this.overlay.textContent = `answer ${f(m.answerTime.median)}/${f(m.answerTime.p90)} ms (n${m.answerTime.n})  missed ${m.windows.missed}/${m.windows.eligible}\nrest p95 ${f(m.answerToRest.p95)} ms  input p95 ${f(m.inputToPaint.p95)} ms  ${f(m.fps)} fps\ntally0>podium ${f(m.tallyToPodium.last)} ms  ambience off x${m.ambience.turnedOff}${m.ambience.offNow ? ' (now)' : ''}${m.ambience.muted ? '  muted' : ''}`;
   }
 
   /* ---- fed by the presenter ---- */

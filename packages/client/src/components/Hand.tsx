@@ -124,14 +124,15 @@ export function Hand({ size, pickedRank, canAsk, onPick, onLay, onDragOver, onDr
               style={{ left: layout.lefts[gi], width: size.w + (g.cards.length - 1) * inStep, zIndex: gi + 1 }}
               data-hand-group={g.rank}
               data-group-index={gi}
-              role={canAsk ? 'button' : undefined}
+              role={canAsk ? 'button' : 'group'}
               tabIndex={canAsk ? 0 : undefined}
               aria-pressed={canAsk ? selected : undefined}
               aria-label={t('hand.groupAria', { count: g.cards.length, rank: rank(g.rank) })}
               onPointerDown={(e) => startPress(e, g)}
               onClick={() => press(g)}
               onKeyDown={(e) => {
-                if (e.key === ' ') {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  if (e.target !== e.currentTarget) return; // the "lay down" tab inside the group has its own keys
                   e.preventDefault();
                   press(g);
                 }

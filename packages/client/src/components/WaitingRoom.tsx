@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Totem } from '../art/table.js';
 import { useT } from '../i18n/useT.js';
 import { useGame } from '../state/store.js';
 import { getEngine } from '../audio/engine.js';
 import { useJoinSignatures, useLobbyAmbience } from '../hooks/useLobbyAudio.js';
 import { RopeRule } from './Lobby.js';
+import { preloadTable } from '../App.js';
+import { DuskPond } from '../art/dusk.js';
 
 const MIN_PLAYERS = 3;
 const MAX_POSTS = 6;
@@ -14,6 +16,7 @@ const MAX_POSTS = 6;
 export function WaitingRoom() {
   useLobbyAmbience();
   useJoinSignatures();
+  useEffect(() => preloadTable(), []);
   const { t } = useT();
   const { roomCode, players, playerId, startGame, error, dismissError, config } = useGame();
   const [copied, setCopied] = useState(false);
@@ -31,7 +34,8 @@ export function WaitingRoom() {
   }
 
   return (
-    <div className="screen screen--centered">
+    <div className="screen screen--centered screen--dusk">
+      <DuskPond />
       <div className="waiting">
         <div className="room-code">
           <div className="room-code__plate">
@@ -46,8 +50,9 @@ export function WaitingRoom() {
         <input className="share-link" readOnly value={link} onFocus={(e) => e.currentTarget.select()} aria-label={t('lobby.shareLink')} />
 
         <div className="posts">
-          {players.map((p) => (
-            <div key={p.id} className={`post ${p.connected ? '' : 'is-offline'} ${p.isHost ? 'post--host' : ''}`}>
+          {players.map((p, i) => (
+            // each post carves in as its player arrives, in step with the seat's signature (`meta.join`)
+            <div key={p.id} className={`post is-carving ${p.connected ? '' : 'is-offline'} ${p.isHost ? 'post--host' : ''}`} style={{ ['--n' as string]: i }}>
               {p.isHost ? <Totem size={44} /> : <PostCap />}
               <div className="post__name">{p.name}</div>
               {p.isHost && <div className="post__role">{t('lobby.host')}</div>}

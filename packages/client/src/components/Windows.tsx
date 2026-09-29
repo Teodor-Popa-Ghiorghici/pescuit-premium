@@ -169,7 +169,7 @@ export function Plank({ view, onDeclared }: { view: RedactedView; onDeclared: (k
       onDeclared(key);
       // the answering device plays `clock.close` at its press - one cue for every answer, Squid included (§3.2).
       // A declaration or a pass in any other window is not public: no sound at all, visual only (§3.2's table)
-      if (opts.cue) getEngine().playRequests([localAnswerCue(view.seq)]);
+      if (opts.cue) getEngine().playRequests([localAnswerCue(view.seq)], { afterPaint: true });
       presenter.press(view, !!opts.cue);
       sendAction(action);
     },

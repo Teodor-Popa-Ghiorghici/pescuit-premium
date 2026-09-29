@@ -63,10 +63,29 @@ export function actorOf(e: PublicEvent): string | null {
   }
 }
 
+export interface EntryOptions {
+  /** the ticker's short line (under one screen width); the log keeps the full one */
+  short?: boolean;
+  /** a failed ask with nothing drawn: the pool is dry ("— Pescuiește!" and nothing more) */
+  dry?: boolean;
+}
+
 export function entryFor(
   e: PublicEvent,
   nameOf: (id: string) => string,
   rankLabel: (r: string) => string,
+  opts: EntryOptions = {},
+): { key: string; params: Record<string, string | number> } | null {
+  const en = fullEntryFor(e, nameOf, rankLabel, opts);
+  if (!en) return null;
+  return opts.short && !en.key.endsWith('Dry') ? { ...en, key: `${en.key}.s` } : en;
+}
+
+function fullEntryFor(
+  e: PublicEvent,
+  nameOf: (id: string) => string,
+  rankLabel: (r: string) => string,
+  opts: EntryOptions,
 ): { key: string; params: Record<string, string | number> } | null {
   switch (e.type) {
     case 'REQUEST_MADE':
@@ -77,7 +96,7 @@ export function entryFor(
         params: { target: nameOf(e.targetId), count: e.count, rank: rankLabel(e.rank), asker: nameOf(e.askerId) },
       };
     case 'REQUEST_FAILED':
-      return { key: 'log.requestFailed', params: { asker: nameOf(e.askerId) } };
+      return { key: opts.dry ? 'log.requestFailedDry' : 'log.requestFailed', params: { asker: nameOf(e.askerId) } };
     case 'HAND_REFILLED':
       return { key: 'log.handRefilled', params: { player: nameOf(e.playerId), count: e.count } };
     case 'SET_LAID':
@@ -125,7 +144,7 @@ export function entryFor(
       return { key: 'log.turnSkippedStunned', params: { player: nameOf(e.playerId) } };
     case 'GAME_ENDED':
       return {
-        key: e.reason === 'decided' ? 'log.gameEndedDecided' : e.reason === 'streak' ? 'log.gameEndedStreak' : 'log.gameEnded',
+        key: e.reason === 'decided' ? 'log.gameEndedDecided' : e.reason === 'streak' ? 'log.gameEndedStreak' : e.reason === 'exhausted' ? 'log.gameEndedExhausted' : 'log.gameEnded',
         params: {},
       };
     default:
@@ -146,10 +165,14 @@ export function logLines(
   nameOf: (id: string) => string,
   rankLabel: (r: string) => string,
   t: (key: string, params?: Record<string, string | number>) => string,
+  short = false,
 ): LogLine[] {
   const out: LogLine[] = [];
-  for (const e of events) {
-    const entry = entryFor(e, nameOf, rankLabel);
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i];
+    // a failed ask that draws nothing is a dry go fish: the next event of the step is not a draw
+    const dry = e.type === 'REQUEST_FAILED' && events[i + 1]?.type !== 'DREW_FROM_POOL';
+    const entry = entryFor(e, nameOf, rankLabel, { short, dry });
     if (!entry) continue;
     out.push({ id: e.seq, text: t(entry.key, entry.params), seal: sealFor(e), actorId: actorOf(e) });
   }

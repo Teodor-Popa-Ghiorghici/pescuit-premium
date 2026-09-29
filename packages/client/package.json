@@ -11,7 +11,10 @@
     "test:watch": "vitest",
     "audio:check": "node tools/audio-check.cjs",
     "layout:check": "node tools/layout-check.cjs",
-    "perf:check": "node tools/perf-check.cjs"
+    "perf:check": "node tools/perf-check.cjs",
+    "bake:textures": "node scripts/bake-textures.mjs",
+    "bake:ink": "node scripts/bake-ink.mjs",
+    "contrast:check": "node scripts/contrast-audit.mjs"
   },
   "dependencies": {
     "@pescuit/engine": "*",

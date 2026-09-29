@@ -131,6 +131,11 @@ export class Stage {
         return box(q('[data-tally]'));
       case 'gate':
         return box(q('[data-gate]')) ?? box(q('[data-basin]'));
+      case 'between': {
+        const f = this.anchor({ k: 'seat', id: a.from }, role);
+        const t = this.anchor({ k: 'seat', id: a.to }, role);
+        return f && t ? { cx: f.cx + (t.cx - f.cx) * a.t, cy: f.cy + (t.cy - f.cy) * a.t, w: f.w, h: f.h } : null;
+      }
     }
   }
 
@@ -310,9 +315,10 @@ export class Stage {
     set: (r) => `[data-set-id="${r ? CSS.escape(r) : ''}"]`,
     crack: (r) => `[data-set-id="${r ? CSS.escape(r) : ''}"]`,
     tally: () => '[data-tally]',
+    lastnotch: () => '[data-tally]',
     podium: () => '[data-podium]',
   };
-  private static TOKEN: Record<MaskTarget, string> = { totem: 'hide', plank: 'soft', set: 'hide', crack: 'crack', tally: 'tally', podium: 'hide' };
+  private static TOKEN: Record<MaskTarget, string> = { totem: 'hide', plank: 'soft', set: 'hide', crack: 'crack', tally: 'tally', lastnotch: 'nolast', podium: 'hide' };
 
   private tokens(el: Element): string[] {
     return (el.getAttribute('data-masked') ?? '').split(' ').filter(Boolean);
@@ -340,6 +346,26 @@ export class Stage {
       if (i >= to && i < from) n.setAttribute('data-keep', '');
     });
   }
+  /** a lay that took two notches or more says so: a "−2" stamped beside the tally for a moment (a `data-tally-delta` slot) */
+  notchDelta(n: number): void {
+    const el = q('[data-tally-delta]');
+    if (!el || n < 2) return;
+    el.textContent = `\u2212${n}`;
+    if (this.reduced || typeof el.animate !== 'function') {
+      setTimeout(() => (el.textContent = ''), 1600);
+      return;
+    }
+    el.animate([{ opacity: 1, translate: '0 0' }, { opacity: 1, translate: '0 0', offset: 0.7 }, { opacity: 0, translate: '0 -6px' }], { duration: 1700, easing: 'steps(6, end)' }).onfinish = () => (el.textContent = '');
+  }
+
+  /** the pool's last card has left: the basin drains to a dry floor (stepped, ~900 ms; instant under reduced motion) */
+  drain(): void {
+    const basin = q('[data-basin]');
+    if (!basin || this.reduced) return;
+    basin.classList.add('is-draining');
+    setTimeout(() => basin.classList.remove('is-draining'), 960);
+  }
+
   maskCard(id: string, on: boolean): void {
     const el = q(`[data-hand-card-id="${CSS.escape(id)}"]`);
     if (!el) return;
@@ -457,6 +483,10 @@ export class Stage {
   /** the posts carve in, one after another (game start) */
   carve(): void {
     if (this.reduced) return;
+    // the tally is carved on the rim: one notch after another, left to right
+    document.querySelectorAll<HTMLElement>('.tally__notch').forEach((n, i) => {
+      if (typeof n.animate === 'function') n.animate([{ scale: '1 0', opacity: 0 }, { scale: '1 1', opacity: 1 }], { duration: 160, delay: 300 + i * 40, easing: 'steps(3, end)', fill: 'backwards' });
+    });
     const posts = [...document.querySelectorAll<HTMLElement>('[data-player-id]')];
     posts.forEach((p, i) => {
       if (typeof p.animate === 'function') p.animate([{ opacity: 0, translate: '0 10px' }, { opacity: 1, translate: '0 0' }], { duration: 260, delay: i * 90, easing: 'steps(4, end)', fill: 'backwards' });

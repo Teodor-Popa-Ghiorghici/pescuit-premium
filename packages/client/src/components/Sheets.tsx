@@ -1,9 +1,10 @@
 import { LOCALES } from '@pescuit/shared';
-import { useEffect, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 import { audioStatus, onAudioStatus } from '../audio/context.js';
 import { getEngine } from '../audio/engine.js';
 import type { AudioSettings } from '../audio/mixer.js';
 import { getTableSpeed, setTableSpeed, subscribeTableSpeed } from '../game/presentationSettings.js';
+import { useDialog } from '../hooks/useDialog.js';
 import { useT } from '../i18n/useT.js';
 import { useGame } from '../state/store.js';
 
@@ -31,14 +32,6 @@ export function SoundTab() {
 
 function useTableSpeed() {
   return useSyncExternalStore(subscribeTableSpeed, getTableSpeed);
-}
-
-function useEscape(onClose: () => void) {
-  useEffect(() => {
-    const on = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', on);
-    return () => window.removeEventListener('keydown', on);
-  }, [onClose]);
 }
 
 function Slider({ label, value, onChange, id }: { label: string; value: number; onChange: (v: number) => void; id: string }) {
@@ -69,11 +62,11 @@ export function SoundSettings({ onClose }: { onClose: () => void }) {
   const engine = getEngine();
   const s = useAudioSettings();
   const speed = useTableSpeed();
-  useEscape(onClose);
+  const dialog = useDialog<HTMLDivElement>(onClose);
   const set = (patch: Partial<AudioSettings>) => engine.update(patch);
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal sheet-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('settings.title')} data-settings>
+      <div ref={dialog} className="modal sheet-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t('settings.title')} data-settings>
         <div className="modal__header">
           <h2>{t('settings.title')}</h2>
           <button className="btn modal__close" onClick={onClose} aria-label={t('nav.close')}>
@@ -131,10 +124,10 @@ export function SoundSettings({ onClose }: { onClose: () => void }) {
 export function MenuSheet({ onClose, onSound }: { onClose: () => void; onSound: () => void }) {
   const { t, locale } = useT();
   const { setLocale, leaveRoom, local } = useGame();
-  useEscape(onClose);
+  const dialog = useDialog<HTMLDivElement>(onClose);
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal sheet-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('menu.title')} data-menu>
+      <div ref={dialog} className="modal sheet-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t('menu.title')} data-menu>
         <div className="modal__header">
           <h2>{t('menu.title')}</h2>
           <button className="btn modal__close" onClick={onClose} aria-label={t('nav.close')}>

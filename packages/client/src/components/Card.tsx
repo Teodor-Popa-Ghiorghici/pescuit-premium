@@ -1,7 +1,8 @@
 import type { Rank } from '@pescuit/engine';
 import { memo } from 'react';
 import { POWER_RANKS } from '@pescuit/engine';
-import { EGGS_CARVING, NORMAL_CARVINGS, POWER_CARVINGS } from '../art/carvings.js';
+import { BAKED_CARVINGS, BAKED_FRAMES } from '../art/baked.generated.js';
+import { CardBack } from './CardBack.js';
 import { sealFor } from '../art/seals.js';
 import { useT } from '../i18n/useT.js';
 
@@ -17,19 +18,19 @@ const SIZES: Record<CardSize, { w: number; h: number }> = {
   sm: { w: 44, h: 66 },
 };
 
-/** §4.3 — category is carried by shape before colour: a 28px bite for powers,
- *  20px for ordinary fish, and icre are the only rounded card in the deck. */
-const POWER_FRAME = '28,0 236,0 264,28 264,368 236,396 28,396 0,368 0,28';
-const NORMAL_FRAME = '20,0 244,0 264,20 264,376 244,396 20,396 0,376 0,20';
+/* §4.3 — category is carried by shape before colour: a 28px bite for powers, 20px for ordinary fish, and
+ * icre are the only rounded card in the deck. The frames and carvings are drawn from the ink bake (§5.4):
+ * src/art/baked.generated.ts, made by scripts/bake-ink.mjs from the authored vector in src/art/. */
 
 export function categoryOf(rank: Rank): CardCategory {
   if (rank === 'eggs') return 'eggs';
   return POWER_SET.has(rank) ? 'power' : 'normal';
 }
 
-function carvingFor(rank: Rank) {
-  if (rank === 'eggs') return EGGS_CARVING;
-  return POWER_CARVINGS[rank] ?? NORMAL_CARVINGS[rank] ?? null;
+/** a rank's baked carving, as the markup of the plate's <g> */
+function Carving({ rank }: { rank: Rank }) {
+  const html = BAKED_CARVINGS[rank];
+  return html ? <g dangerouslySetInnerHTML={{ __html: html }} /> : null;
 }
 
 /** §4.5 laid — the angle is seeded by the set id so a set sits the same way for
@@ -98,7 +99,7 @@ function CardImpl({
   const ink = destroyed || spent || disabled ? '#3b322a' : '#17120e';
   const paper = laid || disabled ? '#e3d3b4' : '#efe2c8';
   const ropeId = laid || disabled ? 'ropeDark' : 'rope';
-  const frame = cat === 'power' ? POWER_FRAME : NORMAL_FRAME;
+  const frame = BAKED_FRAMES[rank] ?? '';
 
   const classes = [
     'card',
@@ -125,16 +126,16 @@ function CardImpl({
     >
       {cat === 'eggs' ? (
         <>
-          <rect x="0" y="0" width="264" height="396" rx="30" fill="#0e2b38" />
-          <rect x="0" y="0" width="264" height="396" rx="30" fill="none" stroke={ink} strokeWidth="16" />
-          <rect x="0" y="0" width="264" height="396" rx="30" fill="none" stroke="url(#bead)" strokeWidth="16" />
+          <path d={frame} fill="#0e2b38" />
+          <path d={frame} fill="none" stroke={ink} strokeWidth="16" />
+          <path d={frame} fill="none" stroke="url(#bead)" strokeWidth="16" />
         </>
       ) : (
         <>
-          <polygon points={frame} fill={paper} />
-          <polygon points={frame} fill="none" stroke={selected ? '#d99a2b' : ink} strokeWidth="16" />
-          <polygon points={frame} fill="none" stroke={`url(#${ropeId})`} strokeWidth="16" />
-          {selected && <polygon points={frame} fill="none" stroke="#17120e" strokeWidth="4" />}
+          <path d={frame} fill={paper} />
+          <path d={frame} fill="none" stroke={selected ? '#d99a2b' : ink} strokeWidth="16" />
+          <path d={frame} fill="none" stroke={`url(#${ropeId})`} strokeWidth="16" />
+          {selected && <path d={frame} fill="none" stroke="#17120e" strokeWidth="4" />}
         </>
       )}
 
@@ -145,7 +146,7 @@ function CardImpl({
             {sealFor(rank)}
           </g>
         ) : (
-          carvingFor(rank)
+          <Carving rank={rank} />
         )}
       </g>
 
@@ -237,33 +238,4 @@ function CardImpl({
 /** memoised: a card is drawn from its props alone, and a table re-renders on every message */
 export const Card = memo(CardImpl);
 
-/** §4.4 — one back, one seed, byte-identical wherever it is drawn. */
-function CardBackImpl({ width = 88, height = 132, title }: { width?: number; height?: number; title?: string }) {
-  return (
-    <div className="card card--back" title={title} role="img" aria-label={title ?? 'card'}>
-      <svg className="card__plate" width={width} height={height} viewBox="0 0 264 396" aria-hidden="true" focusable="false">
-        <polygon points={POWER_FRAME} fill="#6b4a2f" />
-        <polygon points={POWER_FRAME} fill="none" stroke="#40291a" strokeWidth="18" />
-        <g stroke="#40291a" strokeWidth="4" opacity=".7">
-          <path d="M0,60 H264 M0,110 H264 M0,170 H264 M0,230 H264 M0,290 H264 M0,340 H264" />
-        </g>
-        <circle cx="132" cy="198" r="88" fill="#40291a" />
-        <circle cx="132" cy="198" r="74" fill="none" stroke="#6b4a2f" strokeWidth="8" />
-        <g fill="#6b4a2f">
-          <polygon points="132,120 145,160 119,160" />
-          <polygon points="210,198 170,211 170,185" />
-          <polygon points="132,276 119,236 145,236" />
-          <polygon points="54,198 94,185 94,211" />
-          <polygon points="187,143 158,172 143,143" />
-          <polygon points="187,253 143,253 158,224" />
-          <polygon points="77,253 106,224 121,253" />
-          <polygon points="77,143 121,143 106,172" />
-        </g>
-        <circle cx="132" cy="198" r="26" fill="#d99a2b" />
-        <circle cx="132" cy="198" r="10" fill="#40291a" />
-      </svg>
-    </div>
-  );
-}
-
-export const CardBack = memo(CardBackImpl);
+export { CardBack } from './CardBack.js';

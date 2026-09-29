@@ -1,16 +1,24 @@
 import { LOCALES } from '@pescuit/shared';
-import { useState } from 'react';
-import { CardBack } from './Card.js';
+import { useEffect, useState } from 'react';
+import { CardBack } from './CardBack.js';
 import { useT } from '../i18n/useT.js';
 import { useGame } from '../state/store.js';
 import { roomCodeFromUrl } from '../net/session.js';
 import { getEngine } from '../audio/engine.js';
 import { useLobbyAmbience } from '../hooks/useLobbyAudio.js';
+import { DuskPond } from '../art/dusk.js';
+import { preloadTable } from '../App.js';
 
 /** §5.1 — the sheet of stock everything else is printed on, and the rope rule under
  *  the title that reappears at the top of every screen in the game. */
 export function Lobby() {
   useLobbyAmbience();
+  // the table's chunk is fetched once the page is idle, so creating or joining a room never waits for it
+  useEffect(() => {
+    const w = window as unknown as { requestIdleCallback?: (cb: () => void) => number };
+    const id = w.requestIdleCallback ? w.requestIdleCallback(preloadTable) : window.setTimeout(preloadTable, 1200);
+    return () => (w.requestIdleCallback ? undefined : window.clearTimeout(id));
+  }, []);
   const { t, locale } = useT();
   const { createRoom, joinRoom, setLocale, error, dismissError, joining } = useGame();
   const [name, setName] = useState('');
@@ -31,7 +39,8 @@ export function Lobby() {
   }
 
   return (
-    <div className="screen screen--centered">
+    <div className="screen screen--centered screen--dusk">
+      <DuskPond />
       <div className="panel">
         <div className="panel__crest">
           <h1 className="title">{t('app.title')}</h1>
@@ -43,6 +52,7 @@ export function Lobby() {
             <button
               key={l}
               className={`lang-switch__btn ${l === locale ? 'is-active' : ''}`}
+              aria-pressed={l === locale}
               onClick={() => setLocale(l)}
               type="button"
             >
@@ -52,10 +62,10 @@ export function Lobby() {
         </div>
 
         <div className="tabs">
-          <button className={`tab ${mode === 'create' ? 'is-active' : ''}`} onClick={() => setMode('create')} type="button">
+          <button className={`tab ${mode === 'create' ? 'is-active' : ''}`} aria-pressed={mode === 'create'} onClick={() => setMode('create')} type="button">
             {t('lobby.createRoom')}
           </button>
-          <button className={`tab ${mode === 'join' ? 'is-active' : ''}`} onClick={() => setMode('join')} type="button">
+          <button className={`tab ${mode === 'join' ? 'is-active' : ''}`} aria-pressed={mode === 'join'} onClick={() => setMode('join')} type="button">
             {t('lobby.joinRoom')}
           </button>
         </div>

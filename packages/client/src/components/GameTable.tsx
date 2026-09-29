@@ -1,10 +1,10 @@
 import type { Rank } from '@pescuit/engine';
 import { EGGS } from '@pescuit/engine';
 import type { ClientAction } from '@pescuit/shared';
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { getEngine } from '../audio/engine.js';
 import { Mark, markForSeat, PowerPips } from '../art/marks.js';
-import { RoePips, Totem } from '../art/table.js';
+import { Totem } from '../art/table.js';
 import { logLines } from '../game/logLines.js';
 import { opponentsInOrder, seatFacts } from '../game/seatFacts.js';
 import type { HandGroup } from '../game/handModel.js';
@@ -12,17 +12,22 @@ import { cardSizeFor, useDesktop, useMedia, useWindowSize, WIDE_QUERY } from '..
 import { useT } from '../i18n/useT.js';
 import { usePresenter } from '../hooks/usePresenter.js';
 import { useGame } from '../state/store.js';
+import { Announcer } from './Announcer.js';
 import { AskSheet } from './AskSheet.js';
 import { FlightLayer } from './FlightLayer.js';
 import { Hand } from './Hand.js';
 import { LogPanel } from './LogPanel.js';
 import { Pond } from './Pond.js';
 import { LaidRow } from './LaidSets.js';
-import { RulesPanel } from './RulesPanel.js';
 import { Chip, Post } from './Seats.js';
 import { HeadphonesPrompt, MenuSheet, SoundSettings } from './Sheets.js';
 import { TopBar } from './TopBar.js';
 import { Plank, WindowBanner, windowKeyOf, tooLateText } from './Windows.js';
+
+// the podium is a chunk of its own: fetched as soon as a game is on, shown when the last beat has landed
+const loadPodium = () => import('./Podium.js');
+const Podium = lazy(loadPodium);
+const RulesPanel = lazy(() => import('./RulesPanel.js'));
 
 const CONNECTION_GRACE_MS = 1500;
 const REINK_MS = 460;
@@ -93,6 +98,9 @@ export function GameTable() {
   const declared = useRef<{ key: string; seq: number } | null>(null);
 
   const feel = useConnectionFeel(status);
+  useEffect(() => {
+    void loadPodium();
+  }, []);
 
   // the settings sheet and the engine share one truth: follow it (headphones glyph, mute)
   useEffect(() => {
@@ -172,20 +180,20 @@ export function GameTable() {
   const pick = useCallback(
     (r: Rank) => {
       if (r === EGGS) return;
-      getEngine().play('ui.select');
+      getEngine().play('ui.select', undefined, { afterPaint: true });
       setPicked((cur) => (cur === r ? null : r));
       setKbTarget(null);
     },
     [],
   );
 
-  const refuse = useCallback(() => getEngine().play('ui.error'), []);
+  const refuse = useCallback(() => getEngine().play('ui.error', undefined, { afterPaint: true }), []);
 
   const ask = useCallback(
     (targetId: string, r: Rank) => {
       if (!view || !playerId) return;
       const seat = Math.max(0, view.turnOrder.indexOf(targetId));
-      getEngine().play('ui.target', { seat });
+      getEngine().play('ui.target', { seat }, { afterPaint: true });
       sendAction({ type: 'REQUEST', playerId, targetId, rank: r } as ClientAction);
       setPicked(null);
       setKbTarget(null);
@@ -197,11 +205,19 @@ export function GameTable() {
   const lay = useCallback(
     (set: { rank: Rank; cardIds: string[] }) => {
       if (!playerId) return;
-      getEngine().play('ui.press');
+      getEngine().play('ui.press', undefined, { afterPaint: true });
       sendAction({ type: 'LAY_SET', playerId, rank: set.rank, cardIds: set.cardIds } as ClientAction);
     },
     [playerId, sendAction],
   );
+
+  // the log drawer closes on Escape (§5.9)
+  useEffect(() => {
+    if (!drawer) return;
+    const on = (e: KeyboardEvent) => e.key === 'Escape' && setDrawer(false);
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, [drawer]);
 
   // §4.4 keyboard: 1-9 pick a group, ←/→ cycle targets, Enter asks. (Space, D and Esc belong to the plank.)
   useEffect(() => {
@@ -221,7 +237,7 @@ export function GameTable() {
         const step = e.key === 'ArrowRight' ? 1 : -1;
         const next = targets[at < 0 ? (step > 0 ? 0 : targets.length - 1) : (at + step + targets.length) % targets.length];
         setKbTarget(next.id);
-        getEngine().play('ui.select');
+        getEngine().play('ui.select', undefined, { afterPaint: true });
         e.preventDefault();
       } else if (e.key === 'Enter' && picked && kbTarget) {
         e.preventDefault();
@@ -253,7 +269,7 @@ export function GameTable() {
   const lines = useMemo(() => {
     if (!view) return [];
     const nameOf = (id: string) => view.players.find((p) => p.id === id)?.name ?? id;
-    return logLines(events.slice(-12), nameOf, rank, t);
+    return logLines(events.slice(-12), nameOf, rank, t, true);
   }, [events, view, rank, t]);
 
   if (!view || !playerId) {
@@ -327,7 +343,7 @@ export function GameTable() {
       <span className="dock__name">{t('dock.me')}</span>
       <span className="dock__score num">{me.score}</span>
       <PowerPips unused={myFacts.unused} used={myFacts.used} />
-      {desktop && <LaidRow view={view} owner={playerId} className="laid--me" />}
+      <LaidRow view={view} owner={playerId} className="laid--me" max={desktop ? undefined : 5} />
       <span className="dock__hand">
         · <span className="num">{me.handSize}</span> {t('dock.cards')}
       </span>
@@ -370,8 +386,16 @@ export function GameTable() {
           {t('conn.reconnecting')}
         </div>
       )}
-      {isGameOver && <GameOverOverlay onNewGame={leaveRoom} />}
-      {showRules && <RulesPanel onClose={() => setShowRules(false)} />}
+      {isGameOver && (
+        <Suspense fallback={null}>
+          <Podium onNewGame={leaveRoom} />
+        </Suspense>
+      )}
+      {showRules && (
+        <Suspense fallback={null}>
+          <RulesPanel onClose={() => setShowRules(false)} />
+        </Suspense>
+      )}
       {showMenu && (
         <MenuSheet
           onClose={() => setShowMenu(false)}
@@ -383,6 +407,7 @@ export function GameTable() {
       )}
       {showSound && <SoundSettings onClose={() => setShowSound(false)} />}
       <FlightLayer />
+      <Announcer />
     </>
   );
 
@@ -443,12 +468,13 @@ export function GameTable() {
           <Chip key={p.id} {...seatProps(p)} />
         ))}
       </div>
-      <div className="ph-mid" ref={tableRef} data-table-layer>
-        {sheetRank ? (
-          <AskSheet view={view} me={playerId} rank={sheetRank} keyTarget={kbTarget} onAsk={(id) => ask(id, sheetRank)} onClose={() => setPicked(null)} />
-        ) : (
+      <div className="ph-mid" ref={tableRef} data-table-layer role="main" aria-label={t('a11y.table')}>
+        {sheetRank && <AskSheet view={view} me={playerId} rank={sheetRank} keyTarget={kbTarget} onAsk={(id) => ask(id, sheetRank)} onClose={() => setPicked(null)} />}
+        {/* the pond stays mounted while the sheet takes its row (display: none): opening and closing the sheet is a style
+            flip, not a rebuild of the basin, the pool stack and the tally on every tap (input -> visual, §4.4) */}
+        <div className="ph-pond-slot" style={{ display: sheetRank ? 'none' : 'contents' }}>
           <Pond view={view} ticker={ticker} />
-        )}
+        </div>
         {hpPrompt}
       </div>
       <section className={`ph-dock ${shownMine && !isGameOver ? 'is-turn' : ''}`} data-dock data-me={playerId}>
@@ -462,42 +488,3 @@ export function GameTable() {
     </div>
   );
 }
-
-/** §5.7 - the table is rebuilt as a podium. The winner's post stands taller and keeps
- *  the totem; everyone else keeps their roe. */
-function GameOverOverlay({ onNewGame }: { onNewGame: () => void }) {
-  const { t } = useT();
-  const { view, local } = useGame();
-  if (!view) return null;
-
-  const ranked = view.players.slice().sort((a, b) => b.score - a.score);
-
-  return (
-    <div className="modal-overlay modal-overlay--solid" data-podium>
-      <div className="gameover">
-        <h2 className="gameover__title">{t('game.gameOver')}</h2>
-        <div className="gameover__posts">
-          {ranked.map((p) => {
-            const isWinner = view.winners.includes(p.id);
-            return (
-              <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                {isWinner && <Totem size={40} />}
-                <div className={`gameover__post ${isWinner ? 'is-winner' : ''}`}>
-                  <div className="gameover__name">{p.name}</div>
-                  <RoePips score={p.score} title={`${t('game.score')}: ${p.score}`} />
-                  {isWinner && <div className="gameover__crown">{t('game.winnerTag')}</div>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {!local && (
-          <button className="btn btn--primary" onClick={onNewGame}>
-            {t('game.newGame')}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-

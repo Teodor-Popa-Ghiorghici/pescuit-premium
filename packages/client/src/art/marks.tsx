@@ -88,8 +88,8 @@ export const ShellIcon = ({ size = 12 }: { size?: number }) => (
 
 /** A headphone glyph for the top bar while headphones mode is on (§3.2). */
 export const HeadphonesIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.6" aria-hidden="true">
-    <path d="M4,15 V12 A8,8 0 0 1 20,12 V15" />
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.6" strokeLinejoin="miter" aria-hidden="true">
+    <path d="M4,15 V10 L8,5 H16 L20,10 V15" />
     <rect x="3" y="14" width="4.5" height="7" fill={color} />
     <rect x="16.5" y="14" width="4.5" height="7" fill={color} />
   </svg>

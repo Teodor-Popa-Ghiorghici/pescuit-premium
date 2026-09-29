@@ -46,8 +46,19 @@ button {
 }
 
 :focus-visible {
-  outline: var(--line-mid) solid var(--ocru);
+  outline: var(--line-thin) solid var(--ocru);
   outline-offset: 2px;
+}
+
+/* a clip-path would cut the focus ring off: a focused control keeps its edge square (§5.9) */
+:is(button, [role='button'], .btn, .tab, .lang-switch__btn, input, select):focus-visible {
+  clip-path: none;
+}
+
+/* on paper and paper plates ochre is faint: the ring is ink there (§5.9: every control has a visible focus) */
+:is(.ph-dock, .dk-me, .dk-log, .modal, .plank, .sheet, .gameover__name):focus-visible,
+:is(.ph-dock, .dk-me, .dk-log, .modal, .plank, .sheet) :focus-visible {
+  outline-color: var(--ink);
 }
 
 input,
@@ -71,6 +82,33 @@ select {
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
+}
+
+/* the lobby and the waiting room: the pond at dusk (§5.8) */
+.screen--dusk {
+  position: relative;
+  isolation: isolate;
+}
+.dusk {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+.screen--dusk > :not(.dusk) {
+  position: relative;
+}
+
+/* a post carves in: stepped, one after another */
+.post.is-carving {
+  animation: post-carve 280ms steps(4, end) both;
+  animation-delay: calc(var(--n, 0) * 90ms);
+}
+@keyframes post-carve {
+  from { opacity: 0; transform: translateY(10px) scale(0.94); }
+  to { opacity: 1; transform: none; }
 }
 
 .muted {
@@ -532,6 +570,7 @@ select {
   pointer-events: none;
   z-index: 40;
   animation: pulseBorder 1s var(--ease-gouge) infinite;
+  will-change: opacity; /* the one element that animates for the whole window: its own layer, so the pulse never repaints the table */
   clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% calc(100% - 18px), calc(100% - 18px) 100%, 18px 100%, 0 calc(100% - 18px), 0 18px);
 }
 
@@ -668,12 +707,12 @@ select {
   background: var(--apa);
 }
 
-/* game over: the winner's post stands taller and keeps the totem */
+/* game over (§5.7): the winners' posts rise, a tie is equal totems on equal posts, the pips count up */
 .gameover {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 28px;
+  gap: 20px;
   padding: 24px 16px;
   width: min(900px, 100%);
 }
@@ -683,17 +722,40 @@ select {
   color: var(--hartie);
 }
 
+.gameover__reason {
+  margin: -8px 0 0;
+  color: var(--pe-apa);
+  font-size: var(--t-md);
+  text-align: center;
+  max-width: 34ch;
+}
+
 .gameover__posts {
   display: flex;
-  gap: 20px;
+  gap: 16px;
   align-items: flex-end;
   flex-wrap: wrap;
   justify-content: center;
 }
 
+.gameover__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gameover__totem {
+  min-height: 55px;
+  display: flex;
+  align-items: flex-end;
+}
+
 .gameover__post {
   width: 126px;
-  background: var(--lemn);
+  /* a post is as tall as its score is next to the best: the winners' posts are the tallest */
+  min-height: calc(110px + var(--rise, 0) * 90px);
+  background-color: var(--lemn);
+  background-image: var(--tex-wood);
   border: var(--line-mid) solid var(--lemn-inchis);
   padding: 10px 8px;
   display: flex;
@@ -708,7 +770,8 @@ select {
 }
 
 .gameover__name {
-  background: var(--hartie);
+  background-color: var(--hartie);
+  background-image: var(--tex-paper);
   color: var(--ink);
   font-family: var(--display);
   font-weight: 700;
@@ -716,12 +779,21 @@ select {
   padding: 4px 10px;
   width: 100%;
   text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gameover__post.is-winner .gameover__name {
-  background: var(--var);
+  background-color: var(--var);
   font-weight: 800;
   font-size: var(--t-lg);
+}
+
+.gameover__score {
+  font-size: var(--t-xl);
+  color: var(--var);
+  line-height: 1;
 }
 
 .gameover__crown {
@@ -729,6 +801,82 @@ select {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--var);
+}
+
+.podium__pips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  max-width: 116px;
+}
+
+.podium__pip circle {
+  fill: none;
+  stroke: var(--lemn-inchis);
+  stroke-width: 2;
+}
+
+/* the count-up: an earned pip fills, one step after another, once the podium is no longer masked */
+[data-podium]:not([data-masked]) .podium__pip.is-earned circle {
+  animation: pip-fill 60ms linear both;
+  animation-delay: calc(900ms + var(--i) * 110ms);
+}
+@keyframes pip-fill {
+  0%, 49% { fill: none; }
+  50%, 100% { fill: var(--ocru); }
+}
+.podium__pip.is-earned circle {
+  fill: var(--ocru);
+}
+
+/* the posts rise: stepped, staggered, the tallest last */
+[data-podium]:not([data-masked]) .gameover__col {
+  animation: post-rise 640ms steps(6, end) both;
+  animation-delay: calc(var(--n, 0) * 90ms);
+}
+@keyframes post-rise {
+  from { transform: translateY(70%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (max-width: 520px) {
+  .gameover {
+    padding: 8px 2px;
+    gap: 12px;
+  }
+  .gameover__posts {
+    gap: 6px;
+    row-gap: 10px;
+  }
+  .gameover__post,
+  .gameover__post.is-winner {
+    width: 90px;
+    padding: 6px 3px;
+    gap: 5px;
+    min-height: calc(74px + var(--rise, 0) * 50px);
+  }
+  .gameover__post.is-winner {
+    width: 96px;
+  }
+  .gameover__totem {
+    min-height: 44px;
+  }
+  .podium__pip {
+    width: 13px;
+    height: 13px;
+  }
+  .gameover__score {
+    font-size: var(--t-lg);
+  }
+  .gameover__name,
+  .gameover__post.is-winner .gameover__name {
+    font-size: var(--t-sm);
+    padding: 3px 4px;
+  }
+  .podium__pips {
+    max-width: 84px;
+  }
 }
 
 /* ------------------------------------------------------------- §6.6 reduced */
@@ -751,6 +899,15 @@ select {
     animation: none;
   }
 
+  /* the podium is simply there, the pips already counted */
+  [data-podium]:not([data-masked]) .gameover__col {
+    animation: none;
+  }
+  [data-podium]:not([data-masked]) .podium__pip.is-earned circle {
+    animation: none;
+    fill: var(--ocru);
+  }
+
   .card.is-pressable:hover,
   .card.is-selected,
   .hgroup.is-selected,
@@ -758,4 +915,18 @@ select {
   .btn:hover:not(:disabled) {
     transform: none;
   }
+}
+
+/* text for screen readers only: never seen, never in the way, never hidden from them (§5.9) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

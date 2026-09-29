@@ -20,7 +20,11 @@ export function publicViewOf(v: RedactedView): PublicView {
   const w = v.pendingWindow;
   const ctx = (w?.context ?? {}) as Ctx;
   const handSizes: Record<string, number> = {};
-  for (const p of v.players) handSizes[p.id] = p.handSize;
+  const scores: Record<string, number> = {};
+  for (const p of v.players) {
+    handSizes[p.id] = p.handSize;
+    scores[p.id] = p.score;
+  }
   return {
     players: v.turnOrder,
     currentPlayerId: v.currentPlayerId,
@@ -30,6 +34,7 @@ export function publicViewOf(v: RedactedView): PublicView {
     endPressure: v.endPressure,
     laidSets: v.laidSets.map((s) => ({ id: s.id, ownerId: s.ownerId, isPowerSet: s.isPowerSet, rank: s.rank, cardCount: s.cardCount, spent: s.spent, destroyed: s.destroyedByMantis })),
     handSizes,
+    scores,
     ended: v.status === 'ENDED',
   };
 }

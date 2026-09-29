@@ -29,6 +29,32 @@ traded away with a note in `DECISIONS.md`, "may" is latitude.
 
 ---
 
+## 0.1 Amendments (FEEL_VISUAL_SOUND_PLAN.md §12)
+
+The feel, visual and sound plan (`FEEL_VISUAL_SOUND_PLAN.md`, v4) was built on top of this document and,
+where the two disagree, **the plan wins**. Each row is an amendment; the section it changes carries a
+short "Amended" note pointing back here. Every amendment is implemented.
+
+| § | This document said | Now | Why |
+|---|---|---|---|
+| 2 | Vollkorn for display, including numerals on cards | **Source Serif 4 lining figures for every numeral** (`.num`) | Vollkorn's "1" reads as "I" (A26): the pool count 11 read "II" |
+| 5.4 | tap a post, then a card, then confirm | **phone:** tap a group, then a name, on a mid-screen ask sheet; **desktop:** drag a group onto a post, or tap-tap; `1`-`9`, `←`/`→`, `Enter` on the keyboard | fewer steps; the hand stays in view |
+| 6.2 | nothing may exceed `--dur-heavy` except game over | **signature moments may run to 1.4 s** (the reveal, the last set, the whale), never blocking input | rare moments need anticipation, turn and hold |
+| 6.5 | the authoritative view updates immediately | **logic and input do; arriving pixels are masked for at most 800 ms**, and transitions come from view diffs in `seq` order | otherwise cards appear before they fly, and event shapes could steer presentation |
+| 7.1-7.2 | the toacă as the UI material; ambience off; one sprite | **the material, not the liturgy** (the game-start call is the tulnic); **ambience with two textures** (the pond while the pool lasts, wind once it is dry), **on by default and playtest-gated** (5 of 15 switching it off ships it off), **generated live**; no sprite | cultural care; the pond is the world's voice; the download budget closes |
+| 7.3 | `SET_LAID` identical for power and normal | **identical for every *rank***; the category may differ (`isPowerSet` is public) | the rank is the secret, the category is not |
+| 7.3-7.4 | eligible players hear a distinct window figure and ticks | **only the answer window is voiced, identically on every client**; its close follows `RESPONSE_PENDING` leaving the view; structural windows are silent (the eligible player gets the plank, the clock and a private haptic) | a distinct sound on one client is a tell; a missing close would be one too |
+| 7.5 | duck ambience -6 dB under table cues; cap total output | **no ducking and no bus compression**: program gain is set by an anchor cue (`table.turn`), every cue is mastered per output profile, and a lookahead limiter meets only pile-ups | per-cue ducking pumps; native compressors lifted the bed above the knocks |
+| 8.2 | haptics as the eligibility signal | **Android only; the private pattern is set by the desk test** and is opt-in until then; every haptic has its own toggle | iOS has no Vibration API; a buzzing phone is audible to a microphone |
+| 9.4 | hold 700 ms after every window closes | **the same 220 ms close for every window**; durations are part of what the leak tests compare | the hold hides nothing that uniform, pure choreography does not, and it added half a second to the most frequent transition |
+
+Two further changes came with the plan and are not table rows: the **texture and ink pass** (§3 below, "As built")
+and the **world arc** - the public count of sets still possible (`view.sets`) drives the light (`--apa` steps
+one flat step darker at 12, 6 and 1), the notches on the basin's rim, and the last set, the gate and the podium
+(FEEL_VISUAL_SOUND_PLAN §3.9).
+
+---
+
 ## 1. Art direction
 
 ### The brief, in one sentence
@@ -126,6 +152,9 @@ ochre-on-water and verdigris-on-paper.
 
 ### Typography
 
+> **Amended (§0.1):** every numeral is set in Source Serif 4 lining figures (`.num`), not Vollkorn.
+
+
 Two faces, both self-hosted (`packages/client/public/fonts/`), both subsetted.
 No Google Fonts CDN request — the app ships as a single Railway service and
 should not phone out.
@@ -182,6 +211,17 @@ further, it does not soften it.
 
 ## 3. The ink and texture engine
 
+> **As built (M4):** the three surfaces are small static files made by `packages/client/scripts/bake-textures.mjs`
+> (deterministic seeds; 13 KB against the 30 KB budget): `public/textures/paper.png` (a 128 px wrapping tile of
+> specks and fibres at 7-16 % ink, 2 KB), `wood.svg` (a wrapping grain of wavering lines and two knots, 9 KB - it
+> replaces the pinstripes of A21) and `water.svg` (chisel-cut crescent waves, 2 KB). They are the tokens
+> `--tex-paper`, `--tex-wood` and `--tex-water` in `design/tokens.css`. `scripts/contrast-audit.mjs` (in the test
+> suite) re-audits contrast with each texture at its worst pixel: body text stays >= 7:1 on every surface.
+> **Light follows the tally:** `--apa` and `--apa-2` step flat (`--apa-l1..3`) when the count of sets still possible
+> falls to 12, 6 and 1, set by `[data-light]` on the root; no gradients.
+> **Gouged edges** are baked as vertex jitter, not a displacement filter: see §3.2.
+
+
 "Visible texture" is the most likely thing to either look fake or tank the
 frame rate. The approach is three layers, cheapest first.
 
@@ -198,6 +238,15 @@ A second tile at 512×512 with stretched, directional turbulence provides
 **wood grain** for `--lemn` surfaces (posts, the pool, the frame).
 
 ### 3.2 Gouged edges — baked, not live
+
+> **As built (M4):** `packages/client/scripts/bake-ink.mjs` reads the authored vector (`src/art/carvings.tsx`,
+> `cardArt.tsx`), jitters every polygon, path, rect and circle vertex **along its normal by 1-2 units** with seeded
+> noise keyed on the vertex position (so shared corners stay joined), subdivides long edges so they waver, and pools
+> ink where a stroke ends. One seed per asset - the rank's name for a face, **one fixed seed for the back** (§9.6) -
+> and it writes `src/art/baked.generated.ts` and `baked-back.generated.ts`, which `Card` draws. `--check` (and a test)
+> fails if they are stale. The frames are set in 10 units so the outer edge waves inside the plate's viewBox. The
+> plan's fallback (feTurbulence + feDisplacementMap, rasterised) was not needed. There are no live filters on cards.
+
 
 The wobble that makes a line look carved comes from
 `feTurbulence` + `feDisplacementMap` on the stroke. **Do not ship this as a
@@ -403,6 +452,9 @@ plus the post drawn at 60% ink. Protected = a verdigris shell clamp.
 
 ### 5.4 Hand
 
+> **Amended (§0.1):** the ask flow is now tap a group, then a name (phone, on a mid-screen sheet), or drag / tap-tap (desktop); see FEEL_VISUAL_SOUND_PLAN §4.4.
+
+
 The strongest candidate for a full interaction redesign, because of the clock.
 
 - Cards fan in an arc with a slight rotation per card (seeded by card id, so it
@@ -447,11 +499,23 @@ stamp in (§7.2) rather than sliding.
 
 ### 5.7 Game over
 
+> **As built (M4):** after the last lay's stamp, one held beat and the gate doors, the podium shows (`Podium.tsx`,
+> masked until then): the winners' posts **rise** (stepped, staggered), a tie is **equal totems** on equal posts,
+> the pips **count up** one step at a time with `table.tally` per pip (the cues are placed on the same steps by
+> the choreography), and each end reason - `decided`, `streak`, `exhausted` - has its own short line.
+
+
 The winner's post grows a raised totem; scores are carved as pips into a final
 plaque. Ties (shared victory is a real outcome per §7 of the rules) must render
 as two equal totems, not a single winner with an asterisk.
 
 ### 5.8 Rules panel, and the new Codex
+
+> **As built (M4):** the Rules panel has two tabs. The **Codex** shows the nine powers - the carving (the same
+> `Card`), the seal, the kind (reactive / active / special), a one-line rule in both languages, and a stave with a
+> **button that plays the motif** (Squid shows the rest: an empty stave and no sound). It is a lazy chunk with its
+> own stylesheet. The art QA surface of §4.7 step 6 is `?lab=vfx` and this tab.
+
 
 `RulesPanel` renders `RULES.md` verbatim in English regardless of locale — a
 known limitation, and translating the full rulebook stays out of scope here.
@@ -480,6 +544,9 @@ Corollary: nothing cross-fades, nothing blurs, nothing eases in-out
 symmetrically. Motion is fast-out (the strike) and slow-settle (the weight).
 
 ### 6.2 Tokens
+
+> **Amended (§0.1):** signature moments may run to 1.4 s, never blocking input; `--dur-event` (700 ms) is no longer a hold after windows (§9.4).
+
 
 ```
 --dur-snap    120ms   /* hover lift, chip select, toggle */
@@ -533,6 +600,9 @@ highlight, especially on a phone where posts wrap to two rows.
 
 ### 6.5 Queueing
 
+> **Amended (§0.1):** logic and input read the view at once; only arriving pixels are masked (at most 800 ms). The queue plays in `seq` order and flushes to the end state when more than 2.5 s is queued (`game/presenter.ts`).
+
+
 Events arrive batched in a single `game_state` message (`store.tsx` appends
 `msg.events`). A batch must **play in sequence, not simultaneously** — a
 request that succeeds, completes a set, grants a power and triggers a window
@@ -559,6 +629,9 @@ decoration.
 
 ### 7.1 Material palette
 
+> **Amended (§0.1):** the toacă is the *material*, not the liturgy - no monastery rhythm anywhere, and the game-start call is the tulnic.
+
+
 The sound of carved wood and cold water. Romanian sources again:
 
 - **Toacă** — the wooden plank struck with mallets. This is the app's primary
@@ -573,6 +646,9 @@ No music bed during play. One short motif at game start and at game end only.
 This game is played over voice chat; a continuous music loop is a liability.
 
 ### 7.2 Implementation tiers
+
+> **Amended (§0.1):** everything is synthesised live or rendered at load in plain JS (no sprite); ambience is generated live, two textures, **on by default** and playtest-gated (`?metrics=1` counts turn-offs).
+
 
 | Tier | Content | Cost |
 |---|---|---|
@@ -590,6 +666,9 @@ control lives in the table header and must be reachable in one tap — people
 play this at work.
 
 ### 7.3 Cue map
+
+> **Amended (§0.1):** `SET_LAID` is identical for every *rank* (the category may differ); the cue sheet of the plan (Appendix C/D) replaces this map, and `cues.ts` is the leak-tested function.
+
 
 | Event | Cue |
 |---|---|
@@ -616,6 +695,9 @@ play this at work.
 
 ### 7.4 The window clock
 
+> **Amended (§0.1):** only the answer window is voiced, identically for every client; structural windows are silent.
+
+
 The 12-second interrupt window is the one place audio carries real information.
 
 - Window opens **and you are eligible**: a rising two-note figure, then a
@@ -628,6 +710,9 @@ The 12-second interrupt window is the one place audio carries real information.
 - Window closes: a single resolving knock, at the **fixed** beat of §9.4.
 
 ### 7.5 Mixing
+
+> **Amended (§0.1):** no ducking and no bus compression; program gain from the anchor cue, per-profile mastering, a lookahead limiter.
+
 
 Duck `ambience` by 6 dB under any `table` cue. Hard-limit simultaneous cues to
 4; excess is dropped, not queued. Cap total output so a batch of six events
@@ -648,6 +733,9 @@ and settles. Every landing that represents a physical placement gets a knock
 and, on mobile, a haptic tick.
 
 ### 8.2 Haptics
+
+> **Amended (§0.1):** Android only; the private eligibility pattern is set by the desk test and is opt-in until then.
+
 
 `navigator.vibrate` where supported, gated behind the same toggle as sound:
 
@@ -734,6 +822,9 @@ their own card shows spent — in their own hand panel only.
 
 ### 9.4 Fixed-duration resolution
 
+> **Amended (§0.1):** the uniform 220 ms close replaces the 700 ms hold; it is pure choreography and the leak tests pin its duration.
+
+
 Any window that can be closed by a hidden declaration must take the **same wall
 time to resolve visually** whether it was declared at 0.2s, at 11.8s, or timed
 out. Hold the closing state for `--dur-event` (700ms) measured from when the
@@ -749,6 +840,9 @@ keys for a concealed set or a face-down card must not contain the rank. Use the
 set id. `card--facedown` is correct; `card--facedown-squid` is a leak.
 
 ### 9.6 Texture seeds must not be rank-derived
+
+> **As built:** the ink bake gives the back one fixed seed and one baked string (`baked-back.generated.ts`); a test asserts it is a constant. Faces are seeded by the rank's name, which is fine: a face is only ever drawn where its rank is public or the viewer's own.
+
 
 The baked ink displacement (§3.2) and the card-back rosette use a noise seed.
 **Never seed from rank.** Two face-down cards of different ranks whose grain
@@ -826,9 +920,9 @@ Missing these budgets is a design failure, not an optimisation task.
 
 | Budget | Limit |
 |---|---|
-| Added JS (gzipped) over today's bundle | ≤ 60 KB |
+| Added JS (gzipped) over today's bundle | ≤ 60 KB (as built, M4: 65 KB original + 60 = 125 KB; the lobby loads 107 KB, a played game 126 KB, about 1 KB over - see the README) |
 | All nineteen card arts + back + sigils, inlined SVG, gzipped | ≤ 120 KB |
-| Texture tiles (2 PNGs) | ≤ 20 KB |
+| Texture tiles (paper, wood, water: `scripts/bake-textures.mjs`) | ≤ 30 KB (13 KB as built) |
 | Fonts (2 faces, subsetted WOFF2) | ≤ 90 KB |
 | Audio sprite (tier 2) | ≤ 180 KB |
 | Ambience (tier 3, lazy, off by default) | ≤ 120 KB |

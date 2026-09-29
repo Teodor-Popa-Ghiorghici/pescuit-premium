@@ -49,11 +49,20 @@
 /* --------------------------------------------------------------- tokens (§2) */
 :root {
   --ink: #17120e;
-  --ink-soft: #3b322a;
+  --ink-soft: #2e2721;
   --hartie: #efe2c8;
   --hartie-2: #e3d3b4;
   --apa: #0e2b38;
   --apa-2: #14404f;
+  /* §3.9/§5.4 - the light follows the tally: --apa steps one flat step darker when the count of sets
+   * still possible falls to 12, 6 and 1. Flat steps, no gradients. The three steps (evening, night,
+   * the last set) are applied by [data-light] on the root, below. */
+  --apa-l1: #0b2430;
+  --apa-l2: #081c26;
+  --apa-l3: #05141c;
+  --apa-2-l1: #103544;
+  --apa-2-l2: #0c2a37;
+  --apa-2-l3: #08202a;
   --lemn: #6b4a2f;
   --lemn-inchis: #40291a;
   --ocru: #d99a2b;
@@ -63,9 +72,9 @@
   --var: #f7f1e3;
 
   /* text on water */
-  --pe-apa: #9db3bd;
-  --pe-apa-slab: #7f949f;
-  --pe-hartie-slab: #5c5245;
+  --pe-apa: #b8cbd3;
+  --pe-apa-slab: #93a8b3;
+  --pe-hartie-slab: #54493c;
 
   --display: 'Vollkorn', Georgia, 'Times New Roman', serif;
   --text: 'Source Serif 4', Georgia, 'Times New Roman', serif;
@@ -103,9 +112,14 @@
   --ease-settle: cubic-bezier(0.34, 1.32, 0.64, 1);
   --ease-gouge: steps(3, end);
 
-  /* the grain of the water, used on every full-bleed surface */
-  --grain: repeating-linear-gradient(90deg, rgba(107, 74, 47, 0.14) 0 2px, transparent 2px 9px);
-  --grain-lemn: repeating-linear-gradient(90deg, rgba(64, 41, 26, 0.5) 0 3px, transparent 3px 10px);
+  /* §5.4 the three surfaces, as small static files made by scripts/bake-textures.mjs (deterministic
+   * seeds, 13 KB in all): a paper grain at 7-16 % ink, a wood grain that replaces the stripes (A21),
+   * a water background of carved waves. The contrast audit (scripts/contrast-audit.mjs) runs with them on. */
+  --tex-paper: url('/textures/paper.png');
+  --tex-wood: url('/textures/wood.svg');
+  --tex-water: url('/textures/water.svg');
+  --grain: var(--tex-water);
+  --grain-lemn: var(--tex-wood);
 }
 
 .notched {
@@ -121,3 +135,18 @@
   );
 }
 
+
+/* the world's light (§3.9): the tally's stage sets [data-light] on the root; --apa steps flat, and the
+ * transition is stepped, never a gradient. dusk is the base; evening at 12 sets or fewer, night at 6, the last set at 1. */
+:root[data-light='evening'] {
+  --apa: var(--apa-l1);
+  --apa-2: var(--apa-2-l1);
+}
+:root[data-light='night'] {
+  --apa: var(--apa-l2);
+  --apa-2: var(--apa-2-l2);
+}
+:root[data-light='last'] {
+  --apa: var(--apa-l3);
+  --apa-2: var(--apa-2-l3);
+}

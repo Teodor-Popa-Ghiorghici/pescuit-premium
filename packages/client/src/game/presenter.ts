@@ -20,10 +20,12 @@ import { getEngine } from '../audio/engine.js';
 import { playHaptics } from '../audio/haptics.js';
 import { prefersReducedMotion, stamp } from '../motion.js';
 import { choreograph, TIME, type Anchor, type Beat, type Choreography, type Flight, type Mask, type Op } from './choreography.js';
+import { announce } from './announce.js';
 import { metrics } from './metrics.js';
 import { getTableSpeed } from './presentationSettings.js';
 import { factsOf, publicViewOf, recordOf } from './record.js';
 import { Stage, hash01, type Box } from './stage.js';
+import { lightOf, stageChanged, worldStage } from './world.js';
 
 export interface Message {
   view: RedactedView;
@@ -68,6 +70,9 @@ export class Presenter {
   private windowUI: { node: HTMLElement; box: DOMRect; at: number; frame: HTMLElement | null } | null = null;
   private nudge: ReturnType<typeof setTimeout> | undefined;
   private nudgeFor: string | null = null;
+  /** the count the light has been set for (the world's stage follows what the table has SHOWN) */
+  private shownTally: number | null = null;
+  private snapshotQueued = false;
 
   /* ------------------------------------------------------------- state */
 
@@ -96,8 +101,29 @@ export class Presenter {
     this.presented = null;
     this.poolStart = 0;
     this.localClose = null;
+    this.shownTally = null;
+    if (typeof document !== 'undefined') {
+      delete document.documentElement.dataset.light;
+      delete document.documentElement.dataset.stage;
+    }
     this.listeners.forEach((l) => l());
     getEngine().setAnswerWindow(null);
+  }
+
+  /** §3.9 - the light follows the tally: --apa steps one flat step darker at 12, 6 and 1 sets still possible.
+   *  It is set when the notch that took the count there has been knocked out (a step's `notch` op), or at once
+   *  when nothing is being knocked (a rejoin, the first look, a step without a lay). */
+  private setStage(possible: number | null, ended: boolean): void {
+    const before = this.shownTally;
+    this.shownTally = possible;
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    const stage = worldStage(possible, ended);
+    const light = lightOf(stage);
+    if (root.dataset.light !== light) root.dataset.light = light;
+    if (root.dataset.stage !== stage) root.dataset.stage = stage;
+    const changed = stageChanged(before, possible, ended);
+    if (changed === 'evening' || changed === 'night' || changed === 'last') announce({ key: `a11y.stage.${changed}` });
   }
 
   /** the answering device plays `clock.close` at its press (§3.2); the presenter must not play it again */
@@ -160,7 +186,15 @@ export class Presenter {
   afterRender(): void {
     for (const m of this.masks.values()) this.stage.mask(m.target, m.ref, true);
     for (const c of this.cardMasks) this.stage.maskCard(c, true);
-    this.snapshotWindow();
+    // the plank's picture for the uniform close is taken after the frame's layout, never inside the commit: measuring
+    // right after React has touched the DOM forces a synchronous layout on every render (measured: 19 ms at 4x CPU)
+    if (!this.snapshotQueued && typeof requestAnimationFrame === 'function') {
+      this.snapshotQueued = true;
+      requestAnimationFrame(() => {
+        this.snapshotQueued = false;
+        this.snapshotWindow();
+      });
+    }
   }
 
   /** the plank and frame as they last looked: what the uniform 220 ms close draws when they are gone */
@@ -252,6 +286,7 @@ export class Presenter {
       // a rejoin, or the first look at a table already in progress: never replay choreography
       this.finalizeAll();
       this.setPresented(view.currentPlayerId);
+      this.setStage(view.sets.possible, view.status === 'ENDED');
       this.tableFreeAt = 0;
       return;
     }
@@ -275,6 +310,8 @@ export class Presenter {
     }
     const ch = choreograph(record, facts, { speed: getTableSpeed() * (fast ? 1.5 : 1), short: fast, flush, reduced });
     if (flush) this.finalizeAll();
+    // the light: after the knock if this step knocks a notch out of the rim, otherwise now
+    if (!ch.beats.some((b) => b.ops.some((o) => o.op === 'notch')) || flush) this.setStage(view.sets.possible, view.status === 'ENDED');
     metrics.step(ch.beats.map((b) => b.kind), ch.tableMs, queued, now);
     this.play(ch, prev, view, now);
   }
@@ -521,6 +558,9 @@ export class Presenter {
       case 'podium':
         metrics.podium(performance.now());
         break;
+      case 'notch':
+        this.setStage(op.to, false);
+        break;
       default:
         break;
     }
@@ -563,6 +603,12 @@ export class Presenter {
         break;
       case 'notch':
         this.releaseMasksOf('tally');
+        this.setStage(op.to, false);
+        s.notchDelta(op.from - op.to);
+        break;
+      case 'drain':
+        s.drain();
+        announce({ key: 'a11y.poolDry' });
         break;
       case 'press':
         this.releaseMasksOf('set', op.setId);
@@ -577,9 +623,12 @@ export class Presenter {
       case 'crack':
         this.releaseMasksOf('crack', op.setId);
         break;
-      case 'gate':
+      case 'gate': {
         s.wobble(document.querySelector('[data-gate]'));
+        const ep = this.last?.endPressure;
+        announce(op.open ? { key: 'a11y.gateOpens' } : { key: 'a11y.gateShuts', params: { count: ep ? Math.max(0, ep.limit - ep.misses) : 0 } });
         break;
+      }
       case 'carve':
         s.carve();
         break;

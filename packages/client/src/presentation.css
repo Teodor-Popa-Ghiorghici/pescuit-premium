@@ -194,6 +194,16 @@
   display: none;
 }
 
+/* the last set's peg is inked when its beat lands, not when the view arrives */
+[data-masked~='nolast'] .tally__notch.is-last {
+  width: 5px;
+  height: 11px;
+  margin-top: 0;
+  background-color: var(--lemn);
+  background-image: var(--tex-wood);
+  border-color: var(--ink);
+}
+
 /* the notches just knocked from the rim stay lit until the knock */
 [data-masked~='tally'] .tally__notch[data-keep] {
   background-color: var(--lemn);
@@ -246,6 +256,34 @@
   min-width: 0;
   flex-wrap: nowrap;
   overflow: hidden;
+}
+
+.laid__more {
+  flex: none;
+  align-self: center;
+  font-size: 12px;
+  color: var(--pe-hartie-slab);
+}
+
+/* the phone's dock: a compact row of plates beside your name, the newest five (the drawer has them all) */
+.ph .laid--me {
+  flex: 0 1 auto;
+  min-height: 18px;
+  max-width: 96px;
+  gap: 2px;
+}
+.ph .laid--me .setplate {
+  width: 14px;
+  height: 18px;
+  border-width: 1.5px;
+}
+.ph .laid--me .setplate svg {
+  width: 9px;
+  height: 9px;
+}
+.ph .laid--me .setplate__back {
+  width: 6px;
+  height: 6px;
 }
 
 .laid--dk {
@@ -419,5 +457,35 @@
   .dock__head,
   .dk-me__post {
     transition: none;
+  }
+}
+
+
+/* Beat 0 (§4.1, §4.4): the press answers on the frame after the finger lands, with no JavaScript in the way. :active
+ * is applied by the browser on pointerdown - before React hears of the click - so the lift, the pressed row and the
+ * pressed plank button show at once, even while the table is busy (input -> visual <= 50 ms p95). */
+.hgroup.is-askable:active:not(.is-selected) {
+  transform: translateY(-12px);
+}
+.chip.is-askable:active,
+.post-d.is-askable:active {
+  transform: translate(1px, 2px);
+}
+.sheet__who:not(:disabled):active,
+.tchip:not(:disabled):active {
+  transform: translate(1px, 2px);
+  filter: brightness(0.92);
+}
+.plank__btn:not(:disabled):active {
+  transform: translate(2px, 3px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hgroup.is-askable:active:not(.is-selected),
+  .chip.is-askable:active,
+  .post-d.is-askable:active,
+  .sheet__who:not(:disabled):active,
+  .tchip:not(:disabled):active,
+  .plank__btn:not(:disabled):active {
+    transform: none;
   }
 }

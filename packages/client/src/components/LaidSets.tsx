@@ -24,11 +24,20 @@ export function SetPlate({ set }: { set: RedactedLaidSet }) {
 }
 
 /** the laid sets under a post (desktop) or beside your own name */
-export function LaidRow({ view, owner, className = '' }: { view: RedactedView; owner: string; className?: string }) {
+export function LaidRow({ view, owner, className = '', max }: { view: RedactedView; owner: string; className?: string; max?: number }) {
+  const { t } = useT();
   const sets = view.laidSets.filter((s) => s.ownerId === owner);
+  // on a phone the row is compact: the newest sets as plates, the rest counted ("+N"); the full list is in the log drawer
+  const shown = max !== undefined && sets.length > max ? sets.slice(sets.length - (max - 1)) : sets;
+  const more = sets.length - shown.length;
   return (
-    <div className={`laid ${className}`} data-laid-owner={owner}>
-      {sets.map((s) => (
+    <div className={`laid ${className}`} data-laid-owner={owner} role="group" aria-label={t('game.laidSets', { count: sets.length })}>
+      {more > 0 && (
+        <span className="laid__more num" aria-hidden="true">
+          +{more}
+        </span>
+      )}
+      {shown.map((s) => (
         <SetPlate key={s.id} set={s} />
       ))}
     </div>

@@ -42,7 +42,9 @@ export type Anchor =
   | { k: 'chip' }
   | { k: 'set'; owner: string; id?: string }
   | { k: 'tally' }
-  | { k: 'gate' };
+  | { k: 'gate' }
+  /** a point `t` of the way from one seat to another (the Tortoise's cards lift toward the asker and drop back) */
+  | { k: 'between'; from: string; to: string; t: number };
 
 export type VfxKind =
   | 'inkBurst' | 'woodChips' | 'waterRing' | 'dustPuff' | 'gateNotch' | 'speedGrooves' | 'shellClamp'
@@ -81,7 +83,7 @@ export interface Flight {
   instant?: boolean;
 }
 
-export type MaskTarget = 'totem' | 'plank' | 'set' | 'crack' | 'tally' | 'podium';
+export type MaskTarget = 'totem' | 'plank' | 'set' | 'crack' | 'tally' | 'lastnotch' | 'podium';
 export interface Mask {
   target: MaskTarget;
   ref?: string;
@@ -101,6 +103,8 @@ export type Op =
   | { op: 'reveal'; at: number; owner: string; rank: string }
   | { op: 'spent'; at: number; owner: string }
   | { op: 'notch'; at: number; from: number; to: number }
+  /** the pool's last card has gone: the basin drains to a dry floor */
+  | { op: 'drain'; at: number }
   | { op: 'press'; at: number; owner: string; setId?: string }
   | { op: 'brand'; at: number; anchor: Anchor }
   | { op: 'slot'; at: number; owner: string }
@@ -218,7 +222,7 @@ function cueBeatKinds(id: string): BeatKind[] {
   if (id.startsWith('table.lay')) return ['lay'];
   if (id === 'mus.lastset') return ['lastSet', 'lay'];
   if (id === 'mus.start') return ['start'];
-  if (id.startsWith('mus.end')) return ['end'];
+  if (id.startsWith('mus.end') || id === 'table.tally') return ['end'];
   if (id === 'amb.gate') return ['gate'];
   if (id === 'power.reveal') return ['reveal'];
   if (id.startsWith('power.granted')) return ['grant', 'lay'];
@@ -332,6 +336,8 @@ export function choreograph(record: PublicRecord, facts: SeatFacts, opts: Choreo
         b.kind = 'poolEmpty';
         b.cls = 'heavy';
         b.vfx.push({ kind: 'waterRing', at: TIME.draw, anchor: { k: 'pool' } });
+        // the last card leaves the pool: the basin drains to a dry floor, in step with `table.poolEmpty`'s gurgle
+        b.ops.push({ op: 'drain', at: TIME.draw });
         b.juice = { at: TIME.draw, hitStopMs: TIME.hitStop, trauma: 0.5, impact: true };
       }
     }
@@ -406,6 +412,8 @@ export function choreograph(record: PublicRecord, facts: SeatFacts, opts: Choreo
         b.ops.push({ op: 'notch', at: TIME.notch, from: notchFrom, to: notchTo });
         b.masks.push({ target: 'tally', until: TIME.notch });
         b.vfx.push({ kind: 'woodChips', at: TIME.notch, anchor: { k: 'tally' } });
+        // a lay that also strands another set's cards takes two notches, and the tally says so (§3.9)
+        if (notchFrom - notchTo >= 2) b.vfx.push({ kind: 'woodChips', at: TIME.notch + 90, anchor: { k: 'tally' } });
       }
     } else if (e.type === 'POWER_GRANTED') {
       const layed = has('SET_LAID');
@@ -421,6 +429,8 @@ export function choreograph(record: PublicRecord, facts: SeatFacts, opts: Choreo
     beat('lastSet', {
       lane: 'table', cls: 'heavy', at: has('SET_LAID') ? BEAT.lastSet : 0, dur: 320,
       ops: [{ op: 'stamp', at: has('SET_LAID') ? BEAT.lastSet : 0 }],
+      // the last notch is inked when the beat lands, not when the view arrives
+      masks: [{ target: 'lastnotch', until: has('SET_LAID') ? BEAT.lastSet : 0 }],
       vfx: [{ kind: 'inkBurst', at: has('SET_LAID') ? BEAT.lastSet : 0, anchor: { k: 'tally' } }],
       juice: { at: has('SET_LAID') ? BEAT.lastSet : 0, hitStopMs: TIME.hitStop, trauma: 0.45, impact: true },
     });
@@ -467,14 +477,25 @@ export function choreograph(record: PublicRecord, facts: SeatFacts, opts: Choreo
         });
         break;
       }
-      case 'TORTOISE_BLOCK':
+      case 'TORTOISE_BLOCK': {
+        // "the cards drop back" (Appendix A): the public record does not say how many cards were about to move, so ONE
+        // back lifts from the shell toward the asker, comes to a stop, and drops back - the same for any count
+        const asker = before?.currentPlayerId ?? null;
+        const drop: Flight[] =
+          asker && asker !== e.playerId
+            ? [
+                { key: `lift:${seq}`, what: 'back', from: { k: 'seat', id: e.playerId }, to: { k: 'between', from: e.playerId, to: asker, t: 0.45 }, start: E, land: E + 170, end: 'vanish' },
+                { key: `drop:${seq}`, what: 'back', from: { k: 'between', from: e.playerId, to: asker, t: 0.45 }, to: { k: 'seat', id: e.playerId }, start: E + 210, land: E + 400, end: 'vanish' },
+              ]
+            : [];
         beat('block', {
-          lane: 'table', cls: 'medium', at: 0, dur: E + 400,
+          lane: 'table', cls: 'medium', at: 0, dur: E + 460, flights: drop,
           vfx: [{ kind: 'shellClamp', at: E + 60, anchor: { k: 'seat', id: e.playerId } }],
           ops: [{ op: 'wobble', at: E + 60, anchor: { k: 'seat', id: e.playerId } }, { op: 'chipRelease', at: E + 300 }],
           juice: { at: E + 60, trauma: 0.4 },
         });
         break;
+      }
       case 'JELLYFISH_STUN':
         beat('stun', {
           lane: 'table', cls: 'medium', at: 0, dur: E + 400,
@@ -593,7 +614,7 @@ export function choreograph(record: PublicRecord, facts: SeatFacts, opts: Choreo
   place(haptics, (h) => hapticBeatKinds(h.signal), (b, h) => b.haptics.push(h));
 
   // the podium: the ceremony's cue waits for it
-  for (const b of beats) if (b.kind === 'end' && podiumAt !== null) b.cues = b.cues.map((c) => (c.id.startsWith('mus.end') ? { ...c, at: podiumAt! } : c));
+  for (const b of beats) if (b.kind === 'end' && podiumAt !== null) b.cues = b.cues.map((c) => (c.id.startsWith('mus.end') ? { ...c, at: podiumAt! } : c.id === 'table.tally' ? { ...c, at: podiumAt! + c.at } : c));
 
   return finish({ seq, beats, tableMs: 0, podiumAt, cues: [], haptics: [] }, opts);
 }

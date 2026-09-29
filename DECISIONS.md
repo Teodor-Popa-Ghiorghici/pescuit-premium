@@ -476,7 +476,7 @@ recording:
 ## The one-screen table, the hand and the dev tables (FEEL_VISUAL_SOUND_PLAN §5.2-§5.3, §4.4, §7.1-§7.4)
 
 - **Two layouts, one store.** `useDesktop()` (>= 900 px) picks the pond table (five 150 px posts on an arc, 280 px log board, drawer tab below 1100 px) or the one-screen phone table (40 px bar, 96 px strip of 60x76 chips, flexible pond, dock). Both carry `data-player-id`, `data-pool`, `data-basin`, `data-hand-card-id`, `data-totem`, `data-tally`, `data-gate` for the choreography to fly between.
-- **Tally copy says "at most"** (`game.setsAtMost*`, per "Deciding the game"), not the plan's "încă N seturi" / "ultimul set": the count is an upper bound. The stall gate reads "N încercări până se închide balta" and appears once `misses >= N`.
+- **Tally copy** was "at most" here; M4 changed the label to the plan's "încă N seturi" / "ultimul set" and kept "at most" on the title and the screen-reader label (the count is an upper bound). The stall gate reads "N încercări până se închide balta" and appears once `misses >= N`.
 - **Answer window.** Two equal buttons, one lock/stamp and one local `clock.close` cue whether the answer is honest or a Squid lie; the lie button exists only for a holder of an unused Squid (A23). Structural windows show the neutral "fereastră deschisă" to everyone who cannot act. No `<select>` remains: Jellyfish taps a target, Stickleback a target then a seal, Whale an adjacent pair, all in the bottom 45 %.
 - **Optimistic declare** locks the plank; "Prea târziu - X a fost mai rapid" is derived from the window closing without our `POWER_USED` (naming the other `POWER_USED`'s player when there is one).
 - **Bot table and fixtures** (`src/dev/`, lazy chunk): `?table=bots&n=&seed=&seat=&speed=&bots=memory|random&until=myturn|answer|dry|end|turn:N|sets:N&auto=1&mode=&panel=0`, `?fixture=<id>` (or `?fixture=` for the menu). The driver plays the room's part (seq stamps, window deadline and the server-only skip, Whale entropy, bound actions). The memory bot lives in `packages/engine/src/cli/membot.ts` (exported with the engine's bots).
@@ -499,4 +499,143 @@ recording:
 - **Two fixes found on the way.** `hapticsFor` read `SHARK_JUMP.loserId`, which the engine never sends (it is `fromId`), and `SET_DESTROYED.ownerId`, which it never sends either (the adapter now reads the owner from the view that came before the event: the owner of a set is public).
 - **Reconnect and away.** A rejoin re-syncs without choreography; lines that arrive while the tab is hidden, or that a snapshot carries, are logged under "cât ai lipsit" / "while you were away" (`AwayMark` in the store).
 - **Metrics (`?metrics=1`)**: answer time (median, p90), eligible and missed windows, tally-0 to podium, answer to rest, an overlay and `window.__metrics`. **`tools/perf-check.cjs`** (`npm run perf:check`) builds, serves the production bundle, throttles the CPU (4x by default) and plays a human at a six-player bot table for 90 s, then a whale on a six-player fixture three times: input to visual p95, answer to rest p95 (from the answer leaving the view to the last landing), fps in a whale. The bot table's local room now answers a human's action 24 ms later, like a server would, so a tap's first paint is the plank locking and the reply's cost is counted as answer to rest.
-- **Deliberately not done here:** Tortoise's "cards drop back" (the public record does not say how many cards were about to move), the phone laid-set plates under the chips, the podium's "pips count up", texture and ink (M4), the Codex (M4).
+- **Deliberately not done here (all done in M4, see "The world arc, the ceremony and the surfaces"):** Tortoise's "cards drop back", the phone laid-set plates, the podium's "pips count up", texture and ink, the Codex.
+
+## The world arc, the ceremony and the surfaces (FEEL_VISUAL_SOUND_PLAN §3.9, §5.4, §5.7-§5.9; M4)
+
+**Textures and ink (§5.4).**
+- `packages/client/scripts/bake-textures.mjs` makes the three surfaces as small static files with fixed seeds:
+  `public/textures/paper.png` (a 128 px indexed PNG, 2 KB, ink specks and fibres at 7 / 12 / 16 %), `wood.svg`
+  (9 KB: 45 wavering grain lines that wrap, two knots) and `water.svg` (2 KB: chisel-cut crescents on a 96 x 48 tile).
+  13 KB against the 30 KB budget. `--check` (a test) fails if the files differ from a fresh bake. The stripes of A21
+  (`--grain`, `--grain-lemn`) are gone; `--grain` now aliases the water and `--grain-lemn` the wood.
+- `scripts/bake-ink.mjs` bakes the vertex jitter into `src/art/baked.generated.ts` (faces) and
+  `baked-back.generated.ts` (the back). It reads the authored vector by bundling `carvings.tsx` and `cardArt.tsx` with
+  esbuild and rendering them with react-dom/server, then moves every polygon, path, rect and circle vertex 1-2 units
+  along its normal (noise keyed on the vertex position, so shared corners stay joined), subdivides straight edges longer
+  than 44 units, and pools ink where a stroke ends. **One seed per asset**: `carving:<rank>` and `frame:<rank>` for a
+  face, the single string `back` for the back - never a rank - so every hidden card is one constant. Whole units, single
+  quotes: 26 KB raw for eighteen faces, 2.8 KB for the back. Frames are set in 10 units (`FRAME_INSET`) because the plate
+  is stroked 16 wide and its viewBox clips the outer half, which would have kept the outer edge straight. The
+  feTurbulence + feDisplacementMap fallback was not needed and is not shipped.
+- **Contrast is audited with the grain on** (`scripts/contrast-audit.mjs`, run by the test suite): each text/surface pair
+  is computed at the surface's worst pixel (paper at 16 % ink, wood at its darkest grain line, water at its lightest
+  wave), and on every step of the light. It found four failures and they were fixed in `tokens.css`, not waived:
+  `--pe-apa` #9db3bd -> #b8cbd3 (5.6 -> 7.05:1), `--pe-apa-slab` #7f949f -> #93a8b3, `--pe-hartie-slab` #5c5245 ->
+  #54493c (4.3 -> 4.9:1) and `--ink-soft` #3b322a -> #2e2721 (older log lines on the recessed board were 6.1:1). Body text
+  is >= 7:1 everywhere; the two secondary pairs sit at 4.8-4.9:1 (>= 4.5, large or supplementary text only).
+- **Light follows the tally**: `[data-light]` on the root steps `--apa` / `--apa-2` to `--apa-l1..3` at 12, 6 and 1 sets
+  still possible (`game/world.ts`, pure and tested). The presenter sets it when the notch that took the count there is
+  knocked out (or at once for a rejoin / a step without a lay). Flat steps; no gradient anywhere.
+
+**The world arc (§3.9).**
+- Stages (`worldStage`): dusk 18-13, evening 12-7, night 6-2, the last set 1, finale 0. `data-stage` is on the tally and
+  the root; the night's pegs glow with a hard ochre ring (no blur), the last peg is inked and ringed, its label is bold
+  ochre. Each stage change is announced to screen readers (`a11y.stage.*`).
+- **The ambience was confirmed, not changed**: `Ambience.update` drains the water to wind when `poolCount` is 0 at any
+  stage; `table.poolEmpty` (the gurgle) fires on `DREW_FROM_POOL.poolEmpty`; `amb.lastact` (the dobă pulse) runs from a
+  count of 3 at 3.2 s and quickens to 1.6 s at 1; `mus.lastset` fires when the count reaches 1. All four are functions of
+  the public pool and tally only.
+- **The tally label follows §4.5 verbatim** - "încă N seturi" / "ultimul set" (EN "N sets to go" / "the last set") - as
+  the loose end asked, but the count is still an **upper bound**, so the honest wording stays where it can be read: the
+  tally's `title` and screen-reader label say "cel mult N" / "at most N", the Codex's last line says it, and RULES §7
+  already does. (This reverses the M2/M3 "at most" label; it does not change the number.)
+- **Notches**: the rim is a carved bar with one peg per set; a lay knocks its peg out (chips fly, the stump stays); a lay
+  that also strands another set's cards takes two, two chip bursts fly and a "-2" stamps beside the tally for 1.7 s.
+- **The last card of the pool** drains the basin (`drain` op on the `poolEmpty` beat: the water stands, goes in six steps
+  and the dry floor shows; instant under reduced motion; announced).
+- **The gate**: shuts a notch per miss (already), and now swings open when a capture or a lay resets it (`is-thrown`,
+  520 ms), with the `amb.gate` creak the cues already carried.
+- **The ambience opt-out** is counted for the playtest: `?metrics=1` records how many times this device switched the pond
+  off (`ambience.turnedOff`, `offNow`) and whether it is muted. It is per device; the playtest pools 15 of them by hand
+  (5 or more -> ships off). Nothing is sent anywhere.
+
+**Finale and podium (§5.7).**
+- After the last lay's stamp, one held beat and the gate doors (the choreography already had them) the podium unmasks.
+  `Podium.tsx` (a lazy chunk, prefetched when the table mounts): the winners' posts rise (stepped, staggered); a tie is
+  equal totems on equal posts (and the title says "Egalitate"); each post has its own pips that count up one step at a
+  time (CSS, once `[data-podium]` loses its mask); `table.tally` is emitted by `cuesFor` for every viewer, one per pip,
+  a semitone-pair higher each (the scores are public, so Law 1 holds; the leak tests compare it) and placed on the same
+  steps by the choreography (`podiumAt + 900 + 110 k` ms, at most 18 pips). `mus.end.win / tie / lose` are unchanged.
+- Each `GAME_ENDED` reason has its own line on the podium (`game.endDecided / endStreak / endExhausted`), its own log
+  line (`log.gameEnded*`, `exhausted` was missing) and its own ticker line.
+- **Start**: the gate opens (`gateDoors`), the posts carve in (stepped, with the seat signatures the audio already plays),
+  the tally's pegs are carved on the rim one after another. The waiting room's posts carve in as their players join.
+  The lobby and waiting room stand in front of the pond at dusk (`art/dusk.tsx`, flat bands, a sinking sun, reeds).
+
+**The Codex (§5.8).** Rules panel, two tabs. Each of the nine powers: the carving (the real `Card`), the seal, the kind
+(reactive / active / special), a one-line rule in RO and EN, and a stave (a contour of the motif's notes) with a
+button that plays it in full (`power.used.<rank>`, `full: true`). Squid shows the rest - an empty stave with a whole
+rest - and its button answers with a flash and no sound. Lazy chunk with its own stylesheet. The panel is now a real
+dialog (focus in and back, Tab trapped, Escape closes).
+
+**Loose ends.**
+- *Tortoise "cards drop back"*: built with what the record gives. `TORTOISE_BLOCK` does not say how many cards were
+  about to move, so **one** back lifts from the shell toward the asker (`before.currentPlayerId`, public) and drops back,
+  for any count; the leak tests compare it.
+- *Phone laid sets*: your own laid sets show as compact plates in the dock (the newest five, then "+N"; the drawer lists
+  all); an opponent's are the score on the chip and the drawer. Lay flights to an opponent land on the chip, to you on the plate.
+- *Ticker*: the ticker shows short lines (`log.*.s`, all under 48 characters, tested); the log keeps the full ones. A dry
+  go fish reads "- Pescuiește!" and nothing more (it used to say the asker "draws from the pool").
+- *Copy audit* (`test/copy.test.ts`): RO and EN have the same keys and the same placeholders; every ticker line fits;
+  the tally's label and its honest title; a copy for each end reason; no static line says "you may lie with Squid".
+- *Icons*: the top bar's icons are cut, not drawn - angular, mitred, square-ended on the seals' 24 grid.
+
+**Accessibility (§5.9).**
+- No state is carried by colour alone (audited): stunned = the branded plate + the jellyfish seal; protected = the shell
+  + the rank's seal; offline = a dashed border + the hook; the current turn = the ochre border *and* the totem *and*
+  the words "Rândul lui X" / "Rândul tău"; selected = lift + rope tie + a "PUNE JOS" tab; spent = an X gouged in the
+  collar; destroyed = cracks; the last set = a taller inked peg + the words "ultimul set"; the gate = shut pegs + a count.
+- Screen readers: `Announcer` (two aria-live regions) says the ask that is put to you (assertive), every public log
+  line as it is written, the stage changes, the pool running dry and the gate; the top bar's turn line is its own live
+  region; the answer plank is an assertive dialog. None depends on sound.
+- Keyboard: every control is a button or has `tabIndex` and Enter/Space; hand groups are `group`s when you cannot act
+  and buttons when you can; dialogs trap Tab; the log drawer closes on Escape. **A clip-path cut the focus ring off
+  every `.btn`**: focused controls now drop their notch (`clip-path: none`) and the ring is ochre on water, ink on paper.
+  The layout check Tabs through a table and fails on any control without a >= 2 px ring.
+- Photosensitivity: the impact frame (a two-frame ink/paper swap on the art only) is at most one per second and never
+  on text (`Stage.impact`); shake is translation only, <= 6 px; the window frame pulses at 1 Hz; the podium's pips
+  step at 9 Hz on ~16 px areas and the drain overlay steps six times in 0.9 s at 22 % alpha - all under the 3-flash
+  limit and none of them a full-screen flash. Under `prefers-reduced-motion` the posts are simply there, the pips
+  already counted, the basin dry, the flights instant, and audio is unchanged.
+
+**Performance (§9.1).** See "Performance" below.
+
+## Performance (FEEL_VISUAL_SOUND_PLAN §9.1; M4 loose end d)
+
+`npm run perf:check --workspace=packages/client -- --seconds=200` (production bundle, phone 390 x 664, CPU throttled 4x,
+a six-player memory-bot table played by hand; the previous agent's report was p95 72-210 ms input to visual):
+
+| Gate | Target | Measured (final) | Before the fixes (same script) |
+|---|---|---|---|
+| input -> visual, p95 | <= 50 ms | **77 ms** (n = 26, median 34, one 296 ms outlier) | 153 / 115 / 250 ms (three runs, medians 31-50) |
+| answer -> rest, p95 | <= 900 ms | **884 ms** (median 825) | 865 / 961 / 916 ms |
+| fps in a whale, worst of 3 | >= 55 | **58** (58, 60, 60) | 60 / 59 / 59 |
+
+**Input to visual is still over target (77 ms p95 at 4x CPU on this machine). It is not met and is not claimed.** What
+was found and fixed:
+- `presenter.afterRender` -> `snapshotWindow` called `getBoundingClientRect` inside React's layout-effect phase on every
+  render of the table: a forced synchronous layout, **19 ms of a 4x-throttled tap**. It now runs in a `requestAnimationFrame`,
+  after the frame's own layout.
+- Every press's sound was synthesised inside the input handler (6-10 nodes; 3-6 ms at 4x). `engine.play(..., { afterPaint })`
+  queues the cue and ticks the scheduler after the next paint: the sound costs one frame (input -> audio stays well inside
+  80 ms plus output latency), the frame that shows the press is not delayed. Used for `ui.select`, `ui.target`, `ui.press`,
+  `ui.error` and the answering device's `clock.close`.
+- `:active` styles (`presentation.css`) put the lift, the pressed row and the pressed plank button on the frame after
+  `pointerdown`, before React hears the click; the ask sheet no longer rebuilds the pond (`display: none` instead of unmount).
+- Measured on fixtures at 4x (Event Timing): the tap on a group 56-112 ms -> 40-56 ms; Space on the answer plank 48-56 -> 32 ms.
+
+What is left: the p95 is set by the *keypress that answers* (the slowest four are all `key`): it lands while the previous
+step's flights, the plank rise and the ambience scheduler are running, and in the bot table the engine and the bots run on the
+same thread (a real table has the server do that, not the phone). 14.5 s of the 60 s profiled at 4x was `(program)` - the
+browser's own style, layout and paint work - against ~1.2 s of React; the remaining cost is rendering, not scripting
+(CSS containment was tried and made no difference, so it was not kept). The plan's real target (a mid-range Android) is
+not measured here; a throttled desktop Chromium is a proxy. Next candidates: fewer nodes per hand card (the baked faces are
+paths, not the old polygons), and `content-visibility` on the log drawer.
+
+**Budgets (gzip, production build).** The lobby loads **107.0 KB** of JS (+ 10.1 KB CSS); the table (15.0 KB), the audio
+render catalog (2.9 KB) and the podium (1.2 KB) are lazy, so **a played game loads 126.0 KB - about 1 KB over the plan's
+125 KB** (65 KB + 60). The Rules panel and the Codex are 2.7 KB more, on demand; the dev tools and labs (18.3 KB) never reach a
+player. Before this pass main was 110.9 KB in one file. Textures 13 KB of 30; baked ink 8.7 KB inside the table chunk; audio
+downloads 0 KB. The 1 KB over is the i18n dictionary (RO + EN, now with the Codex text and the ticker's short lines); moving
+the Codex strings into the Codex chunk would recover it.
