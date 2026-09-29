@@ -10,6 +10,7 @@ import type {
 } from '@pescuit/shared';
 import { DEFAULT_LOCALE } from '@pescuit/shared';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { getEngine } from '../audio/engine.js';
 import { createClient, type ConnectionStatus, type WsClient } from '../net/client.js';
 import { loadSession, roomCodeFromUrl, saveSession, setRoomInUrl } from '../net/session.js';
 
@@ -29,6 +30,23 @@ interface GameState {
   joining: boolean;
 }
 
+/**
+ * A table that runs in this tab instead of on the server (the bot table and the scenario fixtures,
+ * §7.1-§7.2). The provider feeds whatever `start`'s `deliver` receives through the very same
+ * message path a WebSocket would, so the real store, views and events drive the real UI. Loaded
+ * lazily: the normal bundle never contains a source.
+ */
+export interface LocalSource {
+  roomCode: string;
+  playerId: string;
+  players: RoomPlayerSummary[];
+  config: RoomConfig;
+  /** wire it up; returns the cleanup. `deliver` takes server messages. */
+  start(deliver: (msg: ServerMessage) => void): () => void;
+  /** whatever the UI would have sent to the server */
+  send(msg: ClientMessage): void;
+}
+
 interface GameApi extends GameState {
   setLocale: (l: Locale) => void;
   createRoom: (name: string, config: RoomConfig) => void;
@@ -37,6 +55,10 @@ interface GameApi extends GameState {
   sendAction: (action: ClientAction) => void;
   dismissError: () => void;
   leaveRoom: () => void;
+  /** true while the table runs from a LocalSource (bot table / fixtures) */
+  local: boolean;
+  /** dev only: pretend the socket dropped or came back, to see §4.6 without pulling a cable */
+  devSetStatus: (s: ConnectionStatus) => void;
 }
 
 const GameContext = createContext<GameApi | null>(null);
@@ -51,15 +73,15 @@ function loadLocale(): Locale {
   return DEFAULT_LOCALE;
 }
 
-export function GameProvider({ children }: { children: React.ReactNode }) {
+export function GameProvider({ children, source }: { children: React.ReactNode; source?: LocalSource }) {
   const [state, setState] = useState<GameState>({
-    status: 'connecting',
+    status: source ? 'open' : 'connecting',
     locale: loadLocale(),
-    roomCode: null,
-    playerId: null,
-    players: [],
-    started: false,
-    config: { powerVisibility: 'ascuns' },
+    roomCode: source?.roomCode ?? null,
+    playerId: source?.playerId ?? null,
+    players: source?.players ?? [],
+    started: !!source,
+    config: source?.config ?? { powerVisibility: 'ascuns' },
     view: null,
     events: [],
     error: null,
@@ -72,7 +94,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   /** the highest event seq already applied: a resent or replayed event is never applied twice */
   const lastSeq = useRef(0);
 
+  const sourceRef = useRef<LocalSource | undefined>(source);
+
   useEffect(() => {
+    if (sourceRef.current) {
+      const stop = sourceRef.current.start(onMessage);
+      return stop;
+    }
     // Rejoin on EVERY socket open, not just at mount (A15): a dropped socket that comes back
     // must re-attach to its seat, or the player is frozen out of the game.
     const client = createClient(onMessage, onStatus, (sendNow) => {
@@ -110,6 +138,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         // the missed lines are not replayed as choreography
         const fresh = msg.events.filter((e) => e.seq > lastSeq.current);
         for (const e of fresh) lastSeq.current = Math.max(lastSeq.current, e.seq);
+        // the window clock reads the server's time through the engine's ServerClock (§3.10)
+        if (msg.view.serverNow > 0) getEngine().server.sample(msg.view.serverNow, Date.now());
         setState((s) => ({
           ...s,
           view: msg.view,
@@ -132,7 +162,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const send = useCallback((msg: ClientMessage) => clientRef.current?.send(msg), []);
+  const send = useCallback((msg: ClientMessage) => (sourceRef.current ? sourceRef.current.send(msg) : clientRef.current?.send(msg)), []);
 
   const api: GameApi = useMemo(
     () => ({
@@ -157,6 +187,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       startGame: () => send({ type: 'start_game' }),
       sendAction: (action) => send({ type: 'action', action }),
       dismissError: () => setState((s) => ({ ...s, error: null })),
+      local: !!source,
+      devSetStatus: (status) => setState((s) => ({ ...s, status })),
       leaveRoom: () => {
         activeRoom.current = null;
         lastSeq.current = 0;
@@ -164,7 +196,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         setState((s) => ({ ...s, roomCode: null, playerId: null, view: null, started: false, players: [] }));
       },
     }),
-    [state, send],
+    [state, send, source],
   );
 
   return <GameContext.Provider value={api}>{children}</GameContext.Provider>;

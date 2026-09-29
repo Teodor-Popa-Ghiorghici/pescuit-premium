@@ -1,37 +1,116 @@
 import type { Rank } from '@pescuit/engine';
+import { EGGS } from '@pescuit/engine';
 import type { ClientAction } from '@pescuit/shared';
-import { LOCALES } from '@pescuit/shared';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { getEngine } from '../audio/engine.js';
+import { Mark, markForSeat, PowerPips } from '../art/marks.js';
+import { RoePips, Totem } from '../art/table.js';
 import { useEventBeats } from '../game/beats.js';
-import { PoolStack, RoePips, Totem } from '../art/table.js';
+import { logLines } from '../game/logLines.js';
+import { opponentsInOrder, seatFacts } from '../game/seatFacts.js';
+import type { HandGroup } from '../game/handModel.js';
+import { cardSizeFor, useDesktop, useMedia, useWindowSize, WIDE_QUERY } from '../hooks/useViewport.js';
 import { useT } from '../i18n/useT.js';
 import { DUR, EASE, prefersReducedMotion } from '../motion.js';
 import { play, setSoundEnabled, soundEnabled } from '../sound.js';
 import { useGame } from '../state/store.js';
-import { EventLog } from './EventLog.js';
+import { AskSheet } from './AskSheet.js';
 import { Hand } from './Hand.js';
-import { InterruptPrompt } from './InterruptPrompt.js';
-import { LaidSets } from './LaidSets.js';
-import { PlayerBadge } from './PlayerBadge.js';
+import { LogPanel } from './LogPanel.js';
+import { Pond } from './Pond.js';
 import { RulesPanel } from './RulesPanel.js';
+import { Chip, Post } from './Seats.js';
+import { HeadphonesPrompt, MenuSheet, SoundSettings } from './Sheets.js';
+import { TopBar } from './TopBar.js';
+import { Plank, WindowBanner, windowKeyOf, tooLateText } from './Windows.js';
+
+const CONNECTION_GRACE_MS = 1500;
+const REINK_MS = 460;
+
+/** §4.6: under 1.5 s disconnected show nothing; longer, drain to --ink-soft with a plaque; on rejoin a 460 ms re-ink. */
+function useConnectionFeel(status: string): 'ok' | 'drained' | 'reink' {
+  const [feel, setFeel] = useState<'ok' | 'drained' | 'reink'>('ok');
+  const feelRef = useRef(feel);
+  feelRef.current = feel;
+  useEffect(() => {
+    if (status === 'open') {
+      if (feelRef.current !== 'drained') return;
+      setFeel('reink');
+      getEngine().play('meta.reconnected');
+      const id = window.setTimeout(() => setFeel('ok'), REINK_MS);
+      return () => window.clearTimeout(id);
+    }
+    const id = window.setTimeout(() => setFeel('drained'), CONNECTION_GRACE_MS);
+    return () => window.clearTimeout(id);
+  }, [status]);
+  return feel;
+}
+
+function readStored(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeStored(key: string, value: string) {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    /* fine: it will just ask again */
+  }
+}
+
+/** The pond's arc: the outer posts stand lower (§5.2). */
+function liftFor(i: number, n: number): number {
+  if (n <= 1) return 0;
+  const t = (i - (n - 1) / 2) / ((n - 1) / 2);
+  return Math.round(30 * t * t * Math.min(1, (n - 1) / 4));
+}
 
 export function GameTable() {
-  const { t, locale } = useT();
-  const { view, playerId, setLocale, leaveRoom, status, sendAction, events } = useGame();
+  const { t, rank } = useT();
+  const { view, playerId, status, sendAction, events, error, dismissError, leaveRoom } = useGame();
+  const desktop = useDesktop();
+  const wide = useMedia(WIDE_QUERY);
+  const { h: winH } = useWindowSize();
+  const cardSize = cardSizeFor(desktop, winH);
+
   const [showRules, setShowRules] = useState(false);
-  const [sound, setSound] = useState(soundEnabled);
-  const [hoverTargetId, setHoverTargetId] = useState<string | null>(null);
-  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
-  const [askRank, setAskRank] = useState<Rank | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showSound, setShowSound] = useState(false);
+  const [drawer, setDrawer] = useState(false);
+  const [muted, setMuted] = useState(!soundEnabled());
+  const [headphones, setHeadphones] = useState(() => getEngine().headphones);
+  const [picked, setPicked] = useState<Rank | null>(null);
+  const [kbTarget, setKbTarget] = useState<string | null>(null);
+  const [dragTarget, setDragTarget] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [askedHeadphones, setAskedHeadphones] = useState(false);
 
   const totemRef = useRef<HTMLDivElement>(null);
   const totemRect = useRef<DOMRect | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  const groupsRef = useRef<HandGroup[]>([]);
+  const declared = useRef<{ key: string; seq: number } | null>(null);
 
-  // §6.3/§6.5 — each event that arrived gets its beat, in order, against the table.
+  const feel = useConnectionFeel(status);
+
+  // the settings sheet and the engine share one truth: follow it (headphones glyph, mute)
+  useEffect(() => {
+    const engine = getEngine();
+    const sync = () => {
+      setHeadphones(engine.headphones);
+      setMuted(engine.settings.muted);
+    };
+    sync();
+    return engine.subscribe(sync);
+  }, []);
+
+  // §6.3/§6.5 - each event that arrived gets its beat, in order, against the table.
   useEventBeats(events, tableRef);
 
-  // §6.4 — the totem travels to the post whose turn it is, and lands with a knock.
+  // §6.4 - the totem travels to the post whose turn it is, and lands with a knock.
   // A FLIP: the slot moves it instantly, then we animate it back from where it was.
   const currentPlayerId = view?.currentPlayerId;
   useLayoutEffect(() => {
@@ -54,7 +133,148 @@ export function GameTable() {
     play('knock');
   }, [currentPlayerId]);
 
-  if (!view) {
+  const isGameOver = view?.status === 'ENDED';
+  const isMyTurn = !!view && view.currentPlayerId === playerId;
+  const canAsk = !!view && !isGameOver && isMyTurn && view.pendingWindow === null;
+  const winKey = windowKeyOf(view);
+  const myWindow = !!view?.pendingWindow?.youAreEligible;
+
+  const targets = useMemo(() => (view && playerId ? opponentsInOrder(view, playerId).filter((p) => !p.stunned) : []), [view, playerId]);
+
+  // an ask that is no longer possible (the turn moved on, the last card of that rank left) closes itself
+  useEffect(() => {
+    if (!view) return;
+    if (picked && (!canAsk || !view.hand.some((c) => c.rank === picked))) {
+      setPicked(null);
+      setKbTarget(null);
+      setDragTarget(null);
+    }
+  }, [view, canAsk, picked]);
+
+  // a plank taking over the screen closes the log drawer
+  useEffect(() => {
+    if (myWindow) setDrawer(false);
+  }, [myWindow]);
+
+  // §4.4 - "Prea târziu": we declared, the window closed, and it was not our declaration that did it
+  useEffect(() => {
+    const d = declared.current;
+    if (!d || !view) return;
+    if (winKey === d.key) return;
+    declared.current = null;
+    const since = events.filter((e) => e.seq > d.seq);
+    if (since.some((e) => e.type === 'POWER_USED' && e.playerId === playerId)) return;
+    const other = since.find((e) => e.type === 'POWER_USED' && e.playerId !== playerId);
+    const name = other && 'playerId' in other ? (view.players.find((p) => p.id === other.playerId)?.name ?? null) : null;
+    setToast(tooLateText(t, name));
+  }, [winKey, events, view, playerId, t]);
+
+  // a server refusal reads on the pond too
+  useEffect(() => {
+    if (!error) return;
+    declared.current = null;
+    setToast(error);
+    dismissError();
+  }, [error, dismissError]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 4200);
+    return () => window.clearTimeout(id);
+  }, [toast]);
+
+  // §3.2 - "Still on headphones?", once per game, in headphones mode
+  const gameKey = view ? `pescuit:hp:${view.turnOrder.join('.')}` : null;
+  const showHpPrompt = !!gameKey && headphones && !askedHeadphones && readStored(gameKey) === null;
+  useEffect(() => {
+    setAskedHeadphones(false);
+  }, [gameKey]);
+
+  const pick = useCallback(
+    (r: Rank) => {
+      if (r === EGGS) return;
+      getEngine().play('ui.select');
+      setPicked((cur) => (cur === r ? null : r));
+      setKbTarget(null);
+    },
+    [],
+  );
+
+  const refuse = useCallback(() => getEngine().play('ui.error'), []);
+
+  const ask = useCallback(
+    (targetId: string, r: Rank) => {
+      if (!view || !playerId) return;
+      const seat = Math.max(0, view.turnOrder.indexOf(targetId));
+      getEngine().play('ui.target', { seat });
+      sendAction({ type: 'REQUEST', playerId, targetId, rank: r } as ClientAction);
+      setPicked(null);
+      setKbTarget(null);
+      setDragTarget(null);
+    },
+    [view, playerId, sendAction],
+  );
+
+  const lay = useCallback(
+    (set: { rank: Rank; cardIds: string[] }) => {
+      if (!playerId) return;
+      play('stamp');
+      sendAction({ type: 'LAY_SET', playerId, rank: set.rank, cardIds: set.cardIds } as ClientAction);
+    },
+    [playerId, sendAction],
+  );
+
+  // §4.4 keyboard: 1-9 pick a group, ←/→ cycle targets, Enter asks. (Space, D and Esc belong to the plank.)
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || showRules || showMenu || showSound) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return;
+      if (!canAsk) return;
+      if (/^[1-9]$/.test(e.key)) {
+        const g = groupsRef.current[Number(e.key) - 1];
+        if (!g) return;
+        if (g.rank === EGGS) refuse();
+        else pick(g.rank);
+        e.preventDefault();
+      } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && picked && targets.length > 0) {
+        const at = targets.findIndex((p) => p.id === kbTarget);
+        const step = e.key === 'ArrowRight' ? 1 : -1;
+        const next = targets[at < 0 ? (step > 0 ? 0 : targets.length - 1) : (at + step + targets.length) % targets.length];
+        setKbTarget(next.id);
+        getEngine().play('ui.select');
+        e.preventDefault();
+      } else if (e.key === 'Enter' && picked && kbTarget) {
+        e.preventDefault();
+        ask(kbTarget, picked);
+      } else if (e.key === 'Escape' && picked) {
+        setPicked(null);
+        setKbTarget(null);
+      }
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, [canAsk, picked, kbTarget, targets, pick, ask, refuse, showRules, showMenu, showSound]);
+
+  const onGroups = useCallback((g: HandGroup[]) => {
+    groupsRef.current = g;
+  }, []);
+
+  const toggleMute = () => {
+    const engine = getEngine();
+    const next = !engine.settings.muted;
+    setMuted(next);
+    setSoundEnabled(!next);
+    if (!next) engine.play('ui.toggle', { on: true });
+  };
+
+  const lines = useMemo(() => {
+    if (!view) return [];
+    const nameOf = (id: string) => view.players.find((p) => p.id === id)?.name ?? id;
+    return logLines(events.slice(-12), nameOf, rank, t);
+  }, [events, view, rank, t]);
+
+  if (!view || !playerId) {
     return (
       <div className="screen screen--centered">
         <p className="muted">{t('game.reconnecting')}</p>
@@ -62,122 +282,208 @@ export function GameTable() {
     );
   }
 
-  const isGameOver = view.status === 'ENDED';
-  const isMyTurn = view.currentPlayerId === playerId;
-  const canAsk = isMyTurn && view.pendingWindow === null;
-  const askableRanks = [...new Set(view.hand.filter((c) => c.rank !== 'eggs').map((c) => c.rank))] as Rank[];
-  const activeTargetId = hoverTargetId ?? selectedTargetId;
+  const me = view.players.find((p) => p.id === playerId)!;
+  const myFacts = seatFacts(view, playerId);
+  const opponents = opponentsInOrder(view, playerId);
+  const current = view.players.find((p) => p.id === view.currentPlayerId);
+  const turnText = isGameOver ? t('game.gameOver') : isMyTurn ? t('game.yourTurn') : t('game.turnOf', { name: current?.name ?? '' });
+  const askOpen = canAsk && picked !== null;
+  const activeTarget = dragTarget ?? kbTarget;
+  const lastLine = lines[lines.length - 1];
 
-  function askPlayer(targetId: string, rank: Rank) {
-    play('stamp');
-    sendAction({ type: 'REQUEST', playerId: playerId!, targetId, rank } as ClientAction);
-    setSelectedTargetId(null);
-    setHoverTargetId(null);
-    setAskRank(null);
-  }
+  const ticker = toast ? (
+    <span className="ticker__toast" role="status">
+      {toast}
+    </span>
+  ) : view.pendingWindow && !myWindow ? (
+    <WindowBanner view={view} />
+  ) : lastLine ? (
+    <>
+      {lastLine.actorId && <Mark id={markForSeat(view.turnOrder, lastLine.actorId)} size={11} color="#9db3bd" />}
+      <span className="ticker__text">{lastLine.text}</span>
+    </>
+  ) : null;
 
-  function toggleSound() {
-    const next = !sound;
-    setSound(next);
-    setSoundEnabled(next);
-    if (next) play('knock');
-  }
+  const dockHint = canAsk ? (picked ? t('dock.pickTarget') : t('dock.pickCard')) : '';
 
-  return (
-    <div className={`game-screen ${status === 'closed' ? 'is-desaturated' : ''}`}>
-      <header className="game-header">
-        <div className={`game-header__turn ${isMyTurn ? '' : 'is-theirs'}`}>
-          {isGameOver
-            ? t('game.gameOver')
-            : isMyTurn
-              ? t('game.yourTurn')
-              : t('game.turnOf', { name: view.players.find((p) => p.id === view.currentPlayerId)?.name ?? '' })}
+  const seatProps = (p: (typeof opponents)[number]) => ({
+    view,
+    player: p,
+    current: p.id === view.currentPlayerId && !isGameOver,
+    askable: canAsk && picked !== null && !p.stunned,
+    target: activeTarget === p.id,
+    totemRef: totemRef,
+    onPick: () => picked && ask(p.id, picked),
+    onHover: (over: boolean) => {
+      if (desktop && picked && !p.stunned) setDragTarget(over ? p.id : null);
+    },
+  });
+
+  const hand = (
+    <Hand
+      size={cardSize}
+      pickedRank={picked}
+      canAsk={canAsk}
+      onPick={pick}
+      onLay={lay}
+      onDragOver={setDragTarget}
+      onDrop={(id, r) => ask(id, r)}
+      onRefuse={refuse}
+      dragEnabled={desktop}
+      onGroups={onGroups}
+    />
+  );
+
+  const meLine = (
+    <>
+      {isMyTurn && !isGameOver && (
+        <span className="dock__totem" ref={totemRef} data-totem>
+          <Totem size={desktop ? 18 : 14} />
+        </span>
+      )}
+      <Mark id={markForSeat(view.turnOrder, playerId)} size={desktop ? 16 : 13} color="#17120e" />
+      <span className="dock__name">{t('dock.me')}</span>
+      <span className="dock__score num">{me.score}</span>
+      <PowerPips unused={myFacts.unused} used={myFacts.used} />
+      <span className="dock__hand">
+        · <span className="num">{me.handSize}</span> {t('dock.cards')}
+      </span>
+    </>
+  );
+
+  const topBar = (
+    <TopBar
+      text={turnText}
+      mine={isMyTurn && !isGameOver}
+      muted={muted}
+      headphones={headphones}
+      logOpen={drawer}
+      showLog={!desktop}
+      onMute={toggleMute}
+      onMixer={() => setShowSound(true)}
+      onLog={() => setDrawer((d) => !d)}
+      onRules={() => setShowRules(true)}
+      onMenu={() => setShowMenu(true)}
+      className={desktop ? 'dk-top' : ''}
+    />
+  );
+
+  const overlays = (
+    <>
+      {view.pendingWindow?.youAreEligible && !isGameOver && (
+        <>
+          <div className="window-frame" aria-hidden="true" />
+          <Plank view={view} onDeclared={(key) => (declared.current = { key, seq: view.seq })} />
+        </>
+      )}
+      {drawer && (
+        <>
+          <div className="scrim" onClick={() => setDrawer(false)} />
+          <LogPanel className="dk-log--drawer" onClose={() => setDrawer(false)} />
+        </>
+      )}
+      {feel === 'drained' && (
+        <div className="plaque" role="status" data-plaque>
+          {t('conn.reconnecting')}
         </div>
-        <div className="game-header__controls">
-          {LOCALES.map((l) => (
-            <button
-              key={l}
-              type="button"
-              className={`btn btn--chip ${l === locale ? 'is-active' : ''}`}
-              onClick={() => setLocale(l)}
-            >
-              {l.toUpperCase()}
-            </button>
-          ))}
-          <button
-            type="button"
-            className="btn btn--small"
-            onClick={toggleSound}
-            aria-pressed={sound}
-            title={sound ? t('game.sound') : t('game.soundOff')}
-          >
-            {sound ? t('game.sound') : t('game.soundOff')}
-          </button>
-          <button type="button" className="btn btn--small" onClick={() => setShowRules(true)}>
-            {t('lobby.rules')}
-          </button>
-        </div>
-      </header>
-
-      <InterruptPrompt />
-
-      {/* The shake lands here, not on the screen: a transform on an ancestor would
-          re-anchor the fixed window frame and plank and make them jump with it. */}
-      <div className="table-row" ref={tableRef}>
-        <PoolStack count={view.poolCount} label={t('game.inPool')} />
-
-        <div className="player-row">
-          {view.players.map((p) => {
-            const isYou = p.id === playerId;
-            const askable = canAsk && !isYou && !p.stunned;
-            const active = askable && activeTargetId === p.id;
-            const hasTotem = p.id === view.currentPlayerId;
-            return (
-              <div key={p.id} className="player-row__item">
-                <div className="totem-slot">{hasTotem && <div ref={totemRef}><Totem /></div>}</div>
-                <PlayerBadge
-                  player={p}
-                  isYou={isYou}
-                  isCurrent={hasTotem}
-                  askable={askable}
-                  active={active}
-                  askableRanks={askableRanks}
-                  onEnter={() => askable && setHoverTargetId(p.id)}
-                  onLeave={() => setHoverTargetId((h) => (h === p.id ? null : h))}
-                  onSelect={() => setSelectedTargetId((cur) => (cur === p.id ? null : p.id))}
-                  onPickRank={(rank) => askPlayer(p.id, rank)}
-                />
-                <LaidSets ownerId={p.id} />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="game-main">
-        <EventLog />
-        <Hand
-          askTargetId={selectedTargetId}
-          askRank={askRank}
-          onPickRank={setAskRank}
-          onAsk={() => selectedTargetId && askRank && askPlayer(selectedTargetId, askRank)}
-        />
-      </div>
-
-      {status === 'closed' && <div className="reconnect-banner">{t('game.reconnecting')}</div>}
-
+      )}
       {isGameOver && <GameOverOverlay onNewGame={leaveRoom} />}
-
       {showRules && <RulesPanel onClose={() => setShowRules(false)} />}
+      {showMenu && (
+        <MenuSheet
+          onClose={() => setShowMenu(false)}
+          onSound={() => {
+            setShowMenu(false);
+            setShowSound(true);
+          }}
+        />
+      )}
+      {showSound && <SoundSettings onClose={() => setShowSound(false)} />}
+    </>
+  );
+
+  const hpPrompt = showHpPrompt ? (
+    <HeadphonesPrompt
+      onDone={() => {
+        if (gameKey) writeStored(gameKey, '1');
+        setAskedHeadphones(true);
+      }}
+    />
+  ) : null;
+
+  const rootClass = `table ${feel === 'drained' ? 'is-drained' : ''} ${feel === 'reink' ? 'is-reink' : ''}`;
+
+  /* ------------------------------------------------------------ the pond table (desktop) */
+  if (desktop) {
+    return (
+      <div className={`dk ${rootClass}`} data-table="desktop">
+        {topBar}
+        <main className="dk-main">
+          <section className="dk-table" ref={tableRef}>
+            <div className="dk-posts">
+              {opponents.map((p, i) => (
+                <Post key={p.id} {...seatProps(p)} lift={liftFor(i, opponents.length)} />
+              ))}
+            </div>
+            <div className="dk-stage">
+              <Pond view={view} ticker={ticker} />
+              {hpPrompt}
+            </div>
+            <div className={`dk-me ${isMyTurn && !isGameOver ? 'is-turn' : ''}`} data-me={playerId}>
+              <div className="dk-me__post">
+                {meLine}
+                <span className="dk-me__hint">{canAsk ? t('dock.drag') : ''}</span>
+              </div>
+              {hand}
+            </div>
+          </section>
+          {wide ? (
+            <LogPanel />
+          ) : (
+            <button type="button" className="dk-log-tab" aria-label={t('nav.log')} aria-pressed={drawer} onClick={() => setDrawer((d) => !d)}>
+              {t('log.title')}
+            </button>
+          )}
+        </main>
+        {overlays}
+      </div>
+    );
+  }
+
+  /* ----------------------------------------------------------------- one screen (phone) */
+  return (
+    <div className={`ph ${rootClass}`} data-table="phone">
+      {topBar}
+      <div className="ph-strip" data-strip>
+        {opponents.map((p) => (
+          <Chip key={p.id} {...seatProps(p)} />
+        ))}
+      </div>
+      <div className="ph-mid" ref={tableRef}>
+        {askOpen && picked ? (
+          <AskSheet view={view} me={playerId} rank={picked} keyTarget={kbTarget} onAsk={(id) => ask(id, picked)} onClose={() => setPicked(null)} />
+        ) : (
+          <Pond view={view} ticker={ticker} />
+        )}
+        {hpPrompt}
+      </div>
+      <section className={`ph-dock ${isMyTurn && !isGameOver ? 'is-turn' : ''}`} data-dock data-me={playerId}>
+        <div className="dock__head">
+          <div className="dock__me">{meLine}</div>
+          <span className="dock__hint">{dockHint}</span>
+        </div>
+        {hand}
+      </section>
+      {overlays}
     </div>
   );
 }
 
-/** §5.7 — the table is rebuilt as a podium. The winner's post stands taller and keeps
+/** §5.7 - the table is rebuilt as a podium. The winner's post stands taller and keeps
  *  the totem; everyone else keeps their roe. */
 function GameOverOverlay({ onNewGame }: { onNewGame: () => void }) {
   const { t } = useT();
-  const { view } = useGame();
+  const { view, local } = useGame();
   if (!view) return null;
 
   const ranked = view.players.slice().sort((a, b) => b.score - a.score);
@@ -201,10 +507,13 @@ function GameOverOverlay({ onNewGame }: { onNewGame: () => void }) {
             );
           })}
         </div>
-        <button className="btn btn--primary" onClick={onNewGame}>
-          {t('game.newGame')}
-        </button>
+        {!local && (
+          <button className="btn btn--primary" onClick={onNewGame}>
+            {t('game.newGame')}
+          </button>
+        )}
       </div>
     </div>
   );
 }
+

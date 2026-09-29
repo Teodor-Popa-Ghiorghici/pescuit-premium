@@ -44,7 +44,9 @@ function cueFor(e: PublicEvent): { cue: Cue; shakePx?: number } | null {
  * for the shakes. Never replays history: on first run it only marks where the log
  * had got to, so a reconnecting player is not hit by forty stamps at once.
  */
-export function useEventBeats(events: PublicEvent[], tableRef: RefObject<HTMLElement>) {
+export function useEventBeats(events: (PublicEvent & { seq?: number })[], tableRef: RefObject<HTMLElement>) {
+  // the highest seq already presented (A10: the store caps its event list, so a length diff goes
+  // quiet once the cap is reached)
   const seen = useRef<number | null>(null);
   const timers = useRef<number[]>([]);
 
@@ -56,12 +58,14 @@ export function useEventBeats(events: PublicEvent[], tableRef: RefObject<HTMLEle
   }, []);
 
   useEffect(() => {
+    const last = events.length ? (events[events.length - 1].seq ?? events.length) : 0;
     if (seen.current === null) {
-      seen.current = events.length;
+      seen.current = last;
       return;
     }
-    const fresh = events.slice(seen.current);
-    seen.current = events.length;
+    const since = seen.current;
+    const fresh = events.filter((e, i) => (e.seq ?? i + 1) > since);
+    seen.current = Math.max(since, last);
     if (fresh.length === 0) return;
 
     let beat = 0;

@@ -1,12 +1,11 @@
+/* The log's grammar, shared by the tally board, the drawer and the pond's ticker: which seal heads a
+ * line, which player's mark stands by it (§5.6), and the sentence itself. Pure: the events are the
+ * redacted ones the server sent, so nothing here can name a concealed rank. */
 import type { PublicEvent } from '@pescuit/engine';
-import { useMemo, useRef, useEffect } from 'react';
-import { Seal } from '../art/seals.js';
-import { useT } from '../i18n/useT.js';
-import { useGame } from '../state/store.js';
+import type { WireEvent } from '@pescuit/shared';
 
-/** Which seal stands at the head of a line. Every event that a power caused is
- *  marked with that power's sigil; the rest fall back to the rank in play. */
-function sealFor(e: PublicEvent): string | null {
+/** Which seal stands at the head of a line: the power that caused it, else the rank in play. */
+export function sealFor(e: PublicEvent): string | null {
   switch (e.type) {
     case 'REQUEST_MADE':
     case 'REQUEST_SUCCEEDED':
@@ -45,7 +44,26 @@ function sealFor(e: PublicEvent): string | null {
   }
 }
 
-function entryFor(
+/** The player an event is about, for the mark beside its line. */
+export function actorOf(e: PublicEvent): string | null {
+  switch (e.type) {
+    case 'REQUEST_MADE':
+    case 'REQUEST_SUCCEEDED':
+    case 'REQUEST_FAILED':
+      return e.askerId;
+    case 'SET_DESTROYED':
+      return e.byPlayerId;
+    case 'GAME_STARTED':
+    case 'GAME_ENDED':
+    case 'WINDOW_OPENED':
+    case 'WINDOW_CLOSED':
+      return null;
+    default:
+      return 'playerId' in e ? e.playerId : null;
+  }
+}
+
+export function entryFor(
   e: PublicEvent,
   nameOf: (id: string) => string,
   rankLabel: (r: string) => string,
@@ -115,45 +133,25 @@ function entryFor(
   }
 }
 
-/** Jurnal — printed on recessed stock, each line headed by the seal of what caused it. */
-export function EventLog() {
-  const { t, rank } = useT();
-  const { events, view } = useGame();
-  const endRef = useRef<HTMLDivElement>(null);
+export interface LogLine {
+  /** the event's seq: a stable key that survives the store's cap */
+  id: number;
+  text: string;
+  seal: string | null;
+  actorId: string | null;
+}
 
-  const nameOf = useMemo(() => {
-    const map = new Map((view?.players ?? []).map((p) => [p.id, p.name]));
-    return (id: string) => map.get(id) ?? id;
-  }, [view]);
-
-  const lines = useMemo(
-    () =>
-      events
-        .map((e, i) => {
-          const entry = entryFor(e, nameOf, rank);
-          if (!entry) return null;
-          return { id: i, text: t(entry.key, entry.params), seal: sealFor(e) };
-        })
-        .filter((x): x is { id: number; text: string; seal: string | null } => x !== null),
-    [events, t, rank, nameOf],
-  );
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
-  }, [lines.length]);
-
-  return (
-    <div className="event-log">
-      <h3 className="event-log__title">{t('game.eventLog')}</h3>
-      <div className="event-log__lines">
-        {lines.map((l) => (
-          <div key={l.id} className="event-log__line">
-            {l.seal ? <Seal rank={l.seal} size={16} color="currentColor" /> : <span style={{ width: 16, flex: 'none' }} />}
-            <span>{l.text}</span>
-          </div>
-        ))}
-        <div ref={endRef} />
-      </div>
-    </div>
-  );
+export function logLines(
+  events: readonly WireEvent[],
+  nameOf: (id: string) => string,
+  rankLabel: (r: string) => string,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): LogLine[] {
+  const out: LogLine[] = [];
+  for (const e of events) {
+    const entry = entryFor(e, nameOf, rankLabel);
+    if (!entry) continue;
+    out.push({ id: e.seq, text: t(entry.key, entry.params), seal: sealFor(e), actorId: actorOf(e) });
+  }
+  return out;
 }
