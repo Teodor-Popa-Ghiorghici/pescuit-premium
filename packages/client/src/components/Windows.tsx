@@ -9,7 +9,7 @@ import { Seal } from '../art/seals.js';
 import { NotchClock } from '../art/table.js';
 import { shortName } from '../game/seatFacts.js';
 import { useT } from '../i18n/useT.js';
-import { play } from '../sound.js';
+import { presenter } from '../game/presenter.js';
 import { useGame } from '../state/store.js';
 import { Card } from './Card.js';
 
@@ -167,8 +167,10 @@ export function Plank({ view, onDeclared }: { view: RedactedView; onDeclared: (k
       if (!key || lockedKey === key) return;
       setLockedKey(key);
       onDeclared(key);
+      // the answering device plays `clock.close` at its press - one cue for every answer, Squid included (§3.2).
+      // A declaration or a pass in any other window is not public: no sound at all, visual only (§3.2's table)
       if (opts.cue) getEngine().playRequests([localAnswerCue(view.seq)]);
-      else play('stamp');
+      presenter.press(view, !!opts.cue);
       sendAction(action);
     },
     [key, lockedKey, onDeclared, sendAction, view.seq],

@@ -1,4 +1,5 @@
 import type { Rank } from '@pescuit/engine';
+import { memo } from 'react';
 import { POWER_RANKS } from '@pescuit/engine';
 import { EGGS_CARVING, NORMAL_CARVINGS, POWER_CARVINGS } from '../art/carvings.js';
 import { sealFor } from '../art/seals.js';
@@ -69,7 +70,7 @@ export interface CardProps {
   title?: string;
 }
 
-export function Card({
+function CardImpl({
   rank,
   size = 'lg',
   faceDown,
@@ -233,8 +234,11 @@ export function Card({
   );
 }
 
+/** memoised: a card is drawn from its props alone, and a table re-renders on every message */
+export const Card = memo(CardImpl);
+
 /** §4.4 — one back, one seed, byte-identical wherever it is drawn. */
-export function CardBack({ width = 88, height = 132, title }: { width?: number; height?: number; title?: string }) {
+function CardBackImpl({ width = 88, height = 132, title }: { width?: number; height?: number; title?: string }) {
   return (
     <div className="card card--back" title={title} role="img" aria-label={title ?? 'card'}>
       <svg className="card__plate" width={width} height={height} viewBox="0 0 264 396" aria-hidden="true" focusable="false">
@@ -261,3 +265,5 @@ export function CardBack({ width = 88, height = 132, title }: { width?: number; 
     </div>
   );
 }
+
+export const CardBack = memo(CardBackImpl);

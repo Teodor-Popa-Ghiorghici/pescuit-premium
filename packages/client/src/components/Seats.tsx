@@ -1,10 +1,10 @@
 import type { RedactedPlayerView, RedactedView } from '@pescuit/engine';
-import type { Ref } from 'react';
 import { FanIcon, HookIcon, Mark, markForSeat, PowerPips } from '../art/marks.js';
 import { Seal } from '../art/seals.js';
 import { HandFan, Totem } from '../art/table.js';
 import { seatFacts, shortName } from '../game/seatFacts.js';
 import { useT } from '../i18n/useT.js';
+import { LaidRow } from './LaidSets.js';
 
 interface SeatProps {
   view: RedactedView;
@@ -14,7 +14,8 @@ interface SeatProps {
   askable: boolean;
   /** the pointer (a drag) or the keyboard is on this seat */
   target: boolean;
-  totemRef?: Ref<HTMLDivElement>;
+  /** the table has SHOWN this seat's turn (the totem has landed): the ochre border follows the totem, not the view */
+  hot?: boolean;
   onPick?: () => void;
   onHover?: (over: boolean) => void;
 }
@@ -46,11 +47,11 @@ function Shell({ width, height, className }: { width: number; height: number; cl
 
 /** §5.2 - the 60×76 opponent chip. Stunned is branded, not tinted; protected wears the shell and the
  *  rank's seal; disconnected is dashed with the hook; the current turn is ochre with the totem. */
-export function Chip({ view, player: p, current, askable, target, totemRef, onPick, onHover }: SeatProps) {
+export function Chip({ view, player: p, current, hot, askable, target, onPick, onHover }: SeatProps) {
   const facts = seatFacts(view, p.id);
   const label = useSeatLabel(view, p, current);
   const prot = p.protectedRanks[0];
-  const cls = ['chip', current && 'is-current', p.stunned && 'is-stunned', !p.connected && 'is-offline', prot && 'is-protected', askable && 'is-askable', target && 'is-target']
+  const cls = ['chip', (hot ?? current) && 'is-current', p.stunned && 'is-stunned', !p.connected && 'is-offline', prot && 'is-protected', askable && 'is-askable', target && 'is-target']
     .filter(Boolean)
     .join(' ');
   return (
@@ -65,7 +66,7 @@ export function Chip({ view, player: p, current, askable, target, totemRef, onPi
       onMouseLeave={() => onHover?.(false)}
     >
       {current && (
-        <div className="chip__totem" ref={totemRef} data-totem>
+        <div className="chip__totem" data-totem>
           <Totem size={14} />
         </div>
       )}
@@ -94,11 +95,11 @@ export function Chip({ view, player: p, current, askable, target, totemRef, onPi
 }
 
 /** §5.2 - the 150 px desktop post, standing on the arc. Same states as the chip, room for the fan. */
-export function Post({ view, player: p, current, askable, target, lift, totemRef, onPick, onHover }: SeatProps & { lift: number }) {
+export function Post({ view, player: p, current, hot, askable, target, lift, onPick, onHover }: SeatProps & { lift: number }) {
   const facts = seatFacts(view, p.id);
   const label = useSeatLabel(view, p, current);
   const prot = p.protectedRanks[0];
-  const cls = ['post-d', current && 'is-current', p.stunned && 'is-stunned', !p.connected && 'is-offline', prot && 'is-protected', askable && 'is-askable', target && 'is-target']
+  const cls = ['post-d', (hot ?? current) && 'is-current', p.stunned && 'is-stunned', !p.connected && 'is-offline', prot && 'is-protected', askable && 'is-askable', target && 'is-target']
     .filter(Boolean)
     .join(' ');
   return (
@@ -116,7 +117,7 @@ export function Post({ view, player: p, current, askable, target, lift, totemRef
       onMouseLeave={() => onHover?.(false)}
     >
       {current && (
-        <div className="post-d__totem" ref={totemRef} data-totem>
+        <div className="post-d__totem" data-totem>
           <Totem size={18} />
         </div>
       )}
@@ -139,6 +140,7 @@ export function Post({ view, player: p, current, askable, target, lift, totemRef
           {!p.connected && <HookIcon size={13} />}
         </span>
       </div>
+      <LaidRow view={view} owner={p.id} className="laid--dk" />
     </div>
   );
 }

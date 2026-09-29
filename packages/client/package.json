@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "audio:check": "node tools/audio-check.cjs",
-    "layout:check": "node tools/layout-check.cjs"
+    "layout:check": "node tools/layout-check.cjs",
+    "perf:check": "node tools/perf-check.cjs"
   },
   "dependencies": {
     "@pescuit/engine": "*",

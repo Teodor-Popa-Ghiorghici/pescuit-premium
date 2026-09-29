@@ -38,6 +38,8 @@ export interface DriverOptions {
   seed: number;
   /** what the human's actions do in a fixture: nothing is executed, only logged */
   frozen?: boolean;
+  /** the first message is a snapshot: no choreography for the events it carries */
+  openAsSnapshot?: boolean;
   /** rewrites every view before it is delivered (a fixture pins the tally or the gate) */
   viewPatch?: (v: RedactedView) => RedactedView;
 }
@@ -55,6 +57,9 @@ export interface DriverInfo {
   status: string;
   last: string;
 }
+
+/** how long the local room takes to answer a human's action */
+const REPLY_MS = 24;
 
 const pick = <T,>(rng: BotRng, a: T[]): T => a[Math.floor(rng.next() * a.length)];
 
@@ -101,7 +106,9 @@ export class LocalDriver implements LocalSource {
     this.deliver = deliver;
     if (!this.started) {
       this.started = true;
-      this.emit(this.pending);
+      // a table reached on purpose (a fixture, `until=`) opens as a snapshot: the last few lines are in the
+      // log, but nothing replays. A fresh bot game opens with its GAME_STARTED, and the ceremony plays.
+      this.emit(this.pending, this.o.openAsSnapshot);
       this.pending = [];
     } else this.emit([], true);
     this.schedule();
@@ -121,11 +128,15 @@ export class LocalDriver implements LocalSource {
       this.tellListeners();
       return;
     }
-    try {
-      this.act(a);
-    } catch (e) {
-      this.deliver?.({ type: 'error', message: e instanceof Error ? e.message : String(e) });
-    }
+    // the room answers like a server a LAN away, not inside the tap's own task: the input's first paint is
+    // the plank locking, and the reply is processed after it (that cost is measured as answer -> rest)
+    setTimeout(() => {
+      try {
+        this.act(a);
+      } catch (e) {
+        this.deliver?.({ type: 'error', message: e instanceof Error ? e.message : String(e) });
+      }
+    }, REPLY_MS);
   }
 
   /* ------------------------------------------------------------- control */
@@ -200,7 +211,7 @@ export class LocalDriver implements LocalSource {
   private emit(events: readonly GameEvent[], snapshot = false): void {
     const stamped = events.map((e) => ({ ...e, seq: ++this.seq }));
     const wire = redactEventsForPlayer(this.state, stamped, this.playerId) as WireEvent[];
-    const msg: ServerMessage = { type: 'game_state', view: this.view(), events: snapshot ? [] : wire };
+    const msg: ServerMessage = { type: 'game_state', view: this.view(), events: wire };
     if (snapshot) msg.snapshot = true;
     this.deliver?.(msg);
     this.tellListeners();

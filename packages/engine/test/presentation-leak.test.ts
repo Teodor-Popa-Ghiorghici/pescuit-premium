@@ -3,7 +3,8 @@
 // redacted streams, views and end timing for everyone who is not an owner of the difference.
 // Test 2 (event part): pairs whose records differ ONLY by a structural window that opens and
 // closes without a declaration produce the same stream once those window events are erased.
-// M1 extends both to choreography.ts, cues.ts and the haptics map.
+// M1 extends both to choreography.ts, cues.ts and the haptics map: packages/client/test/presentation-leak.test.ts
+// runs the same histories through the client's adapter, choreography, cuesFor and hapticsFor.
 import { describe, expect, it } from 'vitest';
 import { reduce } from '../src/engine.js';
 import { redactEventsForPlayer, redactEventsForSpectator, redactForPlayer, redactForSpectator } from '../src/redact.js';

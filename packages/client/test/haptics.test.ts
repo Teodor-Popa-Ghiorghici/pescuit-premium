@@ -46,3 +46,24 @@ describe('the haptics map (§3.11)', () => {
     expect(hapticsFor(r, stuffed)).toEqual(hapticsFor(r, facts('a')));
   });
 });
+
+describe('the haptics map reads the engine\'s real event fields', () => {
+  it('a Shark jumps the cards away from `fromId`, the asker who had just received them', () => {
+    const r = rec(view(), view(), [{ type: 'SHARK_JUMP', playerId: 'c', fromId: 'a', count: 2 }]);
+    expect(signals(hapticsFor(r, facts('a')))).toEqual(['cardsTaken']);
+    expect(hapticsFor(r, facts('b'))).toEqual([]);
+    expect(hapticsFor(r, facts('c'))).toEqual([]);
+  });
+  it('the destroyed set\'s owner comes from the view before the event (the adapter), not from the event', async () => {
+    const { publicEventsOf } = await import('../src/game/record.js');
+    const before = view({ laidSets: [{ id: 's1', ownerId: 'b', isPowerSet: true, rank: null, cardCount: 4, spent: false, destroyed: false }] });
+    const events = publicEventsOf([{ type: 'SET_DESTROYED', setId: 's1', byPlayerId: 'a' }] as never, before);
+    expect(signals(hapticsFor(rec(before, view(), events), facts('b')))).toEqual(['setDestroyed']);
+    expect(hapticsFor(rec(before, view(), events), facts('c'))).toEqual([]);
+  });
+  it('each stop of the totem has its own moment: a stunned skip then your turn', () => {
+    const r = rec(view(), view(), [{ type: 'TURN_SKIPPED_STUNNED', playerId: 'b' }, { type: 'TURN_STARTED', playerId: 'a' }]);
+    expect(hapticsFor(r, facts('a')).map((h) => [h.signal, h.at])).toEqual([['yourTurn', 760 + 420]]);
+    expect(hapticsFor(r, facts('b')).map((h) => [h.signal, h.at])).toEqual([['stunned', 760]]);
+  });
+});

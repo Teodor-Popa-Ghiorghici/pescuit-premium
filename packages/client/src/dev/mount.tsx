@@ -60,7 +60,7 @@ export function mountDev(params: URLSearchParams): void {
   if (fixtureId !== null) {
     const spec = FIXTURES.find((f) => f.id === fixtureId)!;
     const b = spec.build(n, seed, seat);
-    driver = new LocalDriver({ ...b, humanId: `p${b.seat}`, bots: 'memory', speed: num(params.get('speed'), 0), seed });
+    driver = new LocalDriver({ ...b, humanId: `p${b.seat}`, bots: 'memory', speed: num(params.get('speed'), 0), seed, openAsSnapshot: true });
   } else {
     const names = NAMES.slice();
     const players = Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: i === seat ? 'Tu' : (names.shift() ?? `P${i}`) }));
@@ -73,6 +73,7 @@ export function mountDev(params: URLSearchParams): void {
       speed: num(params.get('speed'), 1),
       auto: params.get('auto') === '1',
       seed,
+      openAsSnapshot: !!params.get('until'),
     });
     const pred = untilPredicate(params.get('until'), `p${seat}`);
     if (pred) {
@@ -82,6 +83,8 @@ export function mountDev(params: URLSearchParams): void {
     }
   }
 
+  // the perf script and the debugging scripts drive the table from outside
+  (window as unknown as { __driver: LocalDriver }).__driver = driver;
   root.render(
     <React.StrictMode>
       <ArtDefs />

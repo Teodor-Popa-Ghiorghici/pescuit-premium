@@ -240,6 +240,7 @@ const ro: Dict = {
   'settings.avOffset': 'Decalaj sunet–imagine',
   'settings.muted': 'Fără sunet',
   'settings.silentHint': 'Nu auzi nimic? Verifică comutatorul de sunet al telefonului.',
+  'settings.tableSpeed': 'Viteza mesei',
   'settings.tapForSound': 'Atinge pentru sunet',
   'settings.headphonesAsk': 'Încă pe căști?',
   'settings.headphonesYes': 'Da, căști',
@@ -248,6 +249,7 @@ const ro: Dict = {
   'log.empty': 'Aici apar mutările.',
   'log.sets': 'Seturi puse jos',
   'log.hiddenSet': 'set ascuns',
+  'log.away': '— cât ai lipsit —',
   'log.title': 'Jurnal',
 
   'rules.title': 'Reguli',
@@ -436,6 +438,7 @@ const en: Dict = {
   'settings.avOffset': 'A/V offset',
   'settings.muted': 'Muted',
   'settings.silentHint': 'No sound? Check the silent switch on your phone.',
+  'settings.tableSpeed': 'Table speed',
   'settings.tapForSound': 'Tap for sound',
   'settings.headphonesAsk': 'Still on headphones?',
   'settings.headphonesYes': 'Yes, headphones',
@@ -444,6 +447,7 @@ const en: Dict = {
   'log.empty': 'Moves appear here.',
   'log.sets': 'Sets laid down',
   'log.hiddenSet': 'hidden set',
+  'log.away': '— while you were away —',
   'log.title': 'Log',
 
   'rules.title': 'Rules',

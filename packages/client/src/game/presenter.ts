@@ -1,0 +1,598 @@
+/* presenter.ts - the presentation timeline (§4.2). One per page, fed by the store with every server
+ * message in the order it arrived. It never decides anything: `choreograph` (pure) turns a step into
+ * beats, and this plays them - on two lanes, against the DOM - and hands the step's cues and
+ * haptics to the audio engine on its lookahead clock, aligned to the visual beats.
+ *
+ *  - Logic and input read the view the instant it arrives; only pixels wait. An arriving card, the
+ *    totem, a plank, a laid set, the podium are masked until their beat lands (cards: at most 800 ms);
+ *    a departing card is drawn as a ghost until it takes off.
+ *  - The table lane plays in order; hud and log play in parallel. A beat anchored to `arrival` starts
+ *    when the message arrives (a plank must never wait behind a flight), the rest when the table is free.
+ *  - More than 1.2 s queued: 1.5x with each cue's short variant. More than 2.5 s (or a hidden tab):
+ *    flush to the end state and play only the last landing.
+ *  - A snapshot (a rejoin) never replays choreography: it only re-syncs.
+ *  - Reduced motion: order kept, travel instant; no hit-stop, shake or impact frame. Audio unchanged.
+ */
+import type { RedactedView } from '@pescuit/engine';
+import type { WireEvent } from '@pescuit/shared';
+import { clockTarget, metaCue } from '../audio/cues.js';
+import { getEngine } from '../audio/engine.js';
+import { playHaptics } from '../audio/haptics.js';
+import { prefersReducedMotion, stamp } from '../motion.js';
+import { choreograph, TIME, type Anchor, type Beat, type Choreography, type Flight, type Mask, type Op } from './choreography.js';
+import { metrics } from './metrics.js';
+import { getTableSpeed } from './presentationSettings.js';
+import { factsOf, publicViewOf, recordOf } from './record.js';
+import { Stage, hash01, type Box } from './stage.js';
+
+export interface Message {
+  view: RedactedView;
+  events: readonly WireEvent[];
+  snapshot: boolean;
+}
+
+/** a card in your hand may stay hidden this long, no more (§4.2) */
+const CARD_MASK_CAP_MS = 800;
+const BACKLOG_FAST_MS = 1200;
+const BACKLOG_FLUSH_MS = 2500;
+
+const windowKey = (v: RedactedView | null): string | null => {
+  const w = v?.pendingWindow;
+  if (!w) return null;
+  const c = w.context as Record<string, unknown>;
+  return `${w.type}:${String(c.askerId ?? '')}>${String(c.targetId ?? '')}`;
+};
+
+interface StepCtx {
+  arrive: Map<string, string>;
+  depart: Map<string, string>;
+  stays: HTMLElement[];
+  /** table-lane landings not yet done; at zero the step is at rest (answer -> rest is measured to here) */
+  pending: number;
+}
+
+export class Presenter {
+  readonly stage = new Stage();
+  private me: string | null = null;
+  private last: RedactedView | null = null;
+  private tableFreeAt = 0;
+  private timers = new Map<ReturnType<typeof setTimeout>, (() => void) | null>();
+  private masks = new Map<string, { target: Mask['target']; ref?: string }>();
+  private cardMasks = new Set<string>();
+  private ghosts = new Set<HTMLElement>();
+  private presented: string | null = null;
+  private pendingTurns = 0;
+  private listeners = new Set<() => void>();
+  private localClose: string | null = null;
+  private poolStart = 0;
+  private windowUI: { node: HTMLElement; box: DOMRect; at: number; frame: HTMLElement | null } | null = null;
+  private nudge: ReturnType<typeof setTimeout> | undefined;
+  private nudgeFor: string | null = null;
+
+  /* ------------------------------------------------------------- state */
+
+  setSelf(id: string | null): void {
+    this.me = id;
+    this.stage.me = id;
+  }
+
+  /** the seat whose turn the table has shown so far: the chrome (top bar, dock, ochre chip) follows it, the input follows the view */
+  getPresented = (): string | null => this.presented;
+  subscribe = (cb: () => void): (() => void) => {
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
+  };
+  private setPresented(id: string | null): void {
+    if (this.presented === id) return;
+    this.presented = id;
+    this.listeners.forEach((l) => l());
+  }
+
+  /** nothing carries over from one game (or room) to the next */
+  reset(): void {
+    this.finalizeAll();
+    this.last = null;
+    this.tableFreeAt = 0;
+    this.presented = null;
+    this.poolStart = 0;
+    this.localClose = null;
+    this.listeners.forEach((l) => l());
+    getEngine().setAnswerWindow(null);
+  }
+
+  /** the answering device plays `clock.close` at its press (§3.2); the presenter must not play it again */
+  press(view: RedactedView | null, closeCue: boolean): void {
+    metrics.pressed(performance.now());
+    if (closeCue) this.localClose = windowKey(view);
+    this.resetNudge();
+  }
+
+  /* ------------------------------------------------------------ timers */
+
+  private sched(ms: number, run: () => void, final?: () => void): void {
+    const id = setTimeout(() => {
+      this.timers.delete(id);
+      run();
+    }, Math.max(0, ms));
+    this.timers.set(id, final ?? null);
+  }
+
+  /** every pending beat is finished at once: the table is already correct, only the pixels catch up */
+  private finalizeAll(): void {
+    const finals = [...this.timers.values()];
+    for (const id of this.timers.keys()) clearTimeout(id);
+    this.timers.clear();
+    for (const f of finals) f?.();
+    this.pendingTurns = 0;
+    for (const [id, m] of [...this.masks]) {
+      this.stage.mask(m.target, m.ref, false);
+      this.masks.delete(id);
+    }
+    for (const c of this.cardMasks) this.stage.maskCard(c, false);
+    this.cardMasks.clear();
+    for (const g of this.ghosts) g.remove();
+    this.ghosts.clear();
+    this.stage.clearFliers();
+  }
+
+  /* ------------------------------------------------------------- masks */
+
+  private addMask(id: string, m: Mask, until: number): void {
+    this.masks.set(id, { target: m.target, ref: m.ref });
+    this.stage.mask(m.target, m.ref, true);
+    this.sched(until, () => this.releaseMask(id), () => this.releaseMask(id));
+  }
+  private releaseMask(id: string): void {
+    const m = this.masks.get(id);
+    if (!m) return;
+    this.masks.delete(id);
+    this.stage.mask(m.target, m.ref, false);
+  }
+  private releaseMasksOf(target: Mask['target'], ref?: string): void {
+    for (const [id, m] of [...this.masks]) if (m.target === target && (ref === undefined || m.ref === ref)) this.releaseMask(id);
+  }
+  private releaseCard(id: string | undefined): void {
+    if (!id || !this.cardMasks.delete(id)) return;
+    this.stage.maskCard(id, false);
+  }
+
+  /** after every render: what React just redrew is masked again if its beat has not landed */
+  afterRender(): void {
+    for (const m of this.masks.values()) this.stage.mask(m.target, m.ref, true);
+    for (const c of this.cardMasks) this.stage.maskCard(c, true);
+    this.snapshotWindow();
+  }
+
+  /** the plank and frame as they last looked: what the uniform 220 ms close draws when they are gone */
+  private snapshotWindow(): void {
+    const now = performance.now();
+    if (this.windowUI && now - this.windowUI.at < 250) return;
+    const plank = document.querySelector<HTMLElement>('[data-plank]') ?? document.querySelector<HTMLElement>('[data-banner]');
+    if (!plank) return;
+    this.windowUI = { node: plank.cloneNode(true) as HTMLElement, box: plank.getBoundingClientRect(), at: now, frame: null };
+  }
+
+  private closeGhost(): void {
+    const g = this.windowUI;
+    this.windowUI = null;
+    if (!g || g.box.width === 0) return;
+    if (document.querySelector('[data-plank],[data-banner]')) return; // another window took its place: it has its own animation
+    const layer = document.querySelector<HTMLElement>('[data-fliers]');
+    if (!layer) return;
+    const n = g.node;
+    n.removeAttribute('data-masked');
+    n.setAttribute('aria-hidden', 'true');
+    n.classList.add('window-ghost');
+    Object.assign(n.style, { position: 'fixed', left: `${g.box.left}px`, top: `${g.box.top}px`, width: `${g.box.width}px`, height: `${g.box.height}px`, margin: '0', animation: 'none', pointerEvents: 'none', zIndex: '1' });
+    layer.appendChild(n);
+    // the same close for every window: 220 ms, stepped
+    const a = n.animate?.([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(28px)' }], { duration: TIME.close, easing: 'steps(3, end)', fill: 'forwards' });
+    if (a) a.onfinish = () => n.remove();
+    else n.remove();
+  }
+
+  /* ---------------------------------------------------------- audio world */
+
+  private world(view: RedactedView): void {
+    const engine = getEngine();
+    this.poolStart = Math.max(this.poolStart, view.poolCount);
+    engine.setWorld({ poolCount: view.poolCount, poolStart: Math.max(1, this.poolStart), setsPossible: view.status === 'ENDED' ? null : view.sets.possible, scene: 'game' });
+    engine.setAnswerWindow(view.status === 'ENDED' ? null : clockTarget(publicViewOf(view)));
+  }
+
+  /** your turn has waited 15 s: one soft knock (`meta.nudge`, §4.5) */
+  private resetNudge(): void {
+    clearTimeout(this.nudge);
+    this.nudge = undefined;
+    const v = this.last;
+    if (!v || !this.me || v.status !== 'IN_PROGRESS' || v.currentPlayerId !== this.me || v.pendingWindow) return;
+    const key = `${v.turnCounter}:${v.seq}`;
+    this.nudgeFor = key;
+    this.nudge = setTimeout(() => {
+      const cur = this.last;
+      if (!cur || this.nudgeFor !== key || cur.currentPlayerId !== this.me || cur.pendingWindow) return;
+      getEngine().playRequests([metaCue('nudge', Math.max(0, cur.turnOrder.indexOf(this.me!)), cur.seq)]);
+    }, 15_000);
+  }
+
+  /* ------------------------------------------------------------ the entry */
+
+  present(msg: Message): void {
+    const { view, events, snapshot } = msg;
+    const engine = getEngine();
+    const me = this.me ?? view.viewerId;
+    this.stage.me = me;
+    this.stage.reduced = prefersReducedMotion();
+    metrics.init();
+    const prev = this.last;
+    const now = performance.now();
+
+    // metrics: windows and the tally
+    const pw = prev?.pendingWindow;
+    const nw = view.pendingWindow;
+    const desc = (v: RedactedView | null, w: NonNullable<RedactedView['pendingWindow']> | null | undefined) =>
+      w && v ? { key: windowKey(v)!, answerOnMe: w.type === 'RESPONSE_PENDING' && (w.context as { targetId?: string }).targetId === me, eligible: w.youAreEligible, deadlineAt: w.deadlineAt } : null;
+    metrics.view(desc(prev, pw), desc(view, nw), { before: prev?.sets.possible ?? null, after: view.sets.possible }, now);
+
+    this.last = view;
+    this.world(view);
+    this.resetNudge();
+
+    // a seat that drops or comes back: its signature, damped for the drop (public: the chips show it)
+    if (prev && !snapshot) {
+      view.players.forEach((p, i) => {
+        const was = prev.players.find((x) => x.id === p.id);
+        if (!was || p.id === me || was.connected === p.connected) return;
+        engine.playRequests([metaCue(p.connected ? 'join' : 'leave', i, view.seq)]);
+      });
+    }
+
+    const startsGame = events.some((e) => e.type === 'GAME_STARTED');
+    if (snapshot || (!prev && !startsGame)) {
+      // a rejoin, or the first look at a table already in progress: never replay choreography
+      this.finalizeAll();
+      this.setPresented(view.currentPlayerId);
+      this.tableFreeAt = 0;
+      return;
+    }
+
+    // the boxes of the cards that are about to leave your hand, while the page still shows them
+    if (prev) {
+      const nowIds = new Set(view.hand.map((c) => c.id));
+      this.stage.snapshot(prev.hand.filter((c) => !nowIds.has(c.id)).map((c) => c.id));
+    }
+    const reduced = this.stage.reduced;
+    const queued = Math.max(0, this.tableFreeAt - now);
+    const hidden = typeof document !== 'undefined' && document.hidden;
+    const flush = queued > BACKLOG_FLUSH_MS || hidden;
+    const fast = queued > BACKLOG_FAST_MS;
+    const record = recordOf(prev, view, events, view.seq);
+    const closedAnswer = prev?.pendingWindow?.type === 'RESPONSE_PENDING' && windowKey(prev) !== windowKey(view);
+    const facts = factsOf(prev, view, me, { headphones: engine.headphones, closePlayedLocally: closedAnswer && this.localClose !== null && this.localClose === windowKey(prev) });
+    if (closedAnswer) {
+      this.localClose = null;
+      metrics.answerLeft(now);
+    }
+    const ch = choreograph(record, facts, { speed: getTableSpeed() * (fast ? 1.5 : 1), short: fast, flush, reduced });
+    if (flush) this.finalizeAll();
+    metrics.step(ch.beats.map((b) => b.kind), ch.tableMs, queued, now);
+    this.play(ch, prev, view, now);
+  }
+
+  /* ------------------------------------------------------------ playing */
+
+  private play(ch: Choreography, prev: RedactedView | null, view: RedactedView, now: number): void {
+    const engine = getEngine();
+    const vd = engine.visualDelayMs();
+    const arrival = now;
+    const tableStart = Math.max(now, this.tableFreeAt);
+    const originOf = (b: Beat): number => (b.anchor === 'arrival' ? arrival : tableStart);
+
+    // your own hand: which cards arrive and which leave (private visuals; durations follow the public record)
+    const prevIds = new Set(prev?.hand.map((c) => c.id) ?? []);
+    const nowIds = new Set(view.hand.map((c) => c.id));
+    const arriving = view.hand.filter((c) => !prevIds.has(c.id)).map((c) => c.id);
+    const departing = (prev?.hand ?? []).filter((c) => !nowIds.has(c.id)).map((c) => c.id);
+    const ctx: StepCtx = { arrive: new Map(), depart: new Map(), stays: [], pending: 0 };
+    const landing = (): void => {
+      if (--ctx.pending === 0) metrics.atRest(performance.now());
+    };
+    const toMe = ch.beats.flatMap((b) => b.flights.filter((f) => f.toHand).map((f) => ({ f, t: originOf(b) + f.land }))).sort((a, b) => a.t - b.t);
+    toMe.forEach(({ f }, i) => arriving[i] && ctx.arrive.set(f.key, arriving[i]));
+    const fromMe = ch.beats.flatMap((b) => b.flights.filter((f) => f.fromHand).map((f) => ({ f, t: originOf(b) + f.start }))).sort((a, b) => a.t - b.t);
+    fromMe.forEach(({ f }, i) => departing[i] && ctx.depart.set(f.key, departing[i]));
+
+    // arriving cards are hidden until their flight lands (never longer than 800 ms); departing ones are ghosts
+    for (const [key, id] of ctx.arrive) {
+      const f = toMe.find((x) => x.f.key === key)!;
+      this.cardMasks.add(id);
+      this.stage.maskCard(id, true);
+      const until = Math.min(f.t + vd - now, CARD_MASK_CAP_MS);
+      this.sched(until, () => this.releaseCard(id), () => this.releaseCard(id));
+    }
+    if (!ch.beats.some((b) => b.flights.length) || this.stage.reduced) {
+      /* nothing flies: nothing to ghost */
+    } else {
+      for (const [key, id] of ctx.depart) this.ghost(key, id);
+    }
+
+    for (const beat of ch.beats) {
+      const origin = originOf(beat);
+      const lead = origin - now;
+      // audio: the cues are handed to the engine's lookahead scheduler, aligned to this beat
+      for (const c of beat.cues) engine.play(c.id, c.params, { delayMs: lead + c.at, seed: c.seed });
+      if (beat.haptics.length) playHaptics(beat.haptics, lead);
+      // pixels: a beat's masks, flights, effects, ops and juice
+      beat.masks.forEach((m, i) => {
+        const ref = m.target === 'tally' ? this.tallyRef(beat, m) : m.ref;
+        this.addMask(`${beat.id}:m${i}`, { ...m, ref }, lead + vd + m.until);
+      });
+      for (const f of beat.flights) {
+        if (beat.lane === 'table') ctx.pending++;
+        this.sched(lead + vd + f.start, () => this.flight(f, ctx, origin, vd, beat.lane === 'table' ? landing : undefined), () => this.releaseCard(ctx.arrive.get(f.key)));
+      }
+      for (const v of beat.vfx) this.sched(lead + vd + v.at, () => this.stage.vfx(v.kind, this.stage.anchor(v.anchor, 'to')));
+      for (const op of beat.ops) {
+        const isTurn = op.op === 'turnLanded';
+        const counts = beat.lane === 'table' && (isTurn || op.op === 'settle');
+        if (isTurn) this.pendingTurns++;
+        if (counts) ctx.pending++;
+        this.sched(lead + vd + op.at, () => {
+          if (isTurn) this.pendingTurns = Math.max(0, this.pendingTurns - 1);
+          this.doOp(op);
+          if (counts) landing();
+        }, () => {
+          if (isTurn) this.pendingTurns = Math.max(0, this.pendingTurns - 1);
+          this.finalOp(op);
+        });
+      }
+      if (beat.juice) {
+        const j = beat.juice;
+        this.sched(lead + vd + j.at, () => {
+          if (j.hitStopMs) {
+            this.stage.hitStop(j.hitStopMs);
+            this.tableFreeAt += j.hitStopMs;
+          }
+          if (j.trauma) this.stage.addTrauma(j.trauma);
+          if (j.impact) this.stage.impact();
+        });
+      }
+      // fliers that linger (the whale's spiral) go when the beat does
+      this.sched(lead + vd + beat.at + beat.dur + 60, () => {
+        for (const el of ctx.stays) this.stage.remove(el);
+        ctx.stays.length = 0;
+      }, () => {
+        for (const el of ctx.stays) this.stage.remove(el);
+        ctx.stays.length = 0;
+      });
+    }
+
+    // the table lane is busy until this step has landed
+    if (ch.tableMs > 0) {
+      this.tableFreeAt = tableStart + ch.tableMs;
+      // a step with nothing to land is at rest when its table time is up
+      if (ctx.pending === 0) this.sched(this.tableFreeAt - now + vd, () => metrics.atRest(performance.now()));
+    }
+    // a step that moves no totem still moves the chrome along with the view
+    if (!ch.beats.some((b) => b.ops.some((o) => o.op === 'turnLanded')) && this.pendingTurns === 0) this.setPresented(view.currentPlayerId);
+    if (view.status === 'ENDED' && ch.podiumAt === null) this.setPresented(view.currentPlayerId);
+  }
+
+  private tallyRef(beat: Beat, _m: Mask): string | undefined {
+    const n = beat.ops.find((o): o is Extract<Op, { op: 'notch' }> => o.op === 'notch');
+    return n ? `${n.from}:${n.to}` : undefined;
+  }
+
+  /* ------------------------------------------------------------ flights */
+
+  private ghost(key: string, id: string): void {
+    const el = this.stage.spawn('back');
+    const b = this.stage.handCardBox(id);
+    if (!el || !b) return;
+    this.stage.place(el, b, Stage.BASE.BACK, b.w / Stage.BASE.BACK.w);
+    el.dataset.ghost = key;
+    this.ghosts.add(el);
+  }
+
+  private boxFor(f: Flight, role: 'from' | 'to', a: Anchor, ctx: StepCtx): Box | null {
+    const s = this.stage;
+    if (f.what === 'totem') return a.k === 'seat' ? s.totemSpot(a.id) : s.anchor(a, role);
+    if (f.what === 'chip' && a.k === 'seat') return role === 'to' ? s.chipSpot(a.id) : s.anchor(a, role);
+    if (role === 'to' && f.toHand) return s.handCardBox(ctx.arrive.get(f.key)) ?? s.anchor(a, role);
+    if (role === 'from' && f.fromHand) return s.handCardBox(ctx.depart.get(f.key)) ?? s.anchor(a, role);
+    return s.anchor(a, role);
+  }
+
+  private flight(f: Flight, ctx: StepCtx, origin: number, vd: number, landing?: () => void): void {
+    const s = this.stage;
+    const from = this.boxFor(f, 'from', f.from, ctx);
+    const to = this.boxFor(f, 'to', f.to, ctx);
+    const landsIn = Math.max(0, origin + vd + f.land - performance.now());
+    const ghost = [...this.ghosts].find((g) => g.dataset.ghost === f.key);
+    const done = (el: HTMLElement | null): void => {
+      this.landed(f, el, ctx);
+      landing?.();
+    };
+    const chipKey = f.what === 'chip' && f.from.k === 'seat' ? f.key : null;
+    // no room in the air, reduced motion, or nowhere to fly from or to: the flight is its landing
+    const cannot = !from || !to || f.instant || !s.roomInAir || (f.from.k === 'chip' && !s.chip);
+    if (cannot) {
+      ghost?.remove();
+      if (ghost) this.ghosts.delete(ghost);
+      if (f.what === 'chip' && f.end === 'stay' && to) {
+        const el = s.spawn(`chip:${f.rank ?? ''}`);
+        if (el) {
+          s.place(el, to, Stage.BASE.CHIP);
+          s.holdChip(el, f.key);
+        }
+      }
+      this.sched(landsIn, () => done(null));
+      return;
+    }
+    let el: HTMLElement | null;
+    let base: { w: number; h: number };
+    if (f.what === 'chip') {
+      base = Stage.BASE.CHIP;
+      if (f.from.k === 'chip') el = s.chip;
+      else {
+        el = s.spawn(`chip:${f.rank ?? ''}`);
+        if (chipKey) s.releaseChip(0);
+      }
+    } else if (f.what === 'totem') {
+      base = Stage.BASE.TOTEM;
+      el = s.spawn('totem');
+    } else {
+      base = Stage.BASE.BACK;
+      el = ghost ?? s.spawn('back');
+      if (ghost) this.ghosts.delete(ghost);
+    }
+    if (!el) {
+      this.sched(landsIn, () => done(null));
+      return;
+    }
+    if (f.mirror) {
+      const inner = el.querySelector<HTMLElement>('.chip-token__in');
+      if (inner) inner.style.transform = 'scaleX(-1)';
+    }
+    const dur = Math.max(1, f.land - f.start);
+    const cardScale = (b: Box): number => Math.max(0.35, b.w / Stage.BASE.BACK.w);
+    const scaleFrom = f.what === 'back' ? cardScale(from!) : f.what === 'totem' ? 1 : 1;
+    const scaleTo = f.what === 'back' ? cardScale(to!) : f.end === 'dive' ? 0.35 : 1;
+    s.fly(el, {
+      key: f.key,
+      base,
+      from: from!,
+      to: to!,
+      dur,
+      byDistance: f.what === 'back',
+      corner: f.corner,
+      straight: f.straight,
+      scaleFrom,
+      scaleTo,
+      tiltFrom: f.what === 'chip' ? (hash01(f.key) * 2 - 1) * 8 : undefined,
+      tiltTo: f.what === 'chip' ? -6 : undefined,
+      onLand: () => done(el),
+    });
+  }
+
+  private landed(f: Flight, el: HTMLElement | null, ctx: StepCtx): void {
+    const s = this.stage;
+    this.releaseCard(ctx.arrive.get(f.key));
+    switch (f.end) {
+      case 'stay':
+        if (el && f.what === 'chip') s.holdChip(el, f.key);
+        else if (el) ctx.stays.push(el);
+        break;
+      case 'vanish':
+      case 'dive':
+      case 'press':
+        if (f.what === 'chip' && f.end === 'dive') s.releaseChip(0);
+        s.remove(el);
+        break;
+      case 'drop':
+        if (!el) s.releaseChip(140); // nothing flew (reduced motion): the chip is simply done
+        else {
+          // the chip lies on the basin floor a moment, then is gone
+          s.letGoChip();
+          el.classList.remove('is-held');
+          el.classList.add('is-dropped');
+          s.place(el, s.anchor({ k: 'basin' }, 'to') ?? { cx: 0, cy: 0, w: 0, h: 0 }, Stage.BASE.CHIP, 1, 9);
+          this.sched(700, () => s.remove(el));
+        }
+        break;
+      case 'settle':
+        s.remove(el);
+        if (f.what === 'totem') {
+          this.releaseMasksOf('totem');
+          s.bounceTotem();
+        }
+        break;
+    }
+  }
+
+  /* --------------------------------------------------------------- ops */
+
+  /** the end state of an op that must not be lost when a backlog is flushed */
+  private finalOp(op: Op): void {
+    switch (op.op) {
+      case 'turnLanded':
+        this.setPresented(this.last?.currentPlayerId ?? op.playerId);
+        break;
+      case 'podium':
+        metrics.podium(performance.now());
+        break;
+      default:
+        break;
+    }
+  }
+
+  private doOp(op: Op): void {
+    const s = this.stage;
+    switch (op.op) {
+      case 'wobble':
+        s.wobble(op.anchor.k === 'seat' ? s.playerEl(op.anchor.id) : null);
+        break;
+      case 'plankRise':
+        this.releaseMasksOf('plank');
+        break;
+      case 'closeWindow':
+        this.closeGhost();
+        break;
+      case 'chipFlip':
+        s.flipChip();
+        break;
+      case 'chipRelease':
+        s.releaseChip(140);
+        break;
+      case 'settle':
+        s.bounceTotem();
+        break;
+      case 'turnLanded':
+        this.setPresented(op.playerId);
+        this.releaseMasksOf('totem');
+        s.bounceTotem();
+        break;
+      case 'ignite':
+        s.ignite(op.owner, op.setId);
+        break;
+      case 'reveal':
+        s.reveal(op.owner, op.rank);
+        break;
+      case 'spent':
+        s.pulseSets(op.owner);
+        break;
+      case 'notch':
+        this.releaseMasksOf('tally');
+        break;
+      case 'press':
+        this.releaseMasksOf('set', op.setId);
+        s.pressSet(op.setId, op.owner);
+        break;
+      case 'brand':
+        if (op.anchor.k === 'seat') stamp(s.playerEl(op.anchor.id));
+        break;
+      case 'slot':
+        s.pulseSets(op.owner);
+        break;
+      case 'crack':
+        this.releaseMasksOf('crack', op.setId);
+        break;
+      case 'gate':
+        s.wobble(document.querySelector('[data-gate]'));
+        break;
+      case 'carve':
+        s.carve();
+        break;
+      case 'podium':
+        this.releaseMasksOf('podium');
+        metrics.podium(performance.now());
+        break;
+      case 'stamp':
+        stamp(document.querySelector('[data-ticker]'));
+        break;
+    }
+  }
+}
+
+/** the one presenter of the page */
+export const presenter = new Presenter();

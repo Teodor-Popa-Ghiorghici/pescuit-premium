@@ -1,23 +1,23 @@
 import type { Rank } from '@pescuit/engine';
 import { EGGS } from '@pescuit/engine';
 import type { ClientAction } from '@pescuit/shared';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { getEngine } from '../audio/engine.js';
 import { Mark, markForSeat, PowerPips } from '../art/marks.js';
 import { RoePips, Totem } from '../art/table.js';
-import { useEventBeats } from '../game/beats.js';
 import { logLines } from '../game/logLines.js';
 import { opponentsInOrder, seatFacts } from '../game/seatFacts.js';
 import type { HandGroup } from '../game/handModel.js';
 import { cardSizeFor, useDesktop, useMedia, useWindowSize, WIDE_QUERY } from '../hooks/useViewport.js';
 import { useT } from '../i18n/useT.js';
-import { DUR, EASE, prefersReducedMotion } from '../motion.js';
-import { play, setSoundEnabled, soundEnabled } from '../sound.js';
+import { usePresenter } from '../hooks/usePresenter.js';
 import { useGame } from '../state/store.js';
 import { AskSheet } from './AskSheet.js';
+import { FlightLayer } from './FlightLayer.js';
 import { Hand } from './Hand.js';
 import { LogPanel } from './LogPanel.js';
 import { Pond } from './Pond.js';
+import { LaidRow } from './LaidSets.js';
 import { RulesPanel } from './RulesPanel.js';
 import { Chip, Post } from './Seats.js';
 import { HeadphonesPrompt, MenuSheet, SoundSettings } from './Sheets.js';
@@ -80,7 +80,7 @@ export function GameTable() {
   const [showMenu, setShowMenu] = useState(false);
   const [showSound, setShowSound] = useState(false);
   const [drawer, setDrawer] = useState(false);
-  const [muted, setMuted] = useState(!soundEnabled());
+  const [muted, setMuted] = useState(() => getEngine().settings.muted);
   const [headphones, setHeadphones] = useState(() => getEngine().headphones);
   const [picked, setPicked] = useState<Rank | null>(null);
   const [kbTarget, setKbTarget] = useState<string | null>(null);
@@ -88,8 +88,6 @@ export function GameTable() {
   const [toast, setToast] = useState<string | null>(null);
   const [askedHeadphones, setAskedHeadphones] = useState(false);
 
-  const totemRef = useRef<HTMLDivElement>(null);
-  const totemRect = useRef<DOMRect | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const groupsRef = useRef<HandGroup[]>([]);
   const declared = useRef<{ key: string; seq: number } | null>(null);
@@ -107,35 +105,16 @@ export function GameTable() {
     return engine.subscribe(sync);
   }, []);
 
-  // §6.3/§6.5 - each event that arrived gets its beat, in order, against the table.
-  useEventBeats(events, tableRef);
-
-  // §6.4 - the totem travels to the post whose turn it is, and lands with a knock.
-  // A FLIP: the slot moves it instantly, then we animate it back from where it was.
-  const currentPlayerId = view?.currentPlayerId;
-  useLayoutEffect(() => {
-    const el = totemRef.current;
-    if (!el) {
-      totemRect.current = null;
-      return;
-    }
-    const next = el.getBoundingClientRect();
-    const prev = totemRect.current;
-    totemRect.current = next;
-    if (!prev || prefersReducedMotion()) return;
-    const dx = prev.left - next.left;
-    const dy = prev.top - next.top;
-    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-    el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0,0)' }], {
-      duration: DUR.heavy,
-      easing: EASE.settle,
-    });
-    play('knock');
-  }, [currentPlayerId]);
+  // §4.2 - the presenter plays the timeline (it is fed by the store, message by message); this returns the
+  // seat whose turn the table has SHOWN: the totem lands there, and the chrome follows it (§4.5)
+  const shownTurn = usePresenter(playerId, view?.currentPlayerId);
 
   const isGameOver = view?.status === 'ENDED';
   const isMyTurn = !!view && view.currentPlayerId === playerId;
+  const shownMine = !!view && shownTurn === playerId;
   const canAsk = !!view && !isGameOver && isMyTurn && view.pendingWindow === null;
+  // the lift answers first (beat 0, 50 ms); the sheet that takes the pond's row is mounted right behind it, in the next frame
+  const sheetRank = useDeferredValue(canAsk && picked !== null ? picked : null);
   const winKey = windowKeyOf(view);
   const myWindow = !!view?.pendingWindow?.youAreEligible;
 
@@ -218,7 +197,7 @@ export function GameTable() {
   const lay = useCallback(
     (set: { rank: Rank; cardIds: string[] }) => {
       if (!playerId) return;
-      play('stamp');
+      getEngine().play('ui.press');
       sendAction({ type: 'LAY_SET', playerId, rank: set.rank, cardIds: set.cardIds } as ClientAction);
     },
     [playerId, sendAction],
@@ -264,8 +243,11 @@ export function GameTable() {
     const engine = getEngine();
     const next = !engine.settings.muted;
     setMuted(next);
-    setSoundEnabled(!next);
-    if (!next) engine.play('ui.toggle', { on: true });
+    engine.update({ muted: next });
+    if (!next) {
+      engine.unlock();
+      engine.play('ui.toggle', { on: true });
+    }
   };
 
   const lines = useMemo(() => {
@@ -285,8 +267,8 @@ export function GameTable() {
   const me = view.players.find((p) => p.id === playerId)!;
   const myFacts = seatFacts(view, playerId);
   const opponents = opponentsInOrder(view, playerId);
-  const current = view.players.find((p) => p.id === view.currentPlayerId);
-  const turnText = isGameOver ? t('game.gameOver') : isMyTurn ? t('game.yourTurn') : t('game.turnOf', { name: current?.name ?? '' });
+  const current = view.players.find((p) => p.id === (shownTurn ?? view.currentPlayerId));
+  const turnText = isGameOver ? t('game.gameOver') : shownMine ? t('game.yourTurn') : t('game.turnOf', { name: current?.name ?? '' });
   const askOpen = canAsk && picked !== null;
   const activeTarget = dragTarget ?? kbTarget;
   const lastLine = lines[lines.length - 1];
@@ -310,9 +292,9 @@ export function GameTable() {
     view,
     player: p,
     current: p.id === view.currentPlayerId && !isGameOver,
+    hot: p.id === shownTurn && !isGameOver,
     askable: canAsk && picked !== null && !p.stunned,
     target: activeTarget === p.id,
-    totemRef: totemRef,
     onPick: () => picked && ask(p.id, picked),
     onHover: (over: boolean) => {
       if (desktop && picked && !p.stunned) setDragTarget(over ? p.id : null);
@@ -337,7 +319,7 @@ export function GameTable() {
   const meLine = (
     <>
       {isMyTurn && !isGameOver && (
-        <span className="dock__totem" ref={totemRef} data-totem>
+        <span className="dock__totem" data-totem>
           <Totem size={desktop ? 18 : 14} />
         </span>
       )}
@@ -345,6 +327,7 @@ export function GameTable() {
       <span className="dock__name">{t('dock.me')}</span>
       <span className="dock__score num">{me.score}</span>
       <PowerPips unused={myFacts.unused} used={myFacts.used} />
+      {desktop && <LaidRow view={view} owner={playerId} className="laid--me" />}
       <span className="dock__hand">
         · <span className="num">{me.handSize}</span> {t('dock.cards')}
       </span>
@@ -354,7 +337,7 @@ export function GameTable() {
   const topBar = (
     <TopBar
       text={turnText}
-      mine={isMyTurn && !isGameOver}
+      mine={shownMine && !isGameOver}
       muted={muted}
       headphones={headphones}
       logOpen={drawer}
@@ -399,6 +382,7 @@ export function GameTable() {
         />
       )}
       {showSound && <SoundSettings onClose={() => setShowSound(false)} />}
+      <FlightLayer />
     </>
   );
 
@@ -419,7 +403,7 @@ export function GameTable() {
       <div className={`dk ${rootClass}`} data-table="desktop">
         {topBar}
         <main className="dk-main">
-          <section className="dk-table" ref={tableRef}>
+          <section className="dk-table" ref={tableRef} data-table-layer>
             <div className="dk-posts">
               {opponents.map((p, i) => (
                 <Post key={p.id} {...seatProps(p)} lift={liftFor(i, opponents.length)} />
@@ -429,7 +413,7 @@ export function GameTable() {
               <Pond view={view} ticker={ticker} />
               {hpPrompt}
             </div>
-            <div className={`dk-me ${isMyTurn && !isGameOver ? 'is-turn' : ''}`} data-me={playerId}>
+            <div className={`dk-me ${shownMine && !isGameOver ? 'is-turn' : ''}`} data-me={playerId}>
               <div className="dk-me__post">
                 {meLine}
                 <span className="dk-me__hint">{canAsk ? t('dock.drag') : ''}</span>
@@ -459,15 +443,15 @@ export function GameTable() {
           <Chip key={p.id} {...seatProps(p)} />
         ))}
       </div>
-      <div className="ph-mid" ref={tableRef}>
-        {askOpen && picked ? (
-          <AskSheet view={view} me={playerId} rank={picked} keyTarget={kbTarget} onAsk={(id) => ask(id, picked)} onClose={() => setPicked(null)} />
+      <div className="ph-mid" ref={tableRef} data-table-layer>
+        {sheetRank ? (
+          <AskSheet view={view} me={playerId} rank={sheetRank} keyTarget={kbTarget} onAsk={(id) => ask(id, sheetRank)} onClose={() => setPicked(null)} />
         ) : (
           <Pond view={view} ticker={ticker} />
         )}
         {hpPrompt}
       </div>
-      <section className={`ph-dock ${isMyTurn && !isGameOver ? 'is-turn' : ''}`} data-dock data-me={playerId}>
+      <section className={`ph-dock ${shownMine && !isGameOver ? 'is-turn' : ''}`} data-dock data-me={playerId}>
         <div className="dock__head">
           <div className="dock__me">{meLine}</div>
           <span className="dock__hint">{dockHint}</span>
@@ -489,7 +473,7 @@ function GameOverOverlay({ onNewGame }: { onNewGame: () => void }) {
   const ranked = view.players.slice().sort((a, b) => b.score - a.score);
 
   return (
-    <div className="modal-overlay modal-overlay--solid">
+    <div className="modal-overlay modal-overlay--solid" data-podium>
       <div className="gameover">
         <h2 className="gameover__title">{t('game.gameOver')}</h2>
         <div className="gameover__posts">

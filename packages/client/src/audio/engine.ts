@@ -279,6 +279,11 @@ export class AudioEngine {
     this.syncWorld();
   }
 
+  /** which scene the pond is playing, if any: the lobby hands over to the game without a gap */
+  get worldScene(): string | null {
+    return this.world?.scene ?? null;
+  }
+
   private syncWorld(): void {
     const m = this.mixer;
     if (!m || !this.ready) return;

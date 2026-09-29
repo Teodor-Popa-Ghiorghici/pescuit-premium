@@ -7,7 +7,8 @@
  *
  * §6.6: under prefers-reduced-motion every travel becomes an instant state change
  * and every stamp becomes a one-frame ink saturation. Screen shake is off entirely.
- * The 700ms resolution beat is *not* motion — it is a secrecy device — so it stays.
+ * Travel, shake and hit-stop now live in the presentation timeline (game/presenter.ts, game/stage.ts);
+ * this file keeps the stamp, the durations and the reduced-motion query.
  */
 import { useEffect, useRef, useState } from 'react';
 
@@ -62,29 +63,6 @@ export function stamp(el: Element | null | undefined): void {
       { transform: 'scale(1)', opacity: 1 },
     ],
     { duration: DUR.stamp, easing: EASE.strike },
-  );
-}
-
-/** A short travel that lands with a knock — §6.4's totem, and anything it carries. */
-export function place(el: Element | null | undefined, fromX: number, fromY = 0): void {
-  if (!canAnimate(el) || prefersReducedMotion()) return;
-  el.animate(
-    [{ transform: `translate(${fromX}px, ${fromY}px)` }, { transform: 'translate(0,0)' }],
-    { duration: DUR.heavy, easing: EASE.settle },
-  );
-}
-
-/** Never under reduced motion — §6.6 turns screen shake off entirely. */
-export function shake(el: Element | null | undefined, px = 2): void {
-  if (!canAnimate(el) || prefersReducedMotion()) return;
-  el.animate(
-    [
-      { transform: 'translateX(0)' },
-      { transform: `translateX(-${px}px)` },
-      { transform: `translateX(${px}px)` },
-      { transform: 'translateX(0)' },
-    ],
-    { duration: DUR.snap, easing: EASE.gouge },
   );
 }
 

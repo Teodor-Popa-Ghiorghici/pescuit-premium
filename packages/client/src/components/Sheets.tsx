@@ -1,7 +1,9 @@
 import { LOCALES } from '@pescuit/shared';
 import { useEffect, useSyncExternalStore } from 'react';
+import { audioStatus, onAudioStatus } from '../audio/context.js';
 import { getEngine } from '../audio/engine.js';
 import type { AudioSettings } from '../audio/mixer.js';
+import { getTableSpeed, setTableSpeed, subscribeTableSpeed } from '../game/presentationSettings.js';
 import { useT } from '../i18n/useT.js';
 import { useGame } from '../state/store.js';
 
@@ -11,6 +13,24 @@ function useAudioSettings(): AudioSettings {
     (cb) => engine.subscribe(cb),
     () => engine.settings,
   );
+}
+
+/** §3.5 - "tap for sound": a tab hangs from the top bar while the audio context is suspended or locked. The
+ *  first tap anywhere unlocks it as well; this is for the player who has not tapped yet. */
+export function SoundTab() {
+  const { t } = useT();
+  const status = useSyncExternalStore(onAudioStatus, audioStatus);
+  const s = useAudioSettings();
+  if (status === 'running' || status === 'unavailable' || s.muted) return null;
+  return (
+    <button type="button" className="sound-tab" data-sound-tab onClick={() => getEngine().unlock()}>
+      {t('settings.tapForSound')}
+    </button>
+  );
+}
+
+function useTableSpeed() {
+  return useSyncExternalStore(subscribeTableSpeed, getTableSpeed);
 }
 
 function useEscape(onClose: () => void) {
@@ -48,6 +68,7 @@ export function SoundSettings({ onClose }: { onClose: () => void }) {
   const { t } = useT();
   const engine = getEngine();
   const s = useAudioSettings();
+  const speed = useTableSpeed();
   useEscape(onClose);
   const set = (patch: Partial<AudioSettings>) => engine.update(patch);
   return (
@@ -78,6 +99,16 @@ export function SoundSettings({ onClose }: { onClose: () => void }) {
                 onClick={() => set({ profile: p })}
               >
                 {p === 'speaker' ? t('settings.speakers') : t('settings.headphones')}
+              </button>
+            ))}
+          </span>
+        </div>
+        <div className="sheetrow" role="radiogroup" aria-label={t('settings.tableSpeed')}>
+          <span className="sheetrow__label">{t('settings.tableSpeed')}</span>
+          <span className="seg">
+            {([1, 1.5] as const).map((v) => (
+              <button key={v} type="button" role="radio" aria-checked={speed === v} className={`seg__btn ${speed === v ? 'is-on' : ''}`} onClick={() => setTableSpeed(v)}>
+                {v}×
               </button>
             ))}
           </span>

@@ -246,10 +246,10 @@ Rhythm is the onsets in the first 300 ms; timbre is the log-mel pattern of the f
 | ui.target / seat A1 (speaker) | 20.0 |
 | table.turn / seat A2 (headphones) | 20.7 |
 | table.turn / seat A2 (speaker) | 20.7 |
-| meta.join / seat A2 (headphones) | 20.8 |
 | meta.join / seat A2 (speaker) | 20.8 |
-| table.bonus / seat A2 (speaker) | 20.9 |
+| meta.join / seat A2 (headphones) | 20.8 |
 | table.bonus / seat A2 (headphones) | 20.9 |
+| table.bonus / seat A2 (speaker) | 20.9 |
 | meta.leave / seat A2 (headphones) | 23.7 |
 | meta.leave / seat A2 (speaker) | 23.7 |
 

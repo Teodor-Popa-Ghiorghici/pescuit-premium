@@ -1,7 +1,8 @@
 import type { RedactedView } from '@pescuit/engine';
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
 import { Mark, markForSeat } from '../art/marks.js';
 import { Seal } from '../art/seals.js';
+import { SetPlate } from './LaidSets.js';
 import { logLines } from '../game/logLines.js';
 import { useT } from '../i18n/useT.js';
 import { useGame } from '../state/store.js';
@@ -9,7 +10,7 @@ import { useGame } from '../state/store.js';
 /** Sets that have been laid, per player, as small chips: a face-down power set is a wooden back and
  *  nothing more (Mode Ascuns); a spent one is struck through; a destroyed one is cracked. */
 function LaidSummary({ view }: { view: RedactedView }) {
-  const { t, rank } = useT();
+  const { t } = useT();
   const owners = view.turnOrder.filter((id) => view.laidSets.some((s) => s.ownerId === id));
   if (owners.length === 0) return null;
   return (
@@ -25,13 +26,7 @@ function LaidSummary({ view }: { view: RedactedView }) {
               {view.laidSets
                 .filter((s) => s.ownerId === id)
                 .map((s) => (
-                  <span
-                    key={s.id}
-                    className={`setchip ${s.rank === null ? 'is-hidden' : ''} ${s.spent ? 'is-spent' : ''} ${s.destroyedByMantis ? 'is-destroyed' : ''}`}
-                    title={s.rank ? rank(s.rank) : t('log.hiddenSet')}
-                  >
-                    {s.rank ? <Seal rank={s.rank} size={13} color="currentColor" /> : <span aria-hidden="true">?</span>}
-                  </span>
+                  <SetPlate key={s.id} set={s} />
                 ))}
             </span>
           </div>
@@ -47,7 +42,7 @@ function LaidSummary({ view }: { view: RedactedView }) {
  */
 export function LogPanel({ onClose, className = '' }: { onClose?: () => void; className?: string }) {
   const { t, rank } = useT();
-  const { events, view } = useGame();
+  const { events, view, away } = useGame();
   const linesRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
@@ -62,7 +57,7 @@ export function LogPanel({ onClose, className = '' }: { onClose?: () => void; cl
   useLayoutEffect(() => {
     const el = linesRef.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [lines.length]);
+  }, [lines.length, away.length]);
 
   return (
     <aside className={`dk-log ${className}`} data-log aria-label={t('log.title')}>
@@ -85,10 +80,22 @@ export function LogPanel({ onClose, className = '' }: { onClose?: () => void; cl
       >
         {lines.length === 0 && <p className="dk-log__empty">{t('log.empty')}</p>}
         {lines.map((l, i) => (
-          <div key={l.id} className={`dk-log__line ${i >= lines.length - 3 ? 'is-recent' : ''}`}>
-            {view && l.actorId ? <Mark id={markForSeat(view.turnOrder, l.actorId)} size={13} /> : <span style={{ width: 13, flex: 'none' }} />}
-            {l.seal ? <Seal rank={l.seal} size={14} color="currentColor" /> : <span style={{ width: 14, flex: 'none' }} />}
-            <span>{l.text}</span>
+          <Fragment key={l.id}>
+            {away.filter((a) => (lines[i - 1]?.id ?? 0) <= a.afterSeq && l.id > a.afterSeq).map((a) => (
+              <div key={`away${a.afterSeq}`} className="dk-log__away">
+                {t('log.away')}
+              </div>
+            ))}
+            <div className={`dk-log__line ${i >= lines.length - 3 ? 'is-recent' : ''}`}>
+              {view && l.actorId ? <Mark id={markForSeat(view.turnOrder, l.actorId)} size={13} /> : <span style={{ width: 13, flex: 'none' }} />}
+              {l.seal ? <Seal rank={l.seal} size={14} color="currentColor" /> : <span style={{ width: 14, flex: 'none' }} />}
+              <span>{l.text}</span>
+            </div>
+          </Fragment>
+        ))}
+        {away.filter((a) => !lines.some((l) => l.id > a.afterSeq)).map((a) => (
+          <div key={`away-end${a.afterSeq}`} className="dk-log__away">
+            {t('log.away')}
           </div>
         ))}
       </div>

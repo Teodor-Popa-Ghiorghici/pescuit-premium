@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Totem } from '../art/table.js';
 import { useT } from '../i18n/useT.js';
 import { useGame } from '../state/store.js';
-import { play } from '../sound.js';
+import { getEngine } from '../audio/engine.js';
+import { useJoinSignatures, useLobbyAmbience } from '../hooks/useLobbyAudio.js';
 import { RopeRule } from './Lobby.js';
 
 const MIN_PLAYERS = 3;
@@ -11,6 +12,8 @@ const MAX_POSTS = 6;
 /** §5.2 — the room is a row of carved posts. The ones nobody has taken yet are
  *  dashed outlines, so the table always shows how much of it is still empty. */
 export function WaitingRoom() {
+  useLobbyAmbience();
+  useJoinSignatures();
   const { t } = useT();
   const { roomCode, players, playerId, startGame, error, dismissError, config } = useGame();
   const [copied, setCopied] = useState(false);
@@ -21,7 +24,7 @@ export function WaitingRoom() {
 
   function copyLink() {
     navigator.clipboard?.writeText(link).then(() => {
-      play('stamp');
+      getEngine().play('ui.copy');
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });

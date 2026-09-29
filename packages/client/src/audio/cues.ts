@@ -45,6 +45,25 @@ export interface PublicView {
   setsPossible?: number | null;
   /** the stall gate: consecutive asks that captured and drew nothing, and the 2N limit */
   endPressure?: { misses: number; limit: number } | null;
+  /** the laid sets: public facts only (owner, category, the rank once it is public, how many cards). Only the
+   * choreography reads them - never the cues. */
+  laidSets?: readonly PublicLaidSet[];
+  /** every seat's hand size: public (the chips show it) */
+  handSizes?: Readonly<Record<string, number>>;
+  /** the game is over */
+  ended?: boolean;
+}
+
+/** what any spectator can see of a laid set */
+export interface PublicLaidSet {
+  id: string;
+  ownerId: string;
+  isPowerSet: boolean;
+  /** null while concealed */
+  rank: string | null;
+  cardCount: number;
+  spent: boolean;
+  destroyed: boolean;
 }
 
 /** The redacted event stream, keeping only the fields sound may read. */
@@ -54,23 +73,23 @@ export type PublicEvent =
   | { type: 'TURN_SKIPPED_STUNNED'; playerId: string }
   | { type: 'BONUS_TURN'; playerId: string }
   | { type: 'HAND_REFILLED'; playerId: string; count: number }
-  | { type: 'REQUEST_MADE'; askerId: string; targetId: string }
-  | { type: 'REQUEST_SUCCEEDED'; askerId: string; targetId: string; count: number }
-  | { type: 'REQUEST_FAILED'; askerId: string; targetId: string }
+  | { type: 'REQUEST_MADE'; askerId: string; targetId: string; rank?: string }
+  | { type: 'REQUEST_SUCCEEDED'; askerId: string; targetId: string; count: number; rank?: string }
+  | { type: 'REQUEST_FAILED'; askerId: string; targetId: string; rank?: string }
   | { type: 'DREW_FROM_POOL'; playerId: string; poolEmpty?: boolean }
-  | { type: 'SET_LAID'; playerId: string; isPowerSet: boolean }
-  | { type: 'SET_DESTROYED'; byPlayerId?: string; ownerId?: string }
-  | { type: 'POWER_GRANTED'; playerId: string; grantId?: string; rank?: string | null }
+  | { type: 'SET_LAID'; playerId: string; isPowerSet: boolean; setId?: string; rank?: string | null; eggCount?: number }
+  | { type: 'SET_DESTROYED'; byPlayerId?: string; ownerId?: string; setId?: string }
+  | { type: 'POWER_GRANTED'; playerId: string; grantId?: string; rank?: string | null; sourceSetId?: string; unbound?: boolean }
   | { type: 'POWER_USED'; playerId: string; rank: string; viaClownfish?: boolean }
   | { type: 'CLOWNFISH_BOUND'; playerId: string; boundRank?: string }
-  | { type: 'SHARK_JUMP'; playerId: string; loserId?: string }
-  | { type: 'LANTERNFISH_REFLECT'; playerId: string; fromId: string }
-  | { type: 'TORTOISE_BLOCK'; playerId: string }
+  | { type: 'SHARK_JUMP'; playerId: string; loserId?: string; fromId?: string; count?: number }
+  | { type: 'LANTERNFISH_REFLECT'; playerId: string; fromId: string; count?: number; rank?: string }
+  | { type: 'TORTOISE_BLOCK'; playerId: string; rank?: string }
   | { type: 'JELLYFISH_STUN'; playerId: string; targetId: string }
-  | { type: 'STICKLEBACK_STEAL'; playerId: string; targetId: string }
-  | { type: 'STICKLEBACK_WASTED'; playerId: string; targetId: string }
+  | { type: 'STICKLEBACK_STEAL'; playerId: string; targetId: string; count?: number; rank?: string }
+  | { type: 'STICKLEBACK_WASTED'; playerId: string; targetId: string; rank?: string }
   | { type: 'WHALE_SHUFFLE'; playerId: string; targetAId?: string; targetBId?: string }
-  | { type: 'GAME_ENDED'; winners: readonly string[] }
+  | { type: 'GAME_ENDED'; winners: readonly string[]; reason?: string }
   // never voiced: the rules' own tells
   | { type: 'WINDOW_OPENED' }
   | { type: 'WINDOW_CLOSED' };
@@ -126,6 +145,10 @@ export const BEAT = {
   lastSet: 600,
   effect: 450, // a power's effect, under its motif
   start: 2400, // the first turn after the call to the table
+  /** when several seats stop the totem in one step (a stunned skip, a pass), each stop waits for the last one's cue */
+  turnGap: 420,
+  /** the beat the podium is shown after the last one: the last lay's stamp, one held beat, the gate doors */
+  podium: 500,
 } as const;
 
 /* --------------------------------------------------------------- the function */
@@ -175,21 +198,24 @@ export function cuesFor(record: PublicRecord, facts: SeatFacts): CueRequest[] {
   /* ---- events (they label the diff; structural windows are simply not in this list) ---- */
   const bonusFor = new Set(events.filter((e) => e.type === 'BONUS_TURN').map((e) => (e as { playerId: string }).playerId));
   let usedAt: number | null = null;
+  let turnSlot = 0;
   for (const e of events) {
     switch (e.type) {
       case 'GAME_STARTED':
         add('mus.start', 0);
         break;
-      case 'TURN_STARTED':
+      case 'TURN_STARTED': {
         if (bonusFor.has(e.playerId)) break; // the asker keeps the turn: `table.bonus` says so
-        if (e.playerId === me) add('table.turn.you', started ? BEAT.start : BEAT.turn, { seat: seat(e.playerId) });
-        else add('table.turn', started ? BEAT.start : BEAT.turn, { seat: seat(e.playerId) });
+        const when = (started ? BEAT.start : BEAT.turn) + BEAT.turnGap * turnSlot++;
+        if (e.playerId === me) add('table.turn.you', when, { seat: seat(e.playerId) });
+        else add('table.turn', when, { seat: seat(e.playerId) });
         break;
+      }
       case 'BONUS_TURN':
         add('table.bonus', BEAT.bonus, { seat: seat(e.playerId) });
         break;
       case 'TURN_SKIPPED_STUNNED':
-        add('table.skipped', BEAT.turn, { seat: seat(e.playerId) });
+        add('table.skipped', (started ? BEAT.start : BEAT.turn) + BEAT.turnGap * turnSlot++, { seat: seat(e.playerId) });
         break;
       case 'HAND_REFILLED':
         if (!started) add('table.refill', 0, { count: Math.min(4, e.count) });

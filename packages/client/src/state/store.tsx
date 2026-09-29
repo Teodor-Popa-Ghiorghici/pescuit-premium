@@ -11,6 +11,7 @@ import type {
 import { DEFAULT_LOCALE } from '@pescuit/shared';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getEngine } from '../audio/engine.js';
+import { presenter } from '../game/presenter.js';
 import { createClient, type ConnectionStatus, type WsClient } from '../net/client.js';
 import { loadSession, roomCodeFromUrl, saveSession, setRoomInUrl } from '../net/session.js';
 
@@ -26,8 +27,16 @@ interface GameState {
   config: RoomConfig;
   view: RedactedView | null;
   events: WireEvent[];
+  /** stretches of the log the player did not watch (a rejoin, a hidden tab): "while you were away" */
+  away: AwayMark[];
   error: string | null;
   joining: boolean;
+}
+
+/** the events with `afterSeq < seq <= upToSeq` were not presented: they are in the log, under a divider */
+export interface AwayMark {
+  afterSeq: number;
+  upToSeq: number;
 }
 
 /**
@@ -84,6 +93,7 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
     config: source?.config ?? { powerVisibility: 'ascuns' },
     view: null,
     events: [],
+    away: [],
     error: null,
     joining: false,
   });
@@ -98,6 +108,8 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
 
   useEffect(() => {
     if (sourceRef.current) {
+      presenter.reset();
+      presenter.setSelf(sourceRef.current.playerId);
       const stop = sourceRef.current.start(onMessage);
       return stop;
     }
@@ -124,7 +136,11 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
       case 'joined': {
         saveSession({ roomCode: msg.roomCode, token: msg.token, playerId: msg.playerId, name: '' });
         setRoomInUrl(msg.roomCode);
-        if (activeRoom.current !== msg.roomCode) lastSeq.current = 0; // seq is per room
+        if (activeRoom.current !== msg.roomCode) {
+          lastSeq.current = 0; // seq is per room
+          presenter.reset();
+        }
+        presenter.setSelf(msg.playerId);
         activeRoom.current = msg.roomCode;
         setState((s) => ({ ...s, roomCode: msg.roomCode, playerId: msg.playerId, error: null, joining: false }));
         return;
@@ -137,13 +153,22 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
         // apply only events newer than the last one seen; a resync (rejoin) carries none, and
         // the missed lines are not replayed as choreography
         const fresh = msg.events.filter((e) => e.seq > lastSeq.current);
+        const seenBefore = lastSeq.current;
         for (const e of fresh) lastSeq.current = Math.max(lastSeq.current, e.seq);
         // the window clock reads the server's time through the engine's ServerClock (§3.10)
         if (msg.view.serverNow > 0) getEngine().server.sample(msg.view.serverNow, Date.now());
+        // a rejoin never replays choreography; the lines it carries (or the gap it leaves) go to the log
+        // under "while you were away". So does whatever arrives while the tab is hidden.
+        const snapshot = !!msg.snapshot;
+        const hidden = typeof document !== 'undefined' && document.hidden;
+        const gapTo = snapshot ? Math.max(lastSeq.current, msg.view.seq) : hidden && fresh.length ? lastSeq.current : 0;
+        if (snapshot) lastSeq.current = Math.max(lastSeq.current, msg.view.seq);
+        presenter.present({ view: msg.view, events: fresh, snapshot });
         setState((s) => ({
           ...s,
           view: msg.view,
           events: fresh.length ? [...s.events, ...fresh].slice(-MAX_EVENTS) : s.events,
+          away: gapTo > seenBefore && seenBefore > 0 ? [...s.away, { afterSeq: seenBefore, upToSeq: gapTo }].slice(-8) : s.away,
         }));
         return;
       }
@@ -154,6 +179,7 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
       case 'room_closed': {
         activeRoom.current = null;
         lastSeq.current = 0;
+        presenter.reset();
         setState((s) => ({ ...s, error: msg.reason, roomCode: null, view: null, started: false }));
         return;
       }
@@ -192,8 +218,9 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
       leaveRoom: () => {
         activeRoom.current = null;
         lastSeq.current = 0;
+        presenter.reset();
         setRoomInUrl(null);
-        setState((s) => ({ ...s, roomCode: null, playerId: null, view: null, started: false, players: [] }));
+        setState((s) => ({ ...s, roomCode: null, playerId: null, view: null, started: false, players: [], events: [], away: [] }));
       },
     }),
     [state, send, source],

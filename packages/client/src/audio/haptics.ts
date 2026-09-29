@@ -7,7 +7,7 @@
  * facts (plus the private tier, gated by its toggle); `playHaptics` is the only side effect.
  */
 
-import { type PublicRecord, type SeatFacts } from './cues.js';
+import { BEAT, type PublicRecord, type SeatFacts } from './cues.js';
 
 export type HapticTier = 'public' | 'private';
 
@@ -40,14 +40,21 @@ export function hapticsFor(record: PublicRecord, facts: SeatFacts): HapticReques
   const add = (signal: string, pattern: readonly number[], at = 0, tier: HapticTier = 'public') => out.push({ signal, pattern: [...pattern], at, tier });
 
   const bonus = new Set(events.filter((e) => e.type === 'BONUS_TURN').map((e) => (e as { playerId: string }).playerId));
+  const base = events.some((e) => e.type === 'GAME_STARTED') ? BEAT.start : BEAT.turn;
+  let turnSlot = 0; // the same stops as cuesFor: each seat the totem visits waits for the last one
   for (const e of events) {
     switch (e.type) {
-      case 'TURN_STARTED':
-        if (e.playerId === me && !bonus.has(me)) add('yourTurn', PATTERNS.yourTurn, 760);
+      case 'TURN_STARTED': {
+        if (bonus.has(e.playerId)) break;
+        const at = base + BEAT.turnGap * turnSlot++;
+        if (e.playerId === me) add('yourTurn', PATTERNS.yourTurn, at);
         break;
-      case 'TURN_SKIPPED_STUNNED':
-        if (e.playerId === me) add('stunned', PATTERNS.stunned, 760);
+      }
+      case 'TURN_SKIPPED_STUNNED': {
+        const at = base + BEAT.turnGap * turnSlot++;
+        if (e.playerId === me) add('stunned', PATTERNS.stunned, at);
         break;
+      }
       case 'HAND_REFILLED':
         if (e.playerId === me) add('cardLands', PATTERNS.cardLands);
         break;
@@ -59,7 +66,8 @@ export function hapticsFor(record: PublicRecord, facts: SeatFacts): HapticReques
         if (e.askerId === me) add('cardLands', PATTERNS.cardLands, 450);
         break;
       case 'SHARK_JUMP':
-        if (e.loserId === me) add('cardsTaken', PATTERNS.cardsTaken, 450);
+        // the engine's SHARK_JUMP names the player the cards were jumped away from as `fromId`
+        if ((e.fromId ?? e.loserId) === me) add('cardsTaken', PATTERNS.cardsTaken, 450);
         break;
       case 'LANTERNFISH_REFLECT':
         if (e.fromId === me) add('cardsTaken', PATTERNS.cardsTaken, 450);

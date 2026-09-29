@@ -4,11 +4,13 @@ import { CardBack } from './Card.js';
 import { useT } from '../i18n/useT.js';
 import { useGame } from '../state/store.js';
 import { roomCodeFromUrl } from '../net/session.js';
-import { play } from '../sound.js';
+import { getEngine } from '../audio/engine.js';
+import { useLobbyAmbience } from '../hooks/useLobbyAudio.js';
 
 /** §5.1 — the sheet of stock everything else is printed on, and the rope rule under
  *  the title that reappears at the top of every screen in the game. */
 export function Lobby() {
+  useLobbyAmbience();
   const { t, locale } = useT();
   const { createRoom, joinRoom, setLocale, error, dismissError, joining } = useGame();
   const [name, setName] = useState('');
@@ -19,7 +21,7 @@ export function Lobby() {
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    play('stamp');
+    getEngine().play('ui.press'); // the first knock unlocks the audio
     if (mode === 'create') {
       createRoom(name, { powerVisibility });
     } else {

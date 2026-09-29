@@ -440,6 +440,59 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await expect(page, '[data-settings]', 'the long press did not open the mixer');
   });
 
+  /* ------------------------------------------------------ the presentation (§4.1-§4.3) */
+  await run('phone presentation settles: no flier, no mask left when the table is quiet', ph, true, '?table=bots&n=4&seed=7&seat=0&speed=2&bots=memory&auto=1&panel=0', async (page) => {
+    await page.waitForTimeout(5000);
+    await page.evaluate(() => window.__driver.pause());
+    await page.waitForTimeout(2600);
+    const left = await page.evaluate(() => ({
+      masked: [...document.querySelectorAll('[data-masked]')].map((e) => `${e.className}:${e.getAttribute('data-masked')}`),
+      fliers: [...document.querySelectorAll('[data-fliers] > *')].filter((e) => !e.classList.contains('is-held')).length,
+    }));
+    if (left.masked.length) throw new Error(`still masked: ${left.masked.join(', ')}`);
+    if (left.fliers) throw new Error(`${left.fliers} fliers left in the air`);
+  });
+  await run('phone reduced motion: order kept, nothing travels, nothing shakes', ph, true, '?table=bots&n=4&seed=7&seat=0&speed=2&bots=memory&auto=1&panel=0', async (page) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.evaluate(() => {
+      window.__seen = { cards: 0, totems: 0, shakes: 0, impacts: 0 };
+      new MutationObserver((ms) => {
+        for (const m of ms) {
+          for (const n of m.addedNodes) if (n.classList && n.classList.contains('flier__card')) window.__seen.cards++, (window.__seen.totems += n.classList.contains('flier__totem') ? 1 : 0);
+          if (m.target.classList && m.target.hasAttribute && m.target.hasAttribute('data-table-layer')) {
+            if (m.target.style.translate) window.__seen.shakes++;
+            if (m.target.classList.contains('is-impact')) window.__seen.impacts++;
+          }
+          for (const n of m.addedNodes) if (n.classList && n.classList.contains('flier__totem')) window.__seen.totems++;
+        }
+      }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style'] });
+    });
+    await page.waitForTimeout(7000);
+    const seen = await page.evaluate(() => window.__seen);
+    if (seen.cards || seen.totems) throw new Error(`fliers travelled under reduced motion: ${JSON.stringify(seen)}`);
+    if (seen.shakes || seen.impacts) throw new Error(`shake or impact frame under reduced motion: ${JSON.stringify(seen)}`);
+  });
+  await run('phone a whale: hit-stop, shake and exactly one impact frame; the layer is clean after', ph, true, '?fixture=whale&n=6&panel=0', async (page) => {
+    await page.evaluate(() => {
+      window.__seen = { shakes: 0, impacts: 0, maxAir: 0, cards: 0 };
+      new MutationObserver((ms) => {
+        const layer = document.querySelector('[data-table-layer]');
+        if (layer && layer.style.translate) window.__seen.shakes++;
+        if (layer && layer.classList.contains('is-impact') && !window.__seen.wasImpact) window.__seen.impacts++;
+        window.__seen.wasImpact = !!(layer && layer.classList.contains('is-impact'));
+        window.__seen.maxAir = Math.max(window.__seen.maxAir, document.querySelectorAll('[data-fliers] > .flier__card').length);
+      }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style'] });
+    });
+    await page.locator('.pair').first().click();
+    await page.waitForTimeout(2800);
+    const seen = await page.evaluate(() => ({ ...window.__seen, left: document.querySelectorAll('[data-fliers] > *').length, translate: (document.querySelector('[data-table-layer]') || {}).style.translate }));
+    if (seen.impacts !== 1) throw new Error(`${seen.impacts} impact frames for one heavy event`);
+    if (!seen.shakes) throw new Error('the table did not shake');
+    if (seen.maxAir > 12) throw new Error(`${seen.maxAir} cards in the air at once`);
+    if (seen.left) throw new Error(`${seen.left} fliers left after the whale`);
+    if (seen.translate) throw new Error('the table stayed shifted');
+  });
+
   await browser.close();
   if (server) await server.close();
   for (const r of results) console.log(r);

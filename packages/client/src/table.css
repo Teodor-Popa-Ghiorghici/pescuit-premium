@@ -535,7 +535,8 @@ body:has(.dk) {
   top: 0;
   height: var(--ch);
   scroll-snap-align: start;
-  transition: transform var(--dur-snap) var(--ease-strike);
+  /* beat 0 (§4.1): the lift answers in 50 ms or less */
+  transition: transform 40ms var(--ease-strike);
   outline-offset: 2px;
 }
 

@@ -3,7 +3,7 @@
  * laid sets, every line of the log, and the interrupt prompt.
  *
  * Stroke weight lives on the wrapper so one seal reads at 16px and at 48px. */
-import type { ReactElement } from 'react';
+import { memo, type ReactElement } from 'react';
 
 const SEALS: Record<string, ReactElement> = {
   // the knot: two blocks that will not come apart
@@ -121,7 +121,7 @@ export function sealFor(rank: string): ReactElement {
  * A rank's seal at any size. `size` is the rendered box in px; the 24-grid and the
  * 3px minimum feature are preserved by scaling the stroke with it.
  */
-export function Seal({
+function SealImpl({
   rank,
   size = 24,
   color = 'var(--ink)',
@@ -153,3 +153,5 @@ export function Seal({
     </svg>
   );
 }
+
+export const Seal = memo(SealImpl);

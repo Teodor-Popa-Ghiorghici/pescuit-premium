@@ -8,6 +8,7 @@
  */
 @import './design/tokens.css';
 @import './table.css';
+@import './presentation.css';
 
 * {
   box-sizing: border-box;
