@@ -23,15 +23,27 @@ export function hp(f: number, Q = 0.7071, sr = RENDER_SR): Coef {
 
 /** A direct-form-I biquad whose coefficients may change between samples. */
 export class Biquad {
+  private b0 = 1;
+  private b1 = 0;
+  private b2 = 0;
+  private a1 = 0;
+  private a2 = 0;
   private x1 = 0;
   private x2 = 0;
   private y1 = 0;
   private y2 = 0;
-  constructor(public c: Coef) {}
+  constructor(c: Coef) {
+    this.c = c;
+  }
+  set c(c: Coef) {
+    [this.b0, this.b1, this.b2, this.a1, this.a2] = c;
+  }
   tick(x: number): number {
-    const [b0, b1, b2, a1, a2] = this.c;
-    const y = b0 * x + b1 * this.x1 + b2 * this.x2 - a1 * this.y1 - a2 * this.y2;
-    this.x2 = this.x1; this.x1 = x; this.y2 = this.y1; this.y1 = y;
+    const y = this.b0 * x + this.b1 * this.x1 + this.b2 * this.x2 - this.a1 * this.y1 - this.a2 * this.y2;
+    this.x2 = this.x1;
+    this.x1 = x;
+    this.y2 = this.y1;
+    this.y1 = y;
     return y;
   }
 }

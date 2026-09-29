@@ -40,7 +40,7 @@ export const KEYS: string[] = [
   ...RANKS.flatMap((r) => [`motif.${r}.full`, `motif.${r}.spk`]),
   ...[0, 1, 2].flatMap((t) => [`riffle.full.${t}`, `riffle.spk.${t}`]),
   ...Object.keys(TULNIC).map((k) => `tulnic.${k}`),
-  'dramba.jelly.full', 'dramba.jelly.spk', 'dramba.wobble',
+  'dramba.jelly.full', 'dramba.jelly.spk', 'dramba.wobble', 'dramba.wobble.spk',
   'end.win', 'end.tie', 'end.lose', 'eligible',
 ];
 
@@ -76,7 +76,7 @@ export function build(key: string): Float32Array | null {
       return t ? renderTulnic(t[0], t[1], 1.2) : null;
     }
     case 'dramba':
-      if (a === 'wobble') return renderDramba([{ start: 0.02, dur: 0.3, gain: 0.7, formants: [[380, 520], [1100, 1300]], wobbleHz: 6 }], 0.36);
+      if (a === 'wobble') return renderDramba([{ start: 0.01, dur: b === 'spk' ? 0.1 : 0.3, gain: 0.7, formants: [[380, 520], [1100, 1300]], wobbleHz: 6 }], b === 'spk' ? 0.14 : 0.36);
       return a === 'jelly' ? renderDramba([{ start: 0.01, dur: b === 'spk' ? 0.15 : 0.5, gain: 1, formants: [[450, 810], [1300, 1950]] }], b === 'spk' ? 0.18 : 0.55) : null;
     case 'end': {
       if (a === 'win') return renderBreath([74, 76, 77, 81, 86].map((n, i) => ({ note: n, start: 0.05 + [0, 0.4, 0.8, 1.3, 1.85][i], dur: i === 4 ? 1.0 : 0.42 })), 3, { seed: 9 });

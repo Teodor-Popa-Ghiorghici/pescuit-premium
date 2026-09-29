@@ -18,7 +18,7 @@ import { DEFAULT_SETTINGS, Mixer, loadSettings, masterCurve, saveSettings, type 
 import { RECIPES, type CueParams } from './recipes.js';
 import { fromDb } from './util.js';
 import { VoicePool } from './voices.js';
-import { loadRendered } from './bank.js';
+import { loadRendered, preloadRendered } from './bank.js';
 
 export interface VoiceEnv {
   ctx: BaseAudioContext;
@@ -59,7 +59,7 @@ export function spawnVoice(e: VoiceEnv, id: string, params: CueParams, seed: num
   let input: AudioNode;
   const level = ctx.createGain();
   level.gain.value = fromDb(def.levelDb + (cal ? cal.norm : 0));
-  if (cal && e.mastering !== false) {
+  if (cal && cal.c !== null && e.mastering !== false) {
     const shaper = ctx.createWaveShaper();
     shaper.curve = masterCurve(cal.c) as Float32Array<ArrayBuffer>;
     shaper.connect(level);
@@ -144,6 +144,8 @@ export class AudioEngine {
     this.mixer = new Mixer(ctx, this.settings);
     this.starting = this.mixer.start().then(() => {
       this.ready = true;
+      // render the tonal families for the current profile in the background, in small slices
+      setTimeout(() => void preloadRendered(this.settings.profile), 300);
       this.timer = setInterval(() => this.tick(), 25);
       this.syncWorld();
     });
@@ -181,8 +183,10 @@ export class AudioEngine {
   /* ------------------------------------------------------------- settings */
 
   update(patch: Partial<AudioSettings>): void {
+    const profileChanged = patch.profile !== undefined && patch.profile !== this.settings.profile;
     this.settings = { ...this.settings, ...patch };
     saveSettings(this.settings);
+    if (profileChanged && this.ready) void preloadRendered(this.settings.profile);
     this.mixer?.applySettings(this.settings);
     this.syncWorld();
     this.emit();
@@ -201,7 +205,7 @@ export class AudioEngine {
   play(id: string, params?: CueParams, opts: { delayMs?: number; seed?: number; full?: boolean } = {}): boolean {
     const def = cueDef(id);
     if (!def) return false;
-    if (def.heard === 'private' && !this.headphones) return false; // defence in depth (§3.2)
+    if ((def.heard === 'private' || params?.private) && !this.headphones) return false; // defence in depth (§3.2)
     if (this.settings.muted) return false;
     void this.ensure();
     if (this.tracing) this.trace.push({ at: Date.now(), id, played: true });

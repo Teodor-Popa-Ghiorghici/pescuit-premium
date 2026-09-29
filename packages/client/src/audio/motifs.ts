@@ -37,8 +37,8 @@ export const MOTIFS: Record<Exclude<MotifRank, 'clownfish'>, Motif> = {
   // one note struck three times; begins and ends on the same pitch — enclosed
   tortoise: {
     inst: 'fluier',
-    full: [{ note: 81, start: 0.01, dur: 0.28 }, { note: 81, start: 0.33, dur: 0.28 }, { note: 81, start: 0.65, dur: 0.3 }],
-    spk: [{ note: 81, start: 0.01, dur: 0.11 }, { note: 81, start: 0.12, dur: 0.11 }],
+    full: [{ note: 86, start: 0.01, dur: 0.28 }, { note: 86, start: 0.33, dur: 0.28 }, { note: 86, start: 0.65, dur: 0.3 }],
+    spk: [{ note: 86, start: 0.01, dur: 0.11 }, { note: 86, start: 0.12, dur: 0.11 }],
     seconds: { full: 1, spk: 0.26 },
   },
   // a five-note palindrome, A B C B A — mirror symmetry, like its carving
@@ -69,10 +69,10 @@ export const MOTIFS: Record<Exclude<MotifRank, 'clownfish'>, Motif> = {
   stickleback: {
     inst: 'caval',
     full: [
-      { note: 77, start: 0.01, dur: 0.06 }, { note: 80, start: 0.07, dur: 0.06 }, { note: 81, start: 0.13, dur: 0.06 },
-      { note: 83, start: 0.19, dur: 0.72 },
+      { note: 80, start: 0.01, dur: 0.06 }, { note: 81, start: 0.07, dur: 0.06 }, { note: 83, start: 0.13, dur: 0.06 },
+      { note: 84, start: 0.19, dur: 0.72 },
     ],
-    spk: [{ note: 80, start: 0.01, dur: 0.06 }, { note: 83, start: 0.07, dur: 0.16 }],
+    spk: [{ note: 81, start: 0.01, dur: 0.06 }, { note: 84, start: 0.07, dur: 0.16 }],
     seconds: { full: 1, spk: 0.26 },
   },
   // two long notes, a falling major sixth, with a swell — the heaviest thing in the sea

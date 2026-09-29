@@ -247,7 +247,7 @@ export function cuesFor(record: PublicRecord, facts: SeatFacts): CueRequest[] {
         // public in Deschis; private in Ascuns (and then only for the owner, who has headphones on)
         if (mode === 'deschis' || (e.playerId === me && facts.headphones)) {
           const c = motifName(e.boundRank);
-          add('power.clownfish.bound', 0, c ? { rank: c } : undefined);
+          add('power.clownfish.bound', 0, { ...(c ? { rank: c } : {}), ...(mode === 'deschis' ? {} : { private: true }) });
         }
         break;
       }
@@ -288,7 +288,7 @@ export function cuesFor(record: PublicRecord, facts: SeatFacts): CueRequest[] {
   if (after.setsPossible === 1 && before1 !== 1) add('mus.lastset', has('SET_LAID') ? BEAT.lastSet : 0);
 
   // the private tier is silent unless headphones mode is on: enforced here as well as in the engine
-  return out.filter((c) => cueDef(c.id)?.heard !== 'private' || facts.headphones).sort((a, b) => a.at - b.at);
+  return out.filter((c) => (cueDef(c.id)?.heard !== 'private' && !c.params?.private) || facts.headphones).sort((a, b) => a.at - b.at);
 }
 
 /** The answering device's own close, at the press (§3.2): the same cue, earlier. The device then

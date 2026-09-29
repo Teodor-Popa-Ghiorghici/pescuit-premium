@@ -101,6 +101,6 @@ describe('the cue sheet enforces §3.7', () => {
   });
 
   it('the private tier is exactly what §3.2 names', () => {
-    expect(CUES.filter((c) => c.heard === 'private').map((c) => c.id).sort()).toEqual(['clock.eligible', 'power.clownfish.bound', 'power.granted.mine']);
+    expect(CUES.filter((c) => c.heard === 'private').map((c) => c.id).sort()).toEqual(['clock.eligible', 'power.granted.mine']);
   });
 });

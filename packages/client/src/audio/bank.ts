@@ -48,10 +48,35 @@ export function renderedBuffer(ctx: BaseAudioContext, key: string): AudioBuffer 
   return b;
 }
 
-/** Renders every keyed buffer now (the waiting room, on idle). Returns the milliseconds spent. */
-export async function preloadRendered(): Promise<number> {
+export interface PreloadReport {
+  keys: number;
+  /** CPU milliseconds spent rendering (the work is sliced, so no single frame pays it all) */
+  ms: number;
+}
+
+const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+/**
+ * Renders the buffers the current profile will ask for, in slices of about 6 ms so no frame
+ * stalls: the speaker profile plays the speaker variants and the headphones the full ones, the
+ * ceremonies come last. Anything not yet rendered when a cue asks is rendered on demand.
+ */
+export async function preloadRendered(profile: 'speaker' | 'headphones' = 'speaker'): Promise<PreloadReport> {
   await loadRendered();
-  const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  for (const k of catalog!.KEYS) rendered(k);
-  return (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
+  const skip = profile === 'speaker' ? /\.full(\.|$)/ : /\.spk(\.|$)/;
+  const keys = catalog!.KEYS.filter((k) => !skip.test(k));
+  keys.sort((a, b) => Number(a.startsWith('end.')) - Number(b.startsWith('end.')));
+  let spent = 0;
+  let slice = now();
+  for (const k of keys) {
+    const t = now();
+    rendered(k);
+    spent += now() - t;
+    if (now() - slice > 6) {
+      await tick();
+      slice = now();
+    }
+  }
+  return { keys: keys.length, ms: spent };
 }

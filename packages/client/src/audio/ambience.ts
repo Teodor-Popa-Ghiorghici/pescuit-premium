@@ -24,7 +24,7 @@ export interface AmbienceInputs {
   scene: 'lobby' | 'game';
 }
 
-export const BED_DB = 1; // the bed's level within the ambience bus (prototype: 1)
+export const BED_DB = 0; // the bed's level within the ambience bus (the prototype used +1; the product's dry wind is louder, so it sits 1 dB lower)
 
 export class Ambience {
   private inputs: AmbienceInputs = { poolCount: 1, poolStart: 1, setsPossible: null, scene: 'game' };
@@ -80,7 +80,7 @@ export class Ambience {
     }
     const r = this.r;
     this.next = { drip: t0 + 2 + r() * 4, fish: t0 + 12 + r() * 20, reeds: t0 + 6 + r() * 10, bird: t0 + 15 + r() * 25, pulse: t0 };
-    this.update(this.inputs);
+    this.update(this.inputs, true);
   }
 
   stop(): void {
@@ -95,8 +95,8 @@ export class Ambience {
     this.started = false;
   }
 
-  /** the public inputs: the pool and the tally */
-  update(inputs: Partial<AmbienceInputs>): void {
+  /** the public inputs: the pool and the tally. `immediate` skips the glide (offline renders). */
+  update(inputs: Partial<AmbienceInputs>, immediate = false): void {
     this.inputs = { ...this.inputs, ...inputs };
     if (!this.started) return;
     const { poolCount, poolStart, scene } = this.inputs;
@@ -104,10 +104,11 @@ export class Ambience {
     const t = this.ctx.currentTime;
     const wet = poolStart > 0 ? Math.min(1, poolCount / poolStart) : 1;
     // the water thins as the pool drains; once dry it is wind: brighter, gusting, no lapping
-    const level = (scene === 'lobby' ? 2.2 : 1) * (dry ? 0.9 : 0.55 + 0.45 * wet);
-    this.bedGain.gain.setTargetAtTime(level * 10 ** (BED_DB / 20), t, 1.5);
-    this.lp.frequency.setTargetAtTime(dry ? 900 : 600, t, 2);
-    this.wind.gain.setTargetAtTime(dry ? 0.22 * level : 0, t, 2);
+    const level = (scene === 'lobby' ? 2.2 : 1) * (dry ? 0.7 : 0.8 + 0.2 * wet);
+    const to = (p: AudioParam, v: number, tc: number) => (immediate ? (p.value = v) : p.setTargetAtTime(v, t, tc));
+    to(this.bedGain.gain, level * 10 ** (BED_DB / 20), 1.5);
+    to(this.lp.frequency, dry ? 900 : 600, 2);
+    to(this.wind.gain, dry ? 0.15 * level : 0, 2);
   }
 
   /** Emits every one-shot due before `until` (audio-context seconds). Called by the lookahead scheduler. */

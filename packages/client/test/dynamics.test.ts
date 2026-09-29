@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createDynamics, DYNAMICS_DEFAULTS, runDynamics } from '../src/audio/dynamics.js';
 import { db, fromDb } from '../src/audio/util.js';
 import { peakOf, truePeakDb } from '../src/audio/measure.js';
-import { workletSource } from '../src/audio/worklet.js';
+import { createLimiter, workletSource } from '../src/audio/worklet.js';
 
 const SR = 48000;
 const sine = (f: number, amp: number, n: number, sr = SR) => Float32Array.from({ length: n }, (_, i) => amp * Math.sin((2 * Math.PI * f * i) / sr));
@@ -106,5 +106,29 @@ describe('dynamics: the limiter and the safety clip (§3.3)', () => {
     }
     const lat = createDynamics(SR).latency;
     for (let i = 0; i < 2048; i += 13) expect(got[0][i + lat]).toBeCloseTo(ref.out[0][i], 7);
+  });
+});
+
+describe('the limiter node degrades gracefully (§3.5)', () => {
+  it('without an AudioWorklet it runs the same function in a script processor', async () => {
+    let node: { onaudioprocess?: (e: unknown) => void } = {};
+    const ctx = { sampleRate: SR, createScriptProcessor: () => (node = {}) } as unknown as BaseAudioContext;
+    const lim = await createLimiter(ctx);
+    expect(lim.kind).toBe('script');
+    const n = 1024;
+    const inp = Float32Array.from({ length: n }, (_, i) => 1.5 * Math.sin(i * 0.05));
+    const out = [new Float32Array(n), new Float32Array(n)];
+    for (let block = 0; block < 4; block++)
+      node.onaudioprocess!({ inputBuffer: { numberOfChannels: 1, length: n, getChannelData: () => inp }, outputBuffer: { numberOfChannels: 2, getChannelData: (c: number) => out[c] } });
+    expect(db(peakOf(out[0]))).toBeLessThanOrEqual(DYNAMICS_DEFAULTS.ceilingDb + 1e-3);
+    expect(lim.stats()!.grMaxDb).toBeGreaterThan(3);
+  });
+  it('with neither, a static tanh clip at the ceiling still bounds the output', async () => {
+    const ctx = { sampleRate: SR, createWaveShaper: () => ({ curve: null as Float32Array | null }) } as unknown as BaseAudioContext;
+    const lim = await createLimiter(ctx);
+    expect(lim.kind).toBe('shaper');
+    const curve = (lim.node as unknown as { curve: Float32Array }).curve;
+    expect(Math.max(...curve.map(Math.abs))).toBeLessThanOrEqual(fromDb(-1.5) + 1e-6);
+    expect(lim.stats()).toBeNull();
   });
 });

@@ -27,7 +27,7 @@ export interface AudioSettings {
   muted: boolean;
   profile: Profile;
   mono: boolean;
-  /** the "softer sounds" accessibility option: -3 dB and the highs taken down */
+  /** the "softer sounds" accessibility option: -3 dB and the highs taken down (-9 dB shelf at 4.5 kHz) */
   softer: boolean;
   /** manual A/V offset for Bluetooth, ms (positive delays the pictures) */
   avOffsetMs: number;
@@ -152,7 +152,7 @@ export function masterCurve(cDb: number): Float32Array {
   return curve;
 }
 
-export function calFor(profile: Profile, cue: string): { c: number; norm: number } | undefined {
+export function calFor(profile: Profile, cue: string): { c: number | null; norm: number } | undefined {
   return CAL[profile][cue];
 }
 
@@ -172,7 +172,9 @@ export class Mixer {
     this.program = ctx.createGain();
     this.user = ctx.createGain();
     this.soft = ctx.createBiquadFilter();
-    this.soft.type = 'lowpass';
+    // "softer sounds": a high shelf that is an exact identity at 0 dB, so the default chain is the harness's chain
+    this.soft.type = 'highshelf';
+    this.soft.frequency.value = 4500;
     this.soft.Q.value = 0.707;
     for (const o of Object.values(this.graph.outputs)) o.connect(this.program);
     this.applySettings(settings);
@@ -181,8 +183,10 @@ export class Mixer {
   /** Connects the limiter and the output. Until it resolves the mix is silent, never unlimited. */
   async start(): Promise<void> {
     this.limiter = await createLimiter(this.ctx);
-    this.program.connect(this.limiter.node);
-    this.limiter.node.connect(this.soft).connect(this.user).connect(this.ctx.destination);
+    // the limiter and the clip are the last processing: nothing may sit between them and the output but
+    // the user's attenuation, or a filter could lift a limited peak back over the ceiling
+    this.program.connect(this.soft).connect(this.limiter.node);
+    this.limiter.node.connect(this.user).connect(this.ctx.destination);
   }
 
   applySettings(s: AudioSettings): void {
@@ -191,7 +195,7 @@ export class Mixer {
     for (const n of BUS_NAMES) this.graph.buses[n].gain.setTargetAtTime(busGain(n, s.profile, s), t, 0.02);
     this.graph.setProfile(s.profile);
     this.program.gain.setTargetAtTime(fromDb(PROGRAM_DB[s.profile]), t, 0.02);
-    this.soft.frequency.setTargetAtTime(s.softer ? 5000 : 20000, t, 0.02);
+    this.soft.gain.setTargetAtTime(s.softer ? -9 : 0, t, 0.02);
     // user volume comes last and only attenuates: at most unity
     this.user.gain.setTargetAtTime(s.muted ? 0 : Math.min(1, s.master) * (s.softer ? fromDb(-3) : 1), t, 0.02);
     this.user.channelCount = s.mono ? 1 : 2;

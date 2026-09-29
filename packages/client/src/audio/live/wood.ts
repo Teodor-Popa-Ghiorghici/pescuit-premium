@@ -63,12 +63,13 @@ export function wood(ctx: Ctx, out: AudioNode, t: number, o: WoodOpts = {}): voi
 export function click(ctx: Ctx, out: AudioNode, t: number, seed: number, gain = 1): void {
   hooks.strike?.('D', 0.9);
   const r = rng(seed);
-  const lp = filt(ctx, 'lowpass', 2700);
+  // a broad band-pass, not a low-pass: a click has no DC and no low tail for a 30 Hz high-pass to ring on
+  const lp = filt(ctx, 'bandpass', 2400, 0.6);
   lp.connect(out);
   noiseSrc(ctx, t, 0.004, r).connect(filt(ctx, 'bandpass', 3200, 1.5)).connect(env(ctx, t, gain * 0.7, 0.0005, 0.003)).connect(lp);
   const base = 1200 * (1 + (r() - 0.5) * 0.06);
   for (let i = 0; i < 2; i++) {
-    const t60 = T60[i] * 0.45 * 0.37;
+    const t60 = T60[i] * 0.45 * 0.25;
     const g = env(ctx, t, AMPS[i] * 0.35 * 0.6 * gain, 0.001, t60);
     g.connect(lp);
     const o = ctx.createOscillator();

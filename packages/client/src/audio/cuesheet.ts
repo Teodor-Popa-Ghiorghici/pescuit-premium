@@ -23,7 +23,8 @@ export const BUSES: Record<BusName, { levelDb: number; speakerBoostDb: number; v
 export const GLOBAL_VOICES = 14;
 
 /** Who hears it (Appendix C): every client / the acting client / the seat a public fact
- * concerns / headphones mode only. */
+ * concerns / headphones mode only. (`power.clownfish.bound` is public in Mode Deschis and private
+ * in Ascuns: it is 'all' here and the request carries `private: true` in Ascuns.) */
 export type Heard = 'all' | 'local' | 'you' | 'private';
 
 /** transient (< 200 ms: normalised by K-weighted level over its active span) or sustained
@@ -135,7 +136,7 @@ export const CUES: readonly CueDef[] = [
   row({ id: 'power.stickleback', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 0, prio: 4, variation: 2, maxLenMs: 280, short: 'first hit', env: 'src' }),
   row({ id: 'power.stickleback.miss', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 0, prio: 4, variation: 2, maxLenMs: 180, short: 'first hit', env: 'src' }),
   row({ id: 'power.whale', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 1, prio: 4, variation: 1, maxLenMs: 1400, short: '400 ms', env: 'src', cls: 'S' }),
-  row({ id: 'power.clownfish.bound', bus: 'Power', heard: 'private', plays: [0, 1], levelDb: -4, prio: 3, variation: 1, maxLenMs: 600, short: 'peg' }),
+  row({ id: 'power.clownfish.bound', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: -4, prio: 3, variation: 1, maxLenMs: 600, short: 'peg' }),
 
   // world and meta
   // 0-6 a game, stalls only (Appendix D): a stall is a state, not a play count, so §3.7's bands do not apply

@@ -22,10 +22,14 @@ export function fakeCtx(sampleRate = 48000) {
       curve: null, buffer: null, loop: false,
       start: () => undefined, stop: () => undefined, disconnect: () => undefined,
     };
-    n.connect = (dest: unknown) => dest;
+    n.connect = (dest: unknown) => {
+      edges.push([n, dest]);
+      return dest;
+    };
     return n;
   };
   const buffers: Array<{ length: number; sampleRate: number }> = [];
+  const edges: Array<[unknown, unknown]> = [];
   const ctx = {
     sampleRate,
     currentTime: 0,
@@ -47,5 +51,5 @@ export function fakeCtx(sampleRate = 48000) {
   // creating the destination and shared buffers is not a hit's cost
   tally.total = 0;
   tally.byType = {};
-  return { ctx: ctx as unknown as BaseAudioContext, tally, reset: () => { tally.total = 0; tally.byType = {}; }, fake: ctx };
+  return { ctx: ctx as unknown as BaseAudioContext, tally, edges, reset: () => { tally.total = 0; tally.byType = {}; }, fake: ctx };
 }

@@ -29,6 +29,8 @@ export interface CueParams {
   open?: boolean;
   /** the backlog variant (§4.2) */
   short?: boolean;
+  /** the request voices a private fact: dropped unless headphones mode is on */
+  private?: boolean;
 }
 
 export type Recipe = (ctx: Ctx, out: AudioNode, t: number, seed: number, speaker: boolean, p: CueParams) => void;
@@ -93,8 +95,13 @@ export const RECIPES: Record<string, Recipe> = {
     wood(c, o, t + 0.03, { plank: 'D', damping: 0.7, gain: 0.6, seed: s + 1 });
   },
   'ui.drop': (c, o, t, s) => paperSlide(c, o, t, 0.06, 0.4, rng(s), [3800, 2400]),
-  'ui.target': (c, o, t, s, _sp, p) => signature(c, o, t + 0.005, p.seat ?? 0, s, 0.7, 0.85),
-  'ui.error': (c, o, t, s) => thud(c, o, t, 0.9, rng(s), 1.2 + 0.2 * (s % 2)),
+  'ui.target': (c, o, t, s, _sp, p) => signature(c, o, t + 0.005, p.seat ?? 0, s, 0.7, 0.5),
+  // a dull double bump on the table top - never a buzzer
+  'ui.error': (c, o, t, s) => {
+    const r = rng(s);
+    thud(c, o, t + 0.005, 0.9, r, 1.3 + 0.2 * (s % 2));
+    thud(c, o, t + 0.05, 0.6, r, 1.6);
+  },
   'ui.toggle': (c, o, t, s, _sp, p) => {
     paperLift(c, o, t, 0.4, rng(s), 4000);
     wood(c, o, t + 0.03, { plank: 'D', f0: p.on ? 1500 : 1000, damping: 0.8, gain: 0.5, seed: s });
@@ -119,9 +126,9 @@ export const RECIPES: Record<string, Recipe> = {
     else signature(c, o, t + 0.01, seat, s, 0.7);
   },
   // the stunned seat's signature, muffled, with a jaw-harp wobble
-  'table.skipped': (c, o, t, s, _sp, p) => {
+  'table.skipped': (c, o, t, s, sp, p) => {
     signature(c, o, t + 0.01, p.seat ?? 0, s, 0.8, 0.6);
-    playBuf(c, o, t + 0.12, 'dramba.wobble', 0.5);
+    playBuf(c, o, t + (sp ? 0.06 : 0.12), sp ? 'dramba.wobble.spk' : 'dramba.wobble', 0.5);
   },
   // the target's plank rises: a roll of three taps on plank D - the only three-onset figure
   'table.asked': (c, o, t, s, sp, p) => {
@@ -260,9 +267,10 @@ export const RECIPES: Record<string, Recipe> = {
     const r = rng(s);
     thud(c, o, t + 0.01, 1.2, r, 1.4);
     if (p.short) return;
-    thud(c, o, t + (sp ? 0.05 : 0.1), 1.3, r, 1.7);
-    slap(c, o, t + (sp ? 0.1 : 0.2), 0.8, r, 1.1);
-    slap(c, o, t + (sp ? 0.15 : 0.28), 0.7, r, 1.2);
+    // two clamps, then the cards slap back: a rhythm no go-fish shares
+    thud(c, o, t + (sp ? 0.09 : 0.12), 1.3, r, 1.7);
+    slap(c, o, t + (sp ? 0.15 : 0.24), 0.8, r, 1.1);
+    if (!sp) slap(c, o, t + 0.32, 0.7, r, 1.2);
   },
   // drâmbă through a sweeping formant, then the bell stamp brands the plate
   'power.jellyfish': (c, o, t, s, sp, p) => {
@@ -279,12 +287,14 @@ export const RECIPES: Record<string, Recipe> = {
       splash(c, o, t + (sp ? 0.11 : 0.2), r, 0.3, 5000, 0.04);
     }
   },
-  // the scrape, hollow: nothing caught
+  // the scrape, hollow, and a dead tap: nothing caught
   'power.stickleback.miss': (c, o, t, s) => {
     const r = rng(s);
     const lp = filt(c, 'lowpass', 1400);
     lp.connect(o);
-    paperSlide(c, lp, t + 0.005, 0.14, 0.7, r, [1800, 3600]);
+    paperSlide(c, lp, t + 0.005, 0.1, 0.7, r, [1800, 3600]);
+    wood(c, o, t + 0.13, { plank: 'D', damping: 0.9, gain: 0.5, seed: s + 5 });
+    wood(c, o, t + 0.19, { plank: 'D', damping: 0.95, gain: 0.3, seed: s + 6 });
   },
   // the club lands on the table top, the shell cracks, plank D splinters
   'power.mantis': (c, o, t, s, sp, p) => {
@@ -312,7 +322,8 @@ export const RECIPES: Record<string, Recipe> = {
   'power.clownfish.bound': (c, o, t, s, sp, p) => {
     wood(c, o, t + 0.01, { plank: 'D', damping: 0.6, gain: 0.8, seed: s });
     thud(c, o, t + 0.03, 0.5, rng(s), 1.3);
-    if (!p.short) motif(c, o, t + 0.12, 'clownfish', sp, 0.7, p.rank);
+    // the copied motif is always the two-note figure: the sheet gives this cue 600 ms
+    if (!p.short) motif(c, o, t + (sp ? 0.04 : 0.12), 'clownfish', true, 0.7, p.rank);
   },
 
   /* --------------------------------------------------------------- world and meta */

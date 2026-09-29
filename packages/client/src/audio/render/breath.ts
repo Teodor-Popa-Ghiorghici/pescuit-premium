@@ -49,17 +49,25 @@ export function renderBreath(notes: BreathNote[], seconds: number, o: BreathOpti
     const holdEnd = Math.max(0.06, n.dur - 0.12);
     const f1 = new Biquad(bp(f, 8, sr)), f2 = new Biquad(bp(breathBand, 1, sr));
     const g1 = fromDb(breathDb) * 6, g2 = fromDb(breathDb - 8) * 2;
+    const A2 = fromDb(-14), A3 = fromDb(-20);
     let phase = 0;
+    let inc = 0;
+    const two = f * 2 < sr / 2 - 2000, three = f * 3 < sr / 2 - 2000;
     for (let i = 0; i < len; i++) {
       const tau = i / sr;
       const e = expEnv(tau, 0.05, gain * 0.3, holdEnd, n.dur);
-      const scoop = tau < 0.05 ? -30 * (1 - tau / 0.05) : 0;
-      const depth = tau < 0.15 ? 0 : tau < 0.35 ? (12 * (tau - 0.15)) / 0.2 : 12;
-      const cents = scoop + depth * Math.sin(2 * Math.PI * 5.5 * tau) - (n.sagCents ?? 0) * (tau / n.dur) + (n.cents ?? 0);
-      phase += (2 * Math.PI * f * 2 ** (cents / 1200)) / sr;
-      let s = Math.sin(phase);
-      if (f * 2 < sr / 2 - 2000) s += fromDb(-14) * Math.sin(2 * phase);
-      if (f * 3 < sr / 2 - 2000) s += fromDb(-20) * Math.sin(3 * phase);
+      if (i % 16 === 0) {
+        // pitch control at 2 kHz: the scoop, the vibrato and the sag move slowly
+        const scoop = tau < 0.05 ? -30 * (1 - tau / 0.05) : 0;
+        const depth = tau < 0.15 ? 0 : tau < 0.35 ? (12 * (tau - 0.15)) / 0.2 : 12;
+        const cents = scoop + depth * Math.sin(2 * Math.PI * 5.5 * tau) - (n.sagCents ?? 0) * (tau / n.dur) + (n.cents ?? 0);
+        inc = (2 * Math.PI * f * 2 ** (cents / 1200)) / sr;
+      }
+      phase += inc;
+      const sn = Math.sin(phase);
+      let s = sn;
+      if (two) s += A2 * 2 * sn * Math.cos(phase);
+      if (three) s += A3 * sn * (3 - 4 * sn * sn);
       const w = r() * 2 - 1;
       s += f1.tick(w) * g1 + f2.tick(w) * g2;
       out[first + i] += s * e;
@@ -73,10 +81,18 @@ export function renderTulnic(note: number, dur: number, gain = 1, sr = RENDER_SR
   const out = new Float32Array(Math.ceil(dur * sr));
   const f = midi(note);
   const filter = new Biquad(lp(900, 0.7071, sr));
+  const w = 2 * Math.PI * f;
   for (let i = 0; i < out.length; i++) {
     const tau = i / sr;
-    let s = 0;
-    for (let h = 1; h <= 8; h++) s += Math.sin(2 * Math.PI * f * h * tau) / h;
+    // harmonics 1-8 at 1/h by the Chebyshev recurrence: one sine and one cosine a sample
+    const ph = w * tau, c2 = 2 * Math.cos(ph);
+    let sPrev = 0, sCur = Math.sin(ph), s = sCur;
+    for (let h = 2; h <= 8; h++) {
+      const sNext = c2 * sCur - sPrev;
+      s += sNext / h;
+      sPrev = sCur;
+      sCur = sNext;
+    }
     out[i] = filter.tick(s) * expEnv(tau, 0.2, 0.25 * gain, Math.max(0.21, dur - 0.3), dur);
   }
   return out;
@@ -117,7 +133,7 @@ export function renderDramba(voices: DrambaVoice[], seconds: number, sr = RENDER
     let ph = 0;
     for (let i = 0; i < len; i++) {
       const tau = i / sr, u = tau / v.dur;
-      if (i % 8 === 0) {
+      if (i % 16 === 0) {
         const fa = v.formants[0][0] * (v.formants[0][1] / v.formants[0][0]) ** Math.min(1, u);
         const fb = v.formants[1][0] * (v.formants[1][1] / v.formants[1][0]) ** Math.min(1, u);
         b1.c = bp(fa + v.formants[0][0] * 0.25 * Math.sin(2 * Math.PI * wob * tau), Q1, sr);
