@@ -472,3 +472,12 @@ recording:
   added alongside it.** §5.4 asks for "tap a post, then a card"; the rank chips
   inside a post already worked and are the faster path on a pointer device, so
   both now resolve to the same `REQUEST`.
+
+## The one-screen table, the hand and the dev tables (FEEL_VISUAL_SOUND_PLAN §5.2-§5.3, §4.4, §7.1-§7.4)
+
+- **Two layouts, one store.** `useDesktop()` (>= 900 px) picks the pond table (five 150 px posts on an arc, 280 px log board, drawer tab below 1100 px) or the one-screen phone table (40 px bar, 96 px strip of 60x76 chips, flexible pond, dock). Both carry `data-player-id`, `data-pool`, `data-basin`, `data-hand-card-id`, `data-totem`, `data-tally`, `data-gate` for the choreography to fly between.
+- **Tally copy says "at most"** (`game.setsAtMost*`, per "Deciding the game"), not the plan's "încă N seturi" / "ultimul set": the count is an upper bound. The stall gate reads "N încercări până se închide balta" and appears once `misses >= N`.
+- **Answer window.** Two equal buttons, one lock/stamp and one local `clock.close` cue whether the answer is honest or a Squid lie; the lie button exists only for a holder of an unused Squid (A23). Structural windows show the neutral "fereastră deschisă" to everyone who cannot act. No `<select>` remains: Jellyfish taps a target, Stickleback a target then a seal, Whale an adjacent pair, all in the bottom 45 %.
+- **Optimistic declare** locks the plank; "Prea târziu - X a fost mai rapid" is derived from the window closing without our `POWER_USED` (naming the other `POWER_USED`'s player when there is one).
+- **Bot table and fixtures** (`src/dev/`, lazy chunk): `?table=bots&n=&seed=&seat=&speed=&bots=memory|random&until=myturn|answer|dry|end|turn:N|sets:N&auto=1&mode=&panel=0`, `?fixture=<id>` (or `?fixture=` for the menu). The driver plays the room's part (seq stamps, window deadline and the server-only skip, Whale entropy, bound actions). The memory bot lives in `packages/engine/src/cli/membot.ts` (exported with the engine's bots).
+- **`npm run layout:check --workspace=packages/client`** runs 94 layout frames and interaction checks in Chromium.

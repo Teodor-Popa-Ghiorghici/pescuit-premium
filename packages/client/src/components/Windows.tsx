@@ -263,8 +263,8 @@ export function Plank({ view, onDeclared }: { view: RedactedView; onDeclared: (k
           </div>
         )}
         <div className="plank__say">
-          <div className="plank__rank plank__rank--sm">{who}</div>
-          <div className="plank__sub">{t(hintKey(w.type))}</div>
+          <div className="plank__rank plank__rank--sm">{isTurnStart ? t(hintKey(w.type)) : who}</div>
+          {!isTurnStart && <div className="plank__sub">{t(hintKey(w.type))}</div>}
         </div>
         {clock}
       </div>
