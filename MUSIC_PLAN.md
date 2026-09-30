@@ -1,63 +1,67 @@
 # Background music plan — Pescuiește Extins
 
-**Status: plan v1, for review. Nothing here is built.** It adds a background score to the game without breaking
-any of the laws the rest of the sound was built on. It amends one line of `DESIGN.md` (§7.1, "no music bed during
-play") and says why in §1. Revision history: Appendix C.
+**Status: plan v2, for review. Nothing here is built.** It adds a background score to the game without breaking
+any of the laws the rest of the sound was built on. It amends `DESIGN.md` §7.1 ("no music bed during play") and
+eleven smaller rules, each listed in §1.2 with its reason. v1 was scored 5.8 / 10 by the critic
+(`docs/music-plan-reviews/round-1.md`); Appendix C says what changed.
 
-*Evidence: every claim about the current build was checked against the code on `claude/pensive-edison-28lk6g`
-(commit `438eda9`): `SOUND_DESIGN.md`, `DESIGN.md` §0.1 and §7, `FEEL_VISUAL_SOUND_PLAN.md` §0–§3 and §9–§11,
-`DECISIONS.md` ("The world arc", "Sound: the palette re-voiced"), `packages/client/src/audio/*`, `hooks/useLobbyAudio.ts`
-and `packages/shared/src/protocol.ts`. Numbers about game length come from the plan's bot runs (FEEL §1.1, §3.9). Nothing
-in this plan has been heard by anyone; §10 says how that changes.*
+*Evidence: every claim about the current build was checked against the code on `claude/pensive-edison-28lk6g`:
+`SOUND_DESIGN.md`, `DESIGN.md` §0.1, §1, §6, §7, §9, `FEEL_VISUAL_SOUND_PLAN.md` (FEEL) §0–§3 and §9–§11,
+`DECISIONS.md`, `packages/client/src/audio/*`, `hooks/useLobbyAudio.ts`, `game/world.ts`, `packages/shared/src/protocol.ts`,
+`packages/server/src/room.ts` and `packages/client/tools/out/metrics.md`. One number was measured for this plan: the
+existing horn renderer (`render/horn.ts`) costs **0.57 µs a sample** in Node 22 on the build machine (10 renders of a
+6.55 s phrase: 59 ms at 16 kHz, 183 ms at 48 kHz). Nothing in this plan has been heard by anyone; §10 says how and when
+that changes, and the first gate is a listening test in week 1.*
 
 ---
 
 ## 0. The one-page version
 
-**The idea.** The game already opens with a tulnic calling across a valley (`mus.start`: one horn, partials of a
-58 Hz fundamental, three darker repeats) and closes with the same horn coming home (`mus.podium`: partials 6 → 5 → 4).
-In between there is a pond, then wind, and ~24 knocks a minute. **The score is what happens in the valley between the
-call and the return:** the horn left on the fence hums in the wind, and now and then another shepherd answers from far
-away. It is one instrument on one fundamental, in free rhythm, and it follows only the public count of sets still
-possible. The whole game becomes one phrase: **it leaves home with the call, and it only comes home at the last set.**
+**The idea.** The game already opens with a tulnic calling across a valley (`mus.start`: one natural horn, partials
+of a 58 Hz fundamental, three darker repeats) and closes with the same horn coming home (`mus.podium`: partials
+6 → 5 → 4). In between there is a pond, then wind, and ~24 knocks a minute. **The score is what happens in the
+valley between the call and the return:** a horn left on the fence hums in the wind, and now and then another
+shepherd answers from far away. One instrument, one fundamental, free rhythm, and it follows only the public count of
+sets still possible. Harmonically the game is one cadence: the hum starts on the **dominant** (an open fifth on
+partial 6), moves through the doina's lament (the third) to the night's unrest (the tritone and the natural seventh),
+falls back to the dominant alone at the last set — and the **tonic** is not sustained once in play until the last
+set's single note lands on it.
 
 **The five rules the score reduces to** — the audio counterpart of the art's "two values, one accent":
 
-1. **One instrument, one fundamental.** Every pitch the score sounds is a partial of 58 Hz, from partial 4 (232 Hz)
-   to partial 12 (696 Hz). The accent is partial 11 (638 Hz, the natural horn's "wrong" fourth), and only the night
-   may use it. Home — partial 4 — is reserved for the lobby, the last set and the podium.
-2. **Public, and the same on every client.** The score reads six public fields and nothing else (§5). It is seeded
-   and clocked from the server, so the five speakers on a call play the same phrase at the same moment and their
-   echoes through the call are consonant copies, not five different tunes.
-3. **Under the table, never on it.** No transient, no pulse, nothing in the 1–4 kHz speech band louder than 30 LU
-   under the anchor knock, and the pond plus the score together sit in the bed's existing window, 12–20 LU under
-   the anchor (§6). The knocks are the rhythm; the score has none.
-4. **It never reacts to a turn.** No stinger on an ask, a give, a power or a window: the cues already do that job,
-   and a stinger on a window would voice one of the rules' own tells (FEEL §3.2). The score changes only at the
-   world's five public steps: lobby, the call, 12, 6 and 1 sets possible, the finale — plus the pool running dry and
-   the stall gate.
-5. **Changes are cut on a knock, never faded.** The score is re-voiced under the transient of the knock that already
-   marks the step (`world.dark.*`, the pool-empty thud, the gate's creak), the way the light steps flat and the
-   ambience steps flat (DESIGN §6.1, "nothing cross-fades").
+1. **One instrument, one fundamental.** Every pitch is a partial of 58 Hz, 4 to 12 (232–696 Hz). The accent is
+   partial 11 (638 Hz, the natural horn's "fa"), in the night's calls only. The tonic pitch class (partials 4 and 8)
+   is **never sustained in play before the last set**: the hum never contains it, and a call may only pass through
+   partial 8 (≤ 0.5 s, never first or last).
+2. **Public, and the same on every client.** The score reads six public fields and nothing else (§5). Every phrase,
+   take and slot is a pure function of a public seed, a server-time slot index and the public stage, so the five
+   speakers on a call play the same phrase at the same moment, and one client's mistake cannot cascade.
+3. **Under the table, never on it.** No transient, no pulse, no loop; nothing in the 1–4 kHz speech band louder than
+   30 LU under the anchor knock; the pond plus the score sit exactly where the pond sits today (12–20 LU under the
+   anchor). The knocks are the rhythm; the score has none.
+4. **It never reacts to a turn.** No stinger on an ask, a give, a power or a window: the cues already do that, and a
+   stinger on a window would voice one of the rules' own tells (FEEL §3.2). The score changes only at public world
+   steps: the lobby, the call, 12, 6 and 1 sets possible, the stall gate, the finale.
+5. **Re-voicings are cut on a loud knock; entrances breathe in.** A change of chord is a 25 ms ramp that starts on
+   the transient of the table cue that already marks the step (`world.dark.*`, the miss that shuts the gate, the
+   last lay's stamp) — the way the light steps. Only an entrance from silence swells, as a breath or a gust does.
 
-**What changes in the existing design** (§1.2 has the table): DESIGN §7.1's "no music bed during play" becomes
-"a tuned bed and distant calls during play, inside the ambience's window, on by default and playtest-gated, exactly
-like the ambience was" (FEEL §3.9). Three small re-voicings bring the rest of the soundtrack into the same key (§8):
-the night wind is tuned to partials 5 and 11; the last-set knock moves to the Table bus so the music slider can
-never silence it; and "home" becomes a rule in data.
+**Done means** (§10):
+- the score's schedule is identical on every client for the same public record, and for records that differ only in a
+  hidden card, a Squid, a hidden rank or a structural window (Proxy field test + history tests); the six ways two
+  clients *can* differ are listed and each is tested (§5.3);
+- the audio harness grows from 13 checks to 23, all passing, including: no loop or pulse in the hum's envelope;
+  every held note within 15 ¢ of its partial; the world stem unchanged from today within 0.3 dB; every hum partial
+  audible in its own band; the clock ≥ 10 LU over the world and any call, on both profiles;
+- in week 1, before anything is integrated: listeners judge the rendered horn "a real horn far away" (median ≥ 4/7)
+  and order the four voicings from start to end of an evening (≥ 7 of 10 put dusk before night);
+- no measurable cost to talk: in the call rig, listening effort with the score on is within 0.3 points (1–5 scale) of
+  off, with the 95 % interval's upper bound ≤ 0.5;
+- players keep it: in a dedicated counterbalanced playtest (4 groups, 20 players), ≥ 13 of 20 prefer the game with the
+  score, and fewer than 5 switch it off — else it ships **lobby-only**, as the ambience would have shipped off.
 
-**Done means** (all measured, §10):
-- the score's schedule is identical on every client for the same public record, and for records that differ only in
-  a hidden card, a Squid, or a structural window (Proxy field test + history tests);
-- the audio harness grows from 13 to 21 checks and all pass: every sustained pitch within 10 cents of its partial;
-  no pulse and no transient; speech band ≥ 30 LU under the anchor; the pond plus score inside the 12–20 LU window
-  in all 24 states; the clock ≥ 10 LU over them; a rejoin renders the same score as staying;
-- no measurable cost to talk: in the call rig, word error rate on read sentences rises ≤ 2 points with the score on;
-- players want it: within-subject A/B in the playtests, "the table feels alive" +1 median with the score, no loss on
-  "I always knew what just happened", and fewer than 5 of 15 turn the in-game score off (else it ships lobby-only).
-
-**Effort:** 22–26 engineering days plus 3 composer days and the consultant session already budgeted (FEEL §11.8).
-A 9-day cut ships the lobby and the hum without the distant calls (§11.3).
+**Effort:** 32 engineering days, 5 composer days, one extra consultant hour; +5 days and one recording session if the
+week-1 listening test sends the calls to recorded horn (§11). Cut lines at 16 and 24 days (§11.3).
 
 ---
 
@@ -65,54 +69,58 @@ A 9-day cut ships the lobby and the hum without the distant calls (§11.3).
 
 ### 1.1 The constraints this plan keeps
 
-Each row is a rule already in the repo; the right-hand column is how the score obeys it.
-
 | Rule (source) | How the score keeps it |
 |---|---|
-| **Law 1** — presentation never adds information; sound is a function of the public record (FEEL §3.2, DESIGN §9) | Six public inputs, projected by one function and checked by the same Proxy test pattern as `SOUND_FIELDS` (§5). No seat facts: the score does not even know whose turn it is. |
-| **Squid has no sound, no motif, no timing effect** (RULES §4, DESIGN §9.3, `SILENT_RANKS`) | The score reads no event that Squid could change; a Squid use changes nothing it reads. A history test compares a Squid lie with an honest "no" (§10.2). |
-| **Structural windows are silent for everyone** (SOUND_DESIGN §4, D3) | The score does not read windows at all, and never pauses, starts or stops on one. It runs on server time, so a window's pause does not even shift it. |
-| **Law 2** — the table talks, the game whispers; the call is part of the mix (FEEL §3.3–3.4) | Level inside the bed window; a speech-band ceiling; slurred, slow-attack phrases whose call-echoes are consonant; a sparser speaker arrangement; a word-error-rate gate in the call rig (§6). |
-| **The palette** — wood, paper, ink, board, clay, water, rope; only Shark, Mantis, Whale break it (SOUND_DESIGN §1.3) | The score adds no new instrument. The tulnic already owns the Music bus (`mus.start`, `mus.podium`, the last-set note); the hum is the same resonant-noise technique as the wind (`ambience.ts`). No fluier, caval or țambal returns. |
-| **Plank grammar** — a ringing A/B/C knock always means a seat (FEEL §3.1) | The score has no struck sound at all. Its only onsets are a phrase's first note (≥ 80 ms attack); every later note is slurred. The confusability check runs over it (§10.1). |
-| **Space: discrete repeats, not reverb** (SOUND_DESIGN §1.1, `mus.start`) | Distance is a low-pass and a level. The headphones arrangement gives a far answer its repeats the same way the call's valley does; no reverb node exists. |
-| **Frequency decides length and level** (FEEL §3.7) | Distant calls are rare (one per 30–100 s) and quiet; the only continuous layer is at bed level with no onsets. |
-| **Flat steps, nothing cross-fades** (DESIGN §6.1, world arc) | Re-voicing is a cut under a knock's transient (rule 5). Entrances may swell, as a breath or a gust does. |
-| **Nothing below 150 Hz is relied on** (SOUND_DESIGN §5) | The lowest partial the speaker arrangement sounds is 232 Hz. Partial 2 (116 Hz) exists only in headphones, as warmth. |
-| **Input is never gated on audio** | The score is fire-and-forget on its own scheduler; nothing awaits it. The existing source guard covers the new module. |
-| **0 KB of audio downloads; synthesised or rendered at load** (README budgets) | The hum is live; phrases are rendered in plain JS by the existing `render/horn.ts`, just in time, at 16 kHz. The recorded fallback (§12, R2) fits the untouched 220 KB audio budget. |
-| **Audio is never the only channel** (SOUND_DESIGN §6) | The score carries no information that is not already drawn and announced: the stages (`data-stage`, `a11y.stage.*`), the dry basin, the gate, the podium. |
-| **Hidden tab, unlock, iOS audio session** (`context.ts`) | Unchanged: the score suspends with the context and, on return, resumes at its server-time position; nothing is played late. |
+| **Law 1** — sound is a function of the public record (FEEL §3.2, DESIGN §9) | Six public inputs through one projection, Proxy-tested like `SOUND_FIELDS` (§5.1). No seat facts: the score does not know whose turn it is. |
+| **Squid has no sound and no timing effect** (RULES §4, DESIGN §9.3) | Nothing the score reads can change with a Squid; a history test compares a lie with an honest "no" (§10.2). |
+| **Structural windows are silent for everyone** (SOUND_DESIGN §4) | The score reads no window. It runs on server time, so a window's pause does not shift it either. |
+| **Law 2** — the table talks; the call is part of the mix (FEEL §3.3–3.4) | Today's bed level kept exactly; a speech-band ceiling; slurred, slow-attack, synchronised phrases; a sparser speaker arrangement; a listening-effort gate on real call recordings (§6). |
+| **The palette** — only Shark, Mantis, Whale leave wood/paper/ink/board/clay/water/rope (SOUND_DESIGN §1.3) | No new instrument: the tulnic already owns the Music bus (`mus.start`, `mus.podium`, the last-set note). The hum is aeolian resonance of that horn — resonant noise, the wind's own technique. |
+| **Plank grammar and confusability** (FEEL §3.1) | No struck sound. One onset per phrase, ≥ 80 ms; every later note is a slur. The confusability check runs over the score (#15). |
+| **Space: discrete repeats, not reverb** (`mus.start`'s valley) | Distance is level and low-pass; a far answer in headphones gets two discrete repeats. No reverb node. |
+| **Nothing below 150 Hz is relied on** | The lowest in-game partial on speakers is 290 Hz (partial 5). |
+| **Input never waits on audio** | The score is synthesised on the audio thread from a schedule posted ahead; nothing awaits it. |
+| **0 KB of audio downloads** (README budgets) | Hum and calls are synthesised live. |
+| **Audio is never the only channel** (SOUND_DESIGN §6) | Every state the score marks is already drawn and announced (`data-stage`, `a11y.stage.*`, the gate, the podium). |
+| **Hidden tab, unlock, iOS audio session** (`context.ts`) | Unchanged; the score resumes where the server clock is. |
 
 ### 1.2 The amendments
 
-| § | Says now | This plan says | Why |
-|---|---|---|---|
-| DESIGN §7.1 | "No music bed during play. One short motif at game start and at game end only. This game is played over voice chat; a continuous music loop is a liability." | A **tuned bed and distant calls** during play: no loop, no pulse, no transient, inside the ambience's 12–20 LU window, identical on every client, on by default and **playtest-gated** (≥ 5 of 15 switching the in-game score off ships it lobby-only). The start and end ceremonies are unchanged. | The liability DESIGN names is a *loop* competing with speech. §6 designs that out and §10 measures it. What the game loses without a score is §2. |
-| FEEL §3.5 (buses) | Six buses; Music carries the ceremonies and the last set | A seventh, **Score**, on its own stem (so the harness can measure it and the ceremony envelope can duck it). Music keeps the ceremonies; `world.dark.01`'s knock moves to Table (§8.2). | A slider at 0 must never silence an informative knock. |
-| FEEL §3.9 | "No music bed during play (DESIGN §7.1 stands)" | The world arc gains a harmonic line: open fifth at dusk, the third in the evening, the seventh and the accent at night, home at the last set (§4). | The arc is visual and textural today; it has no line that *resolves*. |
-| `ambience.ts` WIND_BANDS | 310 Hz and 640 Hz | 290 Hz (partial 5) and 638 Hz (partial 11) (§8.1) | The night wind sings in the score's key. |
+| # | Source | Says now | This plan says | Why |
+|---|---|---|---|---|
+| A1 | DESIGN §7.1 | "No music bed during play … a continuous music loop is a liability." | A **tuned bed and distant calls** during play: no loop, no pulse, no transient, at today's bed level, identical on every client, on by default and **playtest-gated** (§10.5), lobby-only if it fails. | The liability is a *loop* competing with speech. §6 designs that out; §10 measures it. |
+| A2 | FEEL §3.3 | "Only ambience sustains past 1.5 s" | The score sustains too, inside the same window as the ambience, which gives up 2 dB to make room (§6.1). | The world stem's loudness is unchanged. |
+| A3 | FEEL §3.4 | The 250 ms echo budget for every all-client cue; `mus.*` exempt as "heard once a game" | The score is **not a cue** and is exempt, although its calls play 4–8 times a stage. Its protection against the call is different: no transient to flam, synchronised copies, a speech-band ceiling (#16), and the listening-effort test (§10.4). | The budget protects the first 250 ms of a knock; a 3–7 s slurred phrase has no "first 250 ms" to protect. |
+| A4 | FEEL §3.7 | Length and level by plays per game | Not applied to the score (not a cue); its rate and length are set by §4.3, and its level by §6.1. | Bands were sized for event cues. |
+| A5 | DESIGN §6.1 | "Nothing cross-fades" | Re-voicings are cuts (25 ms, on a knock). **Entrances from silence swell** (1.5–6 s); a phrase cut by a stage change fades in 300 ms. | A breath cannot start at full level. The ambience already crossfades pond → wind in 400 ms (`ambience.ts`). |
+| A6 | FEEL §3.2, §3.4 | Tonal tails pass suppressors and smear | Kept as the working assumption: the plan assumes the hum and the calls **reach the call** from every speaker device, and designs for that (§6.4). | v1 wrongly assumed suppressors strip the hum. |
+| A7 | FEEL §3.5 | Six buses | A seventh, **Score**, on its own stem, with its own duck and darkening gain (§7.1). | Measurable on its own; must not follow the per-client activity envelope (§5.1). |
+| A8 | `cuesheet.ts` | `world.dark.01` (knock + partial-4 note) on the Music bus | The knock `world.dark.01` moves to **Table**; the note becomes **`mus.home`** on Music. | A music slider at 0 must not silence an informative knock. |
+| A9 | `cuesheet.ts` | Clock bus: `speakerBoostDb` 4, nothing on headphones | **+2 dB on headphones** (a new `headphonesBoostDb`). | The headphones clock clears the bed by 10.2 LU against a 10 LU gate today (`metrics.md`); the score must not eat that margin (§6.1). |
+| A10 | README / FEEL §3.6 | JS budget 125 KB (already 126.0); the 220 KB audio budget is reserved for Tier R | Score chunk ≤ 6 KB gzip → ≈ 132 KB (decision D4). If the recorded fallback is used it draws on the same 220 KB as Tier R (decision D8). | Both are stated, not hidden. |
+| A11 | FEEL §11.8 | A 2–3 h consultant session on the palette and motifs | +1 hour for the score's library (§3.7), booked in week 1. | The library is new material. |
+| A12 | Settings (`mixer.ts`) | Separate music and ambience sliders | The **Music** slider covers the ceremonies *and* the score; one new switch under it, "Background music: On / Lobby only / Off". No new slider. | Five sliders are enough; the switch is the choice players make. |
+
+The v1 idea of tuning the wind to partials 5 and 11 is **dropped**: the wind drifts ±12 % (about ±200 ¢) and its gusts
+move it +30 % (+454 ¢) by design, so a tuned centre would be inaudible.
 
 ---
 
 ## 2. Why the game needs a score
 
-1. **The middle of the game has no line.** A game runs about 16–21 minutes of asks (75–99 turns at the scene's 4.7
-   asks a minute, FEEL §3.3; unmeasured with humans). The call lasts 8.3 s and the podium 2.4 s. Between them, the
-   only tonal sound is one bare note at the last set: ~99 % of the game is knocks over filtered noise. The knocks are
-   right for the table; nothing is there for the *world*.
+1. **The middle of the game has no line.** A game is 75–95 asks (78–99 turns, FEEL §1.1), about 16–20 minutes at the
+   scripted scene's 4.7 asks a minute (`metrics.md`); humans are likely slower, and nothing below depends on the
+   length (§4.3). The call lasts 8.3 s and the podium 2.5 s. Between them the only tonal sound is one bare note at the
+   last set.
 2. **The world arc is seen, not felt.** The light steps darker at 12, 6 and 1, and the ambience steps with it
-   (`DARK_STEPS`: a low-pass and −1.5 dB per step). Those are timbre steps; a player who is not looking at the rim
-   gets "slightly duller water". A harmonic change — the chord gaining a third, then a seventh — is the change the
-   ear notices without attention. FEEL §9.2's target "I knew how close the end was" (median ≥ 5.5) is what the score
-   is for.
-3. **The ceremonies are unconnected.** The call ends on partial 5 and the podium ends on partial 4, but nothing
-   between them makes the return mean anything. With the score, home is withheld for the whole game (rule 1), so the
-   last set's bare partial-4 note is the first time it is heard since the lobby, and the podium confirms it.
-4. **The waiting room is a pond and nothing else.** Players wait there for minutes while the link goes round. It is
-   the one place where a fuller score costs nothing in play, and the first impression of the game's identity.
-
-What it must not cost is in §6: the call.
+   (`DARK_STEPS`: −1.5 dB and a lower low-pass per step). That is a change of level and timbre. Whether a change of
+   *chord* carries "how close is the end" better is a hypothesis, tested in week 1 before anything is built on it
+   (the ordering test, §10.3). FEEL §9.2's "I knew how close the end was" (median ≥ 5.5) is what it is for.
+3. **The ceremonies are unconnected.** The call ends on partial 5 and the podium on partial 4, but nothing in between
+   makes the return mean anything. With the score the tonic is withheld all game, so the last set's note is the
+   first tonic since the lobby, arriving over the dominant — a V → I the whole game has prepared.
+4. **The waiting room is a pond and nothing else.** Players wait there for minutes while the link goes round; it is
+   where a fuller score costs nothing in play and where the game first says what it is.
 
 ---
 
@@ -120,188 +128,195 @@ What it must not cost is in §6: the call.
 
 ### 3.1 One instrument, one fundamental
 
-The tulnic is a long wooden horn with no finger holes, so it sounds only partials of one fundamental. The existing
-renderer (`render/horn.ts`, `HORN_FUNDAMENTAL = 58`) already enforces that every pitch is `58 × n`, un-tempered. The
-score uses the same renderer and extends its range from partials 4–9 to 4–12.
+The existing renderer (`render/horn.ts`, `HORN_FUNDAMENTAL = 58`) already makes every pitch `58 × n`, un-tempered.
 
-| Partial | Hz | Interval over the octave below | Role in the score |
+| Partial | Hz | Pitch class over the tonic (58 Hz ≈ B♭, −8 ¢) | Role in the score |
 |---|---|---|---|
-| 2 | 116 | tonic | headphones warmth under the hum only; never melodic |
-| 4 | 232 | tonic (**home**) | lobby, `world.dark.01`'s note, the podium's last note. **Never sounded in play before the last set.** |
-| 5 | 290 | major third, −14 ¢ | the evening's colour; the call's last note |
-| 6 | 348 | fifth, +2 ¢ | the open note: dusk's centre, most phrase starts |
-| 7 | 406 | minor seventh, −31 ¢ | the night's unrest |
-| 8 | 464 | octave | the high open note; the last set's hollow hum |
-| 9 | 522 | ninth, +4 ¢ | passing note only |
-| 10 | 580 | major third, −14 ¢ | passing and upper-neighbour note |
-| 11 | 638 | "fa" — 551 ¢, half-way between a fourth and a tritone | **the accent**: night only, and the dry wind (§8.1) |
-| 12 | 696 | fifth, +2 ¢ | the ceiling; dusk's shimmer in the hum |
+| 2 | 116 | tonic | lobby warmth, headphones only |
+| 4 | 232 | **tonic** | the lobby; `mus.home` at the last set; the podium's last note. Never in play before the last set. |
+| 5 | 290 | major third, −14 ¢ | the evening's lament and the night's lower voice; the call's last note |
+| 6 | 348 | fifth, +2 ¢ | **the dominant**: dusk's root, the last set's hum, most phrase starts |
+| 7 | 406 | minor seventh, −31 ¢ | the night's unrest (a septimal tritone over partial 5) |
+| 8 | 464 | tonic (octave) | passing note only in play (≤ 0.5 s, never first or last) |
+| 9 | 522 | ninth (2nd), +4 ¢ | dusk's colour; the night's upper voice; the gate |
+| 10 | 580 | major third, −14 ¢ | the evening's upper voice; the gate |
+| 11 | 638 | "fa": 551 ¢ over the octave, half-way between 4th and ♯4 | **the accent**: night calls and answers only |
+| 12 | 696 | fifth, +2 ¢ | dusk's ceiling |
 
-The partials 8–12 form the scale later theorists named the *acoustic* (overtone) scale — major third, raised fourth,
-fifth, sixth, minor seventh — which Bartók reported in Romanian folk melody. The consultant (§11) confirms or corrects
-that claim and the phrase library before a note is fixed; the plan does not depend on it, only on the physics.
+Over 4–12 the pitch classes are 1, 2, 3, ≈♯4, 5, ≈♭7: six of the seven notes of what theorists call the *acoustic*
+(overtone) scale, missing only the sixth (partial 13). Bartók reported that scale in Romanian folk melody; the
+consultant (§3.7) confirms or corrects that before any claim is made in the game's own copy. The plan depends only on
+the physics: a natural horn sounds these pitches and no others.
 
 ### 3.2 Free rhythm: no pulse, anywhere
 
-The *doina* (on UNESCO's Representative List since 2009) is sung and played in free, speech-like rhythm over a
-drone. That is not only the right culture; it is the one rhythm that cannot be mistaken for a clock. The game's
-meaning-bearing rhythms are the seat signatures (one knock, or two 75 ms apart), the clock (a click a second, then a
-double click every 500 ms) and the asked roll (three taps). The score is forbidden all of them by construction:
+The *doina* (on UNESCO's Representative List since 2009) is played in free, speech-like rhythm over a drone. That is
+also the one rhythm that cannot be mistaken for a clock. The game's meaning-bearing rhythms are the seat signatures
+(one knock, or two 75 ms apart), the clock (a click a second, then a double click every 500 ms) and the asked roll
+(three taps). The score is forbidden all of them by construction:
 
-- **No pulse.** Within a phrase, no three consecutive inter-onset intervals lie within ±10 % of each other, and no
-  interval between 0.4 s and 1.1 s repeats even twice (that is where the clock lives). A unit test enforces it on the
-  phrase data; a harness check enforces it on the render (§10.1).
-- **No transient.** A phrase's first note swells over ≥ 80 ms (the call's lip attack is 90 ms); every later note is a
-  slur — a pitch change with no new attack. The hum has no onsets at all.
-- **No meter across phrases.** The gaps between phrases are drawn from a seeded irregular distribution (§4.3), never
-  a grid.
+- **No pulse.** Within a phrase, no three consecutive inter-onset intervals lie within ±10 % of each other, and no two
+  intervals between 0.4 s and 1.1 s (the clock's range) lie within 10 % of each other. `phrases.test.ts` checks the
+  written durations; harness check #15 checks the render.
+- **No transient.** A phrase's first note swells over ≥ 80 ms (the call's lip attack is 90 ms). Every later note is a
+  **slur** (§3.6): no new attack, an amplitude dip of at most 3 dB. The hum has no onsets at all.
+- **No loop.** The hum's noise is generated, not read from a buffer (§3.5): its envelope has no period. Check #15
+  fails on any envelope autocorrelation peak above 0.3 at lags of 0.3–3 s — the test that would have caught v1's
+  1 s loop.
+- **No meter across phrases.** Slot times are drawn from a seeded irregular distribution (18–42 s, §4.3).
 
 ### 3.3 The theme: three cells from the call
 
-The call (`mus.start`) is 6 → 8 → 7 → 6 → 5. It is heard once per game at the most attentive moment, so the score is
-built from it — the way a film cue quotes its main title — and players hear variations of something they already
-know:
+The call (`mus.start`) is 6 → 8 → 7 → 6 → 5. It is heard once per game at the most attentive moment, so the score
+quotes it and players hear variations of something they already know.
 
-| Cell | From the call | Character | Used most in |
+| Cell | From the call | In play | Used most in |
 |---|---|---|---|
-| **leap** | 6 → 8 | opening, calling out | dusk, the lobby |
-| **fall** | 8 → 7 → 6 | the valley's own gesture (the repeats are this) | evening, answers |
-| **settle** | 6 → 5 | coming to rest, but not home | evening cadences |
+| **leap** | 6 → 8 | 6 → (8, passing) → 9 or 12 | dusk, the lobby |
+| **fall** | 8 → 7 → 6 | (8, passing) or 9 → 7 → 6 | evening, answers |
+| **settle** | 6 → 5 | 6 → 5 | evening cadences |
 
-Every phrase is built from these cells plus passing notes (9, 10) and the stage's colour note (5, 7, 11). The podium
-(6 → 5 → **4**) is the settle cell carried one step further — the one step the score never takes.
+The podium (6 → 5 → **4**) is the settle cell carried one step further: the step the score never takes.
 
 ### 3.4 Cadences: where a phrase may end
 
-This is the harmonic arc in one table. It is data (`score/phrases.ts`) and a unit test checks every phrase against it.
+Data in `score/phrases.ts`; `phrases.test.ts` checks every call **and every answer** against it.
 
-| Where | May end on | Never ends on | The feeling |
+| Where | May end on | Tonic class (4, 8) | The feeling |
 |---|---|---|---|
-| Lobby | 4, 6, 8 | 7, 11 | at home |
-| Dusk (18–13) | 6, 8 | 4, 5, 7, 11 | open, unresolved, outward |
-| Evening (12–7) | 5, 6 | 4, 7, 11 | warmer, nearer |
-| Night (6–2) | 7, 8, 11 | 4, 5, 6 | unrest; the question is open |
-| The last set (1) | *no phrases* | — | the bare note (4) is the only melody |
+| Lobby | 4, 6, 8 | free | at home |
+| Dusk (18–13) | 6, 12 | passing only | the dominant, open, outward |
+| Evening (12–7) | 5, 6, 10 | passing only | the third: the doina's lament, nearer |
+| Night (6–2) | 7, 9, 11 | passing only | unrest; the question open |
+| The last set (1) | *no phrases* | `mus.home` (4) | the dominant waits; the tonic arrives once |
 | Finale | the podium (4) | — | home |
+
+Calls are 3–7 s; answers 1.5–3 s. Partial 11 appears only in night phrases.
 
 ### 3.5 The hum: the horn on the fence
 
-**Source.** A tulnic resting on a fence, its bell to the wind: wind across a tube excites its resonances, so it
-hums on its own partials. **Synthesis:** the technique the wind already uses (`ambience.ts`: looped noise through
-narrow band-passes), with the band-passes at partials of 58 Hz instead of wind-gap frequencies.
+**Source.** A tulnic resting on a fence with its bell to the wind: wind across a tube excites its resonances, so it
+hums on its own partials — narrow-band noise, pitched but never steady.
 
-- One looped noise source (the shared buffer, at its own offset) → one band-pass per sounding partial, Q 60 at 232 Hz
-  rising to Q 110 at 696 Hz (bandwidths of 4–6 Hz: clearly pitched, slightly rough, never a sine) → a gain per partial.
-- **Harmonic motion without notes.** Each partial's gain wanders on its own smoothed random walk (0.04–0.12 Hz,
-  ±3 dB): the weight shifts slowly between the partials of the chord, the way a drone breathes. Same mechanism as the
-  pond's wander, never a regular LFO.
-- **A gust** (the ambience's existing gust schedule, when the pool is dry) lifts the hum +3 dB with it: the wind and
-  the horn move together.
-- A 1.1 kHz low-pass and the existing −6 dB bell at 2 kHz. No oscillator anywhere.
-- **The imperfection:** partial 6's band-pass sits 6 cents sharp of true (a dent in the bell). One per sound, as the
-  rest of the palette.
-- ≈ 20 persistent nodes (1 source, 6 band-passes, 6 gains, 6 wander filters and one low-pass), built once per game.
+- **Noise is generated, not stored.** Each sounding partial has its own counter-based noise: sample *n* is a hash of
+  (seed, partial, *n*), where *n* counts samples from the score clock's zero. Nothing repeats, the partials are
+  decorrelated, and a client joining late generates the same noise stream (it is a function of absolute time).
+- **Resonators.** One two-pole resonator per partial, bandwidth 1.5 Hz (Q ≈ 155 at 232 Hz, ≈ 460 at 696 Hz): a
+  pitch with a slow, random amplitude grain (correlation time ≈ 0.2 s) and no period. The spike (§11) tries 1, 1.5
+  and 3 Hz by ear and by check #15.
+- **Harmonic motion without notes.** Each partial's level wanders ±3 dB on seeded value noise over absolute time
+  (knots every 8–25 s, smooth interpolation): the weight shifts between the chord's notes as a drone breathes.
+  Because it is a function of absolute time it is identical on every client and after a rejoin.
+- **With the wind.** When the pool is dry, the ambience's gusts (already scheduled in `ambience.ts`) lift the hum
+  +2 dB with them, on the gust's own envelope.
+- **Imperfection:** the grain itself. (v1's "6-cent dent" was below what a noise resonator can show and is gone, as is
+  the 2 kHz bell on a signal that has nothing there.)
+- **Level** follows `DARK_STEPS`' level column (0, −1.5, −3, −4.5 dB) through the Score stem's own step gain, so the
+  hum darkens with the pond. The low-pass part of the step does nothing below 700 Hz and is not applied.
 
-### 3.6 The distant calls
+### 3.6 The distant calls: a legato horn voice
 
-**Source.** Another shepherd across the valley. Tulnic players in the Apuseni often play in groups, one horn
-answering or overlapping another; the score uses that practice as its texture.
+The existing renderer attacks every note separately (its own lip burst, scoop and attack per note, `horn.ts`), which
+is right for the ceremonies and wrong for a slurred doina phrase. The score gets **one new voice**, `score/voice.ts`,
+built from the same recipe but continuous:
 
-- **A call** is 3–7 s, one breath (no gap > 60 ms), 3–8 notes, rendered by `renderHorn` with the call's recipe at
-  greater distance: lip noise −26 dB (not −20), the low-pass that opens with the dynamics capped at 900 Hz (not 1100),
-  a steadier lip (`wobble` 0.6).
-- **An answer** is a 1.5–3 s fragment (usually the fall cell) from a second, farther horn: −6 dB, low-passed at
-  650 Hz, starting 0.9–2.5 s after the call's last note begins, so the two overlap — heterophony, as the players do.
-- **Distance is level and a low-pass**, not reverb. In the headphones arrangement a far answer gets two discrete
-  repeats (−12 and −19 dB, low-passed 520 and 380 Hz, 1.3 s and 2.9 s later), the valley's own shape from `mus.start`.
-- **Doina ornaments**, taken from what a natural horn can actually do: the scoop into a first note (−50 ¢ over 70 ms,
-  as the call), the sag at the end of a held note (−20 to −45 ¢), the breath running out (`trimEnd` 30–60 ms). No
-  trills and no fast runs: a tulnic cannot play them, and they would be onsets.
-- **Placement** in headphones: the near shepherd −0.35 pan, the far one +0.55, fixed for the game (seeded). Mono and
-  the speaker arrangement collapse both to centre.
+- **One phase accumulator per phrase.** Each note is a target partial; a **slur** is an exponential glide of 45 ms to
+  the next partial (a lip slur on a natural horn passes quickly), with a 3 dB amplitude dip over 30 ms and a +6 dB lift
+  of the breath noise for 40 ms — the audible "break" of a slur, with no new attack.
+- **One lip onset per phrase** (−26 dB under the body for distance, not the call's −20), then breath noise under the
+  body throughout, rising toward the end of each held note (the call's breath-rise).
+- **Per-note shape:** swell, sag (−15 to −45 ¢ over a held note), and the breath running out (`trim` 30–60 ms at a
+  phrase's end only).
+- **Distance:** the dynamics low-pass is a parameter (`horn.ts` hard-codes 500 + 600·open); calls cap it at 900 Hz,
+  answers at 650 Hz. Harmonics are limited to 8 and to below 2 kHz after that low-pass.
+- **Rate:** synthesised at 16 kHz inside the worklet and interpolated to the context rate (all content is under 2 kHz).
+- **Answers** (a second, farther horn): −6 dB, starting 0.9–2.5 s after the call's last note begins, so the two
+  overlap — heterophony, as tulnic players in the Apuseni play. In headphones a far answer gets two discrete repeats
+  (−12 and −19 dB, low-passed 520 and 380 Hz, at +1.3 and +2.9 s), the valley's own shape from `mus.start`.
+- **Placement** in headphones: near −0.35, far +0.55 (seeded per game). Mono and the speaker arrangement: centre.
+- **Imperfection:** the lip's slow random walk (the call's, at 0.6 of its depth: a steadier, farther player).
+
+The ceremonies keep `horn.ts` unchanged. Moving them onto the new voice is not in scope.
 
 ### 3.7 Cultural care
 
-The game borrows the tulnic's *material and practice*, not a specific repertoire: the phrases are new, built from
-the call's cells, and are not transcriptions of any recorded tulnic signal. The consultant session already in the
-plan (FEEL §11.8, 2–3 hours, before any recording) gets the phrase library, the §3.4 table and the renders, with three
-questions: does anything read as a specific ritual or funeral signal (tulnic calls were also used at funerals); is
-the acoustic-scale claim right; would a tulnic player recognise these as playable. The library is revised to the
-answers before M-S2.
+The game borrows the tulnic's *material and practice*, not a repertoire: the phrases are new, built from the call's
+cells, and are not transcriptions of any tulnic signal. The consultant hour (A11) reviews the library, §3.4 and the
+renders with three questions: does anything read as a specific ritual or funeral signal (tulnic calls were also used
+at funerals); is the acoustic-scale remark right; would a tulnic player recognise these as playable. The library is
+revised to the answers before it is frozen (M-S1).
 
 ---
 
 ## 4. The adaptive score
 
-### 4.1 States
+### 4.1 States and voicings
 
-The stages are the world arc's, computed from `sets.possible` exactly as `game/world.ts` does (dusk 18–13, evening
-12–7, night 6–2, the last set 1, finale 0). "Level" is the hum's short-term loudness relative to the pond bed of the
-same state; the harness verifies the combined window (§6.1).
+Stages are the world arc's, from `sets.possible` as `game/world.ts` computes them. Hum levels are dB re the state's
+loudest partial; the whole hum's level is set by §6.1.
 
-| State | Enters on | Hum partials (dB re loudest) | Calls: gap between (s), answers | Headphones extra |
+| State | Hum partials (dB) | Harmonic reading (over B♭) | Calls: slot activity, answers | Speaker arrangement |
 |---|---|---|---|---|
-| **Lobby** | the waiting room mounts (after unlock) | 4 (0), 6 (−4), 8 (−9) | 20–40, then 60–120 after 3 min waiting; answers 1 in 3 | partial 2 (−8) |
-| **The call** | `GAME_STARTED` | *cut* on the call's first note; silence under the call and its valley | none | — |
-| **Dusk** (18–13) | the hum swells in over 6 s from the end of the call's last repeat (8.3 s) | 6 (0), 8 (−5), 12 (−14) | 60–100; first call no earlier than 40 s; no answers | partial 2 (−10) |
-| **Evening** (12–7) | cut on `world.dark.12`'s knock | 5 (−3), 6 (0), 8 (−6) | 45–75; answers 1 in 3 | repeats on answers |
-| **Night** (6–2), pool wet | cut on `world.dark.06`'s knock | 5 (−4), 6 (−6), 7 (−2), 8 (−7) | 30–50; answers 1 in 2 | repeats on answers |
-| **Night** (6–2), pool dry | cut on the later of the two knocks | 5 (−4), 7 (−2), 8 (−7); the tuned wind carries 5 and 11 | same | same |
-| **Pool dry**, any stage | cut on `table.poolEmpty`'s thud | the stage's voicing without its lowest partial (the water's depth gone) | unchanged | partial 2 removed |
-| **The gate** (stall: `endPressure.misses ≥ limit/2`) | cut on `amb.gate`'s shutting creak | narrows to 7 (0) and 8 (−2): the septimal whole tone, a held breath | none while shut | — |
-| Gate thrown open | cut on `amb.gate`'s opening creak | back to the stage's voicing | the next slot resumes | — |
-| **The last set** (1) | cut on `world.dark.01`'s knock | 8 alone (−3): home's octave, hollow. The knock's bare partial-4 note sounds over it. | none | — |
-| **Finale** | cut to silence on the last lay's stamp (the choreography's held beat) | none | none; `mus.podium` sounds alone | — |
-| **After the podium** | 6 s after `mus.podium` ends | the lobby voicing swells in over 4 s | lobby schedule | lobby |
-| **Rejoin / tab returns** | the first view after it | the current state's voicing, 1.5 s swell | the schedule from the current server time; no phrase already begun is played | — |
+| **Lobby** | 4 (0), 6 (−4), 8 (−9); headphones + 2 (−8) | I, at home | every slot for 3 min, then 1 in 3; answers 1 in 3 | 4 (−3), 6 (0), 8 (−6); every other active slot; no answers |
+| **The call** | silence | — | none | same |
+| **Dusk** (18–13) | 6 (0), 9 (−6), 12 (−12) | V: the open fifth on F, with its ninth | 3 in 8 slots (mean 80 s); no answers; none before 40 s | same partials; every other active slot |
+| **Evening** (12–7) | 5 (−2), 6 (0), 10 (−8) | the third arrives: D–F, the lament | 1 in 2 (mean 60 s); answers 1 in 3 | same; every other active slot; no answers |
+| **Night** (6–2) | 5 (−3), 7 (0), 9 (−6) | D–A♭–C: the septimal tritone, unrest | 3 in 4 (mean 40 s); answers 1 in 2 | same; every other active slot; answers 1 in 2 |
+| **The gate** (stall shut) | 9 (0), 10 (−1) | a close whole tone: a held breath | none while shut | same |
+| **The last set** (1) | 6 (−3) alone | V alone, waiting; `mus.home` (4) lands on it: **V → I** | none | same |
+| **Finale** | silence from the last lay's stamp | the podium alone: 6 → 5 → 4 | none | same |
+| **After the podium** | lobby voicing, 4 s swell, 6 s after `mus.podium` ends | I | lobby schedule | lobby |
 
-Why these voicings: dusk is an open fifth with no third (outward, undecided); the evening adds the third (warm,
-closer); the night adds the seventh and the dry wind adds the accent (unrest, the question open); the last set drops
-everything to the octave of home (the answer is near but not given); the podium gives it. The tension line rises
-**by harmony and density, never by loudness or tempo** — the knocks own tempo and the voice owns loudness.
+**Precedence** (one state at a time): Finale > The last set > The gate > the stage (night, evening, dusk). The gate
+therefore shows only before the last set; when it opens, the voicing returns to whatever stage is current.
+**The pool running dry changes nothing in the score**: the ambience turns pond into wind (`table.poolEmpty`), and the
+hum's only link to it is the gust lift (§3.5). The lobby is a separate phase with its own clock (§5.2).
 
-### 4.2 Transitions
+### 4.2 Transitions: exactly where each change happens
 
-- **Cut on the knock.** Every change of voicing is a 25 ms linear ramp of the band-pass gains that starts on the
-  transient of the knock that marks the step — the same ramp `setDarkStep` uses, driven from the same
-  `engine.worldAt` beat, so sound, light and score turn together. The knock masks the cut; nothing glides.
-- **Entrances and exits breathe.** From silence the hum swells (4–6 s); into silence it is cut (the call, the
-  finale). A breath or a gust can swell; a woodcut cannot fade.
-- **A phrase in flight at a cut** finishes if it is at most 1.5 s from its end, else it is cut with the hum. A phrase
-  never outlives its stage by more than 1.5 s.
-- **Ceremonies own the valley.** While any `ex` cue on the Music or Power bus sounds (`mus.start`, `world.dark.01`'s
-  note, `mus.podium`, `power.shark/mantis/whale/reveal`), the score is ducked −10 dB with the ambience (the same
-  `onCeremony` envelope), and no phrase may start until 10 s after it ends. The horn never talks over the horn.
+| Change | Lands on | Loud enough to mask a 25 ms cut? |
+|---|---|---|
+| Dusk → evening, evening → night, → the last set | the transient of `world.dark.12 / .06 / .01` (Table, −2 dB / −2 dB / now Table, A8), on the beat `engine.worldAt` already uses for the light and `DARK_STEPS` | yes: −27.0, −26.6 and −14.0 LUFS momentary max as rendered (SOUND_DESIGN §9), against a bed 14–20 LU under the anchor; #20 measures the click ratio directly |
+| Stage → the gate | the answering cue of the ask whose miss shuts the gate (with the pool dry, `table.gofish.dry`, `feel: 'answer'`), not `amb.gate` | yes; `amb.gate` (−47.9 LUFS) is too quiet and is not used |
+| The gate → stage | the answering cue of the capture that throws it open (`table.give`) or the stamp of the lay (`table.lay*`) | yes |
+| → finale | the last lay's stamp, the choreography's held beat | yes |
+| Silence → dusk | a 6 s swell from 8.3 s after `GAME_STARTED` (the call's last repeat ends) | entrance: swells (A5) |
+| Podium → lobby | 4 s swell | entrance |
+| Rejoin, tab return | 1.5 s swell into the current state | entrance |
 
-### 4.3 How often, and how long before it repeats
+- A unit test (`scoreCuts.test.ts`) asserts that every step that changes the score's state carries the named cue in
+  the same step (from the real presenter's output over bot games), so a cut never happens on silence.
+- **A phrase in flight at a cut** finishes if ≤ 1.5 s remain, else fades over 300 ms.
+- **Ducks** are per cue, in the cue sheet (`scoreDuckDb`, a new field), and explicit: −10 dB under `power.shark`,
+  `power.mantis`, `power.whale`, `power.reveal` (their existing `duckMs`); −6 dB under `mus.home`. **No duck under
+  `world.dark.12/.06`** — they are the cut points, and v1 would have ducked 10 dB exactly where the chord changes.
+  `power.reveal` plays only in Mode Ascuns, so the score *does* differ by mode there; the mode is public, and the
+  duck follows a public cue.
+- **The horn never talks over the horn:** no slot may start within 10 s after any Music-bus cue ends (§5.2 says how
+  that is decided on server time).
 
-Stage lengths follow from the world arc's medians (FEEL §3.9: the tally reaches 12 at 32–44 % of a game, 6 at
-67–79 %, 1 at 93–97 %) and a 16–21 minute game:
+### 4.3 How often, and how long before a phrase repeats
 
-| Stage | Share of the game | Minutes | Mean gap | Expected calls | Library (phrases × ornament takes) | Worst-case repeats |
-|---|---|---|---|---|---|---|
-| Dusk | 32–44 % | 5–9 | 80 s | 3–7 | 8 × 3 | none |
-| Evening | 30–40 % | 5–8 | 60 s | 4–8 | 8 × 3 | none |
-| Night | 18–26 % | 3–5.5 | 40 s | 4–8 | 8 × 3, + 6 answers | none |
-| The last set | 3–7 % | 0.5–1.5 | — | 0 | — | — |
-| Lobby | — | 1–10 | 30 s, then 90 s | 2–10 | 10 × 3, + 4 answers | a phrase at most once per 5 min |
+**Slots, not stage timers.** From the score clock's zero, candidate slots fall every 18–42 s (seeded, uniform; mean
+30 s). Each slot is *active* with the probability of the stage that holds it (§4.1), so the gaps between calls are
+irregular multiples of irregular gaps. Stage length does not enter anywhere.
 
-- **Selection is a seeded shuffle bag per stage** (every phrase once before any repeats; never the same phrase
-  twice running across a bag boundary), and each replay uses a different ornament take (a different scoop depth, sag
-  and trim). With 8 phrases and at most 8 calls a stage, a median game repeats nothing.
-- **Time with a call sounding:** dusk ≈ 6 %, evening ≈ 8 %, night ≈ 14 % of the stage (mean call 4.5 s plus
-  answers). The rest is the hum and the table. The score is mostly *silence with a key*.
-- **The speaker arrangement plays every other slot** (the same slots on every speaker device), halving the calls
-  where they can reach a microphone.
+**No repeats by construction.** A stage's bag has 10 calls. The phrase for global slot *i* in stage *s* is
+`perm(seed, s, ⌊i / 10⌋)[i mod 10]`, with the permutation of each pass re-drawn if its first phrase equals the
+previous pass's last. So **no phrase recurs within 10 consecutive slots — at least 3 minutes, about 5 on average — in
+any stage and any game length**, and a recurring phrase takes a different ornament take (3 per phrase: scoop depth,
+sag, trim). Expected calls per stage in a 16–20 minute game: dusk 4–7, evening 5–8, night 4–8.
+
+**Time with a call sounding** (headphones): dusk ≈ 6 %, evening ≈ 8 %, night ≈ 14 % of the stage (mean call 4.5 s,
+plus answers). On speakers, half that. The rest is the hum under the table.
 
 ### 4.4 What the score never does
 
 - plays on a turn, an ask, an answer, a power, a window, a clock tick, a join or a press;
-- reacts to whose turn it is, to "you", to the mode (Ascuns or Deschis), to the player count, or to anything in a hand;
-- sounds partial 4 in play before the last set;
-- has a pulse, a transient, or a note above 696 Hz;
-- starts a phrase over a ceremony;
-- plays a stored loop;
+- reads whose turn it is, "you", the mode, the player count, a hand, a grant or a window;
+- sustains the tonic in play before the last set, or uses partial 11 outside the night;
+- has a pulse, a transient, a loop, or a note above 696 Hz;
+- starts a phrase within 10 s of a ceremony;
 - blocks, delays or is awaited by anything.
 
 ---
@@ -310,105 +325,132 @@ Stage lengths follow from the world arc's medians (FEEL §3.9: the tally reaches
 
 ### 5.1 What it reads — `SCORE_FIELDS`
 
-The score is a pure function `scoreFor(input, serverTimeMs) → ScoreState` behind a projection, `scoreInputOf`,
-built exactly like `soundInputOf` (SOUND_DESIGN §3): one function copies these fields into a fresh object, and nothing
-after it can read anything else.
+`scoreInputOf` (in `audio/score/input.ts`) copies these fields into a fresh object, exactly as `soundInputOf` does for
+the cues (SOUND_DESIGN §3), and nothing after it can read anything else.
 
 | ID | Field | Public because |
 |---|---|---|
-| S1 | the phase: lobby / game / ended (`room_update.started`, `GAME_STARTED`, `GAME_ENDED` by `type` only) | everyone sees it |
-| S2 | `setsPossible` (after the lay's notch beat, as `world.ts` places it) | V6: the same number for every viewer |
-| S3 | `poolCount === 0` (the pool-empty event, `DREW_FROM_POOL.poolEmpty`) | E9: public |
-| S4 | `endPressure.misses`, `.limit` | V7: public |
-| S5 | the score clock: `startedAt` (new, §7.3), `serverNow` via `ServerClock` | a timestamp, the same for all |
-| S6 | the seed: a hash of the room code and `startedAt` (lobby: room code and `createdAt`) | both public; neither touches the deal's CSPRNG |
+| S1 | the phase: lobby / game / ended (`room_update.started`; `GAME_STARTED` and `GAME_ENDED` by `type`) | everyone sees it |
+| S2 | `setsPossible` | V6: one number for every viewer |
+| S3 | `endPressure.misses`, `.limit` | V7 |
+| S4 | the `serverNow` of the broadcast that carried each change of S1–S3 | `broadcastState` computes it once per broadcast for every player (`room.ts:183`) |
+| S5 | the score clock's zero: `startedAt` (new, §7.3); in the lobby, `createdAt` | a timestamp, the same for all |
+| S6 | the seed: a hash of the room code and S5 | public; independent of the deal's CSPRNG |
 
-Plus the cue stream's **`all`-heard `ex` cues**, for ducking and the ceremony hold (§4.2) — cues that every client
-plays identically. It deliberately does **not** follow the ambience's table-activity envelope, because that envelope
-also reacts to `table.turn.you` and `table.asked` (`heard: 'you'`), which differ by client.
+Plus the cues this client plays that carry a `scoreDuckDb` (§4.2) or are a cut point (§4.2) — all `heard: 'all'`.
+The score does **not** follow the ambience's table-activity envelope: that envelope also reacts to `table.turn.you`
+(`heard: 'you'`, `env: 'src'`, `cuesheet.ts`), which differs between clients.
 
-**Forbidden, and asserted by the Proxy test:** every field in SOUND_DESIGN §3's forbidden list, plus `players`,
-`currentPlayerId`, `facts.playerId`, `mode`/`config.powerVisibility`, `window`/`pendingWindow` (any field), `scores`,
+**Forbidden, asserted by the Proxy test:** SOUND_DESIGN §3's forbidden list, plus `players`, `currentPlayerId`,
+`facts.playerId`, `mode` / `config.powerVisibility`, `window` / `pendingWindow` (any field), `poolCount`, `scores`,
 `winners`, `laidSets`, and the room `seq`.
 
-### 5.2 One score on every speaker
+### 5.2 One clock, one schedule
 
-A call carries every speaker to every player. If five devices each improvised their own phrases, the call would
-carry five tunes. So the score is **deterministic and clocked from the server**:
+- **Slot times** are `T_i = zero + Σ gaps` (seeded), in server milliseconds.
+- **The state of slot *i*** is decided at `T_i − 2 s` from the S1–S3 values of the latest broadcast whose `serverNow`
+  is ≤ `T_i − 2 s`. Every client holds the same broadcasts with the same `serverNow`, so every client that has
+  received them by then decides the same.
+- **The phrase, take, activity, speaker-subset and answer** of slot *i* are pure functions of (seed, state, *i*)
+  (§4.3). Nothing depends on a previous slot's outcome, so one mismatch cannot cascade.
+- **The ceremony hold** is decided the same way: slot *i* is silent if a Music-bus ceremony's broadcast `serverNow`
+  plus its beat offset and length plus 10 s is later than `T_i`.
+- **Ordering with the cut.** A stage-changing broadcast at `S` is presented at `S` + delivery + the notch beat (≈ 0.4 s
+  of choreography), so its cut lands before any slot it governs (≥ `S` + 2 s) whenever delivery is under ~1.5 s.
+- **Output alignment.** Events are posted to the worklet ahead of time at `T − serverOffset − outputLatency`, so the
+  sound leaves every speaker at server time `T` within `ServerClock`'s error. (Today `outputLatency` delays only
+  visuals, `context.ts`; this is new, and only for the score.) The hum's voicing cuts, which follow a knock, stay on
+  presentation time like the knock.
+- **Rejoin, hidden tab:** a snapshot carries the current S1–S3 and its `serverNow`; the schedule from `now + 2 s`
+  follows. Nothing is replayed.
 
-- **The slot schedule** is a seeded sequence of absolute times from `startedAt` (irregular gaps drawn per §4.1).
-  At each slot the phrase is chosen from the bag of the stage that held **2 s before the slot**, by server time. A
-  stage change that lands inside those 2 s on one client and outside them on another is the only way two clients can
-  disagree; it is rare and harmless (both phrases are in the same key). Target: ≥ 99 % of slots agree across six
-  clients in the bot table with 0–300 ms of injected delivery jitter (§10.2).
-- **Alignment**: `ServerClock` already keeps a server offset (min of five samples, half the RTT) for the window clock;
-  the score uses it and the engine's `outputLatency` compensation. Expected spread between devices: tens of ms,
-  plus Bluetooth. A copy of a slurred, slow-attack phrase 100–300 ms late through the call is a consonant doubling —
-  the same pitches — which reads as a second horn, not as a mistake. That is why the score has no transients (§3.2).
-- **Rejoin and hidden tabs** re-enter the schedule where the server clock is. Nothing is replayed (SOUND_DESIGN §2's
-  "no replay of missed events" holds for the score too).
-- **A slow device skips, never lags.** A phrase is rendered ≥ 5 s ahead; if it is not ready 1 s before its slot, the
-  slot is silent on that device. Skipping depends on the device, not on anything in the game.
+### 5.3 Every way two clients can differ
 
-### 5.3 Why no stingers — the argument in full
+None of these depends on anything private; each has a test or a measurement.
 
-A stinger on a power (the obvious AAA move) would be redundant, since every power already has a cue, and hazardous
-twice over: in Mode Ascuns, music that swelled on `POWER_USED` would be the same for every rank, which is fine, but a
-stinger on a *window* would voice the rules' own tells (A6), and a stinger timed to a player's *pause* would turn a
-deliberation into a sound. The simplest rule that is safe everywhere is the one in §4.4: the score does not know a turn
-exists.
+| # | Divergence | Size | Test |
+|---|---|---|---|
+| D-a | A broadcast arrives more than ~2 s after its `serverNow` on one client: that client decides one slot on the older state | one slot | agreement test with injected delay up to 3 s |
+| D-b | A phrase in flight at a cut: finish-or-fade is decided on presentation time | ≤ 300 ms of a fade | agreement test reports the spread |
+| D-c | Device timing: `ServerClock` error, Bluetooth `outputLatency` not reported by the browser | tens of ms; up to ~200 ms on Bluetooth | measured on the rig (§10.4) |
+| D-d | Rejoin or tab return: a 1.5 s swell | 1.5 s | #21 |
+| D-e | No AudioWorklet: no score on that client, for the session | whole session | engine test |
+| D-f | Profile (speaker plays half the calls), mono, volume, mode switch | device settings | none needed: settings, not game state |
+
+**Why a stutter cannot become a tell.** The score is synthesised on the audio thread from a schedule posted seconds
+ahead; the main thread only computes schedules. A heavy main-thread moment (say, a player opening their Squid in their
+own hand panel) cannot delay it. There is no main-thread fallback: a `ScriptProcessor` score would tie its timing to
+exactly that work (D-e instead). The spike's device run records a phrase while the player works through the private
+panels and checks the recording for dropouts (§10.3).
+
+### 5.4 Why no stingers
+
+A stinger on a power is redundant — every power already has a cue — and hazardous nearby: a stinger on a *window*
+voices the rules' own tells (A6), and a stinger timed to a player's *pause* turns a deliberation into a sound. The
+rule that is safe everywhere is §4.4: the score does not know a turn exists.
 
 ---
 
 ## 6. Law 2: under the voice
 
-### 6.1 Level
+### 6.1 Level, with the arithmetic
 
-| Target | Speaker | Headphones | Check |
+Reference values from `tools/out/metrics.md`: anchor −21 LUFS (speaker) and −25 LUFS (headphones); the bed's
+short-term max in the loudest state −35.1 and −38.3 LUFS; the clock over the bed 14.5 and 10.2 LU.
+
+| | Speaker | Headphones | How |
 |---|---|---|---|
-| The world stem (pond or wind **plus** hum), short-term, every state | 12–20 LU under the anchor | same | #17 (extends today's ambience check from 5 pond states to 24: 6 states × wet/dry × 2 profiles) |
-| A distant call, momentary max | ≥ 10 LU under the anchor | ≥ 8 LU under | #18 |
-| The score in the 1–4 kHz speech band, short-term max | ≥ 30 LU under the anchor | ≥ 28 LU under | #16 |
-| Every Clock cue over the world stem plus score | ≥ 10 LU | ≥ 10 LU | #19 (extends today's clock check) |
-| Lobby (no anchor sounds there): the world stem | ≤ the in-game window + 6 dB (the lobby scene is already 2.2× the bed) | same | #17 |
+| Pond / wind in play, score on | −2 dB | −2 dB | a score-on factor on the ambience level |
+| Hum | −3 dB re the pond at its new level | same | Score stem gain, set by the harness |
+| **World stem** (pond + hum), loudest state | −35.1 − 2 + 1.76 = **−35.3 LUFS** (14.3 LU under) | **−38.5** (13.5 LU under) | 10·log(1 + 10^−0.3) = 1.76 dB; every state moves by −0.24 dB, so today's 12–20 LU window holds |
+| Clock over the world | 14.5 + 0.24 = **14.7 LU** | 10.2 + 0.24 + 2 (A9) = **12.4 LU** | |
+| A distant call, momentary max | ≤ −33 LUFS (12 LU under the anchor) | ≤ −37 LUFS | #19 |
+| Clock over a call | clock ≈ −20.6 → **≥ 12.4 LU** | clock ≈ −26.1 (with A9) → **≥ 10.9 LU** | #19 |
+| **Lobby** world stem (no anchor plays there; the anchor is the reference) | the lobby factor drops 2.2 → 1.6 (+4.1 dB over the game bed) and the hum sits −2 dB under it: −35.1 + 4.1 + 2.1 = **−28.9 LUFS (7.9 LU under)** | −38.3 + 6.2 = **−32.1 (7.1 LU under)** | today the lobby pond alone is 7.25 (speaker) and 6.45 LU (headphones) under; v1's figures failed this, these do not |
+| Lobby calls | ≤ 6 LU under the anchor | same | #22 |
 
-Today the bed sits 14.1–19.8 LU under the anchor (speaker) and 13.3–19.1 (headphones) (SOUND_DESIGN §9). The hum is
-set 4 dB (speaker) and 2 dB (headphones) under the pond, which raises the combined short-term level by about 1.5 and
-2.1 dB — putting the loudest state at ≈ 12.6 LU on speakers and ≈ 11.2 LU on headphones. **The second is outside the
-window**, so the pond's `BED_DB` drops 1 dB on headphones when the score is on (it rises back when the score is off, so
-the ambience alone still meets today's check). These are estimates; the harness sets the final values, as the rest
-of the mix is "measured, not set" (FEEL §3.3).
+These are estimates from today's measurements; the harness sets the final gains ("measured, not set", FEEL §3.3).
+
+**Is the hum audible at all?** The pond is noise low-passed at 500 Hz; a hum partial concentrates its energy in 1.5 Hz.
+With the hum 3 dB under the pond and split over three partials, each partial carries about −7.8 dB of the pond's
+power; the pond's share in a third-octave band near 300–350 Hz is roughly −8 dB of its total. So each lower partial
+stands about level with the noise in its own band, and above 500 Hz, where the pond rolls off, clearly over it. A tone
+is audible in noise down to about −4 dB in its band (the critical ratio), so the hum should be **heard as a pitch
+without being loud**. Check #18 measures it (≥ 0 dB per partial in its third-octave band); if it fails, the split
+between pond and hum moves, the world stem's total does not.
 
 ### 6.2 Spectrum
 
-- Nothing above partial 12 (696 Hz) is ever a note; the horn's upper harmonics are low-passed at 900–1100 Hz (calls)
-  and 1100 Hz (hum), with the existing −6 dB bell at 2 kHz. Speech intelligibility lives in 1–4 kHz; the score leaves
-  it nearly empty (#16 measures it).
-- The score's notes overlap the male and female speaking fundamentals and first formants (≈ 100–1000 Hz). That is the
-  honest cost of a tonal bed. It is paid for with level (12–20 LU under a knock that is itself under speech) and with
-  stillness (the hum changes five times a game). The call test measures whether that is enough (§10.3).
+- No note above 696 Hz; calls are low-passed at 900 Hz, answers at 650 Hz, the hum at 1.1 kHz. The 1–4 kHz band, where
+  intelligibility lives, is left nearly empty (#16: ≥ 30 LU under the anchor on speakers, ≥ 28 on headphones).
+- The score shares 100–1000 Hz with speaking voices. That is the honest cost of a tonal bed, paid with level (today's
+  bed level, 12–20 LU under a knock that is itself under speech) and stillness (the hum changes chord five times a
+  game, plus two for each stall). The listening-effort test (§10.4) decides whether it is enough.
 
 ### 6.3 The two arrangements
 
 | | Speaker (default) | Headphones |
 |---|---|---|
-| Hum | partials ≥ 5 (≥ 290 Hz) of the stage voicing, lowest dropped where needed; −4 dB re pond | full voicing plus partial 2; −2 dB re pond |
-| Calls | every other slot; no answers in dusk and evening; answers at night only | every slot; answers per §4.1 |
-| Repeats on answers | none (the call itself makes echoes) | two discrete repeats |
+| Hum | the stage's partials (all ≥ 290 Hz in play; the lobby's partial 4 at −3 dB) | the stage's partials; partial 2 in the lobby |
+| Calls | every other active slot, the same subset on every speaker device | every active slot |
+| Answers | night only | per §4.1 |
+| Repeats on answers | none (the call makes its own) | two discrete repeats |
 | Pan | centre | near −0.35, far +0.55 |
-| Echo budget (FEEL §3.4) | exempt as the ceremonies are, replaced by the no-transient and speech-band checks: a slow slurred tone has no "first 250 ms" to protect | — |
 
 ### 6.4 The call, honestly
 
-Voice-chat suppressors (Krisp, RNNoise-style, Discord's own) remove stationary noise well; the hum is close to
-stationary and will mostly be stripped from a speaker device's microphone. Tonal, changing sounds — a distant call —
-are likelier to pass (FEEL §3.2 designs "as if this were true"). So:
+Following the repo's own model (FEEL §3.2, §3.4): tonal sound passes voice-chat suppressors, so both the hum and the
+calls will reach the call from every speaker device, 100–300 ms late.
 
-- what reaches the call is mostly the calls, at ≥ 10 LU under the anchor, and at night at most one every ~30 s;
-- every device plays the same call at the same moment (§5.2), so the leaked copies double rather than clash;
-- the speaker arrangement halves the calls;
-- the settings offer "Background music: On / Lobby only / Off", and the playtest gate (§10.4) decides the in-game
-  default from the players' own choices, as the ambience's was decided.
+- **The hum's copies** are the same partials; a late copy of a slowly wandering drone is a slightly thicker drone.
+- **The calls' copies** are the same phrase. At a slur, a copy 100–500 ms late briefly sounds the old partial against
+  the new one — 7 against 8, 10 against 11 — for up to half a second. That *is* a clash, heard as heterophony, the way
+  two tulnic players overlap; it is not presented as harmless. It happens at most once every ~30 s at night on
+  speaker devices, at 12 LU under the anchor.
+- **The phone that runs Discord and the game at once** is the common case and is in the rig (§10.4): iOS's voice
+  processing may duck other audio while the microphone is open, and Android's echo cancellation may remove some of
+  the game's own sound from its microphone. Both change what the score costs, in opposite directions.
+- **The switch** (A12) and the playtest gate (§10.5) leave the in-game default to the players' own choices.
 
 ---
 
@@ -418,163 +460,166 @@ are likelier to pass (FEEL §3.2 designs "as if this were true"). So:
 
 ```
 packages/client/src/audio/score/
-  phrases.ts   DATA: the phrase library (partial, dur, scoop, sag, trim, gain per note), the cells, the §3.4 cadence table
-  voicing.ts   DATA: the §4.1 table (hum partials and levels per state and profile, call gaps, answer odds)
-  plan.ts      PURE: (ScoreInput, serverMs, seed) -> the slot schedule and the state; no DOM, no Web Audio; unit-tested in Node
-  hum.ts       the live hum: noise -> partial band-passes -> wandering gains; setVoicing(state, at) as a 25 ms ramp
-  calls.ts     just-in-time rendering (render/horn.ts at 16 kHz, in idle time, >= 5 s ahead) and playback of calls and answers
-  index.ts     the Score class: owns hum + calls, reads only ScoreInput, schedules from the engine's lookahead tick
+  input.ts     scoreInputOf + SCORE_FIELDS (the projection, §5.1)
+  plan.ts      PURE: (ScoreInput history, seed, zero) -> slots (time, state, phrase, take, answer, subset) and cuts; Node-tested
+  phrases.ts   DATA: the library (partial, dur, sag, trim, gain per note), the cells, the §3.4 cadence table
+  voicing.ts   DATA: §4.1 (hum partials and levels per state and profile, slot activity, answer odds)
+  synth.ts     PURE DSP, no Web Audio: counter noise, resonators, value-noise wander, the legato horn voice (§3.5-3.6)
+  worklet.ts   the AudioWorkletProcessor that runs synth.ts, shipped as a Blob exactly as audio/worklet.ts ships dynamics.ts
+  index.ts     the Score class: posts slots, cuts and ducks to the worklet ahead of time; owns the swell/fade rules
 ```
 
-- **`scoreInputOf`** lives beside `soundInputOf` in `cues.ts`'s neighbourhood (`audio/score/input.ts`), with its own
-  `SCORE_FIELDS` constant.
-- **The engine** gains a `Score` beside `Ambience`: `engine.setScore(input)`, driven by the presenter at the same
-  beats as `worldAt` (so the cut lands on the knock), and by `useLobbyAudio` in the waiting room.
-- **Mixer:** a `Score` bus → its own stem with the profile EQ → a ceremony gain driven by `onCeremony` → the sum
-  before the limiter. It does not pass through the ambience's darkening low-pass: the score darkens by voicing.
-- **Voices:** the score does not use the voice pool (like the ambience); it cannot steal a table cue. At most two
-  phrase sources play at once (a call and its answer).
-- **Settings:** `score: number` (volume, default 1) and `scoreMode: 'on' | 'lobby' | 'off'` (default `'on'`), in
-  `AudioSettings`, persisted with the rest behind try/catch. The existing Music slider keeps the ceremonies. The one-tap
-  mute still silences everything. Strings: four new keys in RO and EN; `copy.test.ts` covers them.
-- **Metrics** (`?metrics=1`): `score.turnedOff`, `score.lobbyOnly`, `score.offNow`, beside `ambience.turnedOff`.
+- **Engine:** a `Score` beside `Ambience`: `engine.setScore(input)`, fed by the presenter at the beats of `worldAt` and
+  by `useLobbyAudio` in the waiting room.
+- **Mixer:** Score bus → duck gain (per-cue `scoreDuckDb`) → step gain (`DARK_STEPS` levels) → its own stem with the
+  profile EQ → the sum before the limiter. It does not pass the ambience's activity envelope.
+- **Voices:** the worklet is one node; it holds the hum and at most two phrase voices (a call and its answer). It
+  never enters the voice pool and cannot steal a table cue.
+- **Settings (A12):** `scoreMode: 'on' | 'lobby' | 'off'`, default `'on'`, persisted with the rest behind try/catch;
+  the Music slider scales ceremonies and score. Three strings in RO and EN (`copy.test.ts`).
+- **Metrics** (`?metrics=1`): `score.turnedOff`, `score.lobbyOnly`, `score.modeNow`.
+- **The harness** runs the same `synth.ts` offline (the pattern `dynamics.ts` already follows), in 60 s chunks.
 
 ### 7.2 Budgets
 
-| Budget | Value | Why it holds |
+| Budget | Value | Basis |
 |---|---|---|
-| Download, audio | 0 KB (unchanged) | hum live; calls rendered |
-| JS, gzip | ≤ 5 KB, a lazy chunk fetched after the audio unlocks | the phrase data is ≈ 44 phrases × ≤ 8 notes; the renderer exists |
-| Persistent nodes | ≤ 24 (hum) | §3.5 |
-| Per phrase | ≤ 10 nodes (source, gain, pan, two repeats with filters) | §3.6 |
-| Render cost | ≤ 30 ms per phrase at 16 kHz under 4× CPU throttle, in `requestIdleCallback`, off the input path | measured in the spike (§11.1); the fall-back is a silent slot |
-| Memory | ≤ 3 rendered phrases alive: ≤ 1 MB (7 s × 16 kHz × 4 B ≈ 450 KB each) | calls are released after playing |
-| fps during a six-player whale | ≥ 55 (unchanged gate) | `perf:check` reruns with the score on |
+| Audio download | 0 KB | all synthesised |
+| JS | ≤ 6 KB gzip, a lazy chunk fetched after the audio unlocks | ~56 phrases × ≤ 7 notes of data; the DSP is small |
+| Audio-thread CPU | ≤ 1.5 % of a core on the build machine in the worst moment (hum + call + answer) | measured: the existing renderer costs 0.57 µs a sample; at 16 kHz a voice is ≈ 0.9 % of a core, trimmed to ≤ 8 harmonics under 2 kHz ≈ 0.5 %; six resonators and their noise ≈ 0.3 % (estimate, measured in the spike) |
+| On a mid-range Android (≈ 4× slower) | ≤ 6 % of a core; no audible glitch in a 20-minute game | spike device run |
+| Memory | a few KB of state; no rendered buffers | real-time synthesis |
+| fps during a six-player whale | ≥ 55 (the existing gate) | `perf:check` with the score on |
 
-**The JS budget is already over.** README: a played game loads 126.0 KB against 125 KB. A 5 KB score chunk takes it
-to ≈ 131 KB. This plan does not hide that: decision D4 (§13) asks for the budget line to become 131 KB, or for an
-offsetting cut to be found first. The lobby's initial load (107 KB) is untouched: the chunk arrives after the first
-gesture.
+**The JS budget is already over** (README: 126.0 KB against 125). The chunk takes a played game to ≈ 132 KB. Decision
+D4 asks for the line to move, or for an offsetting cut first. The lobby's initial load (107 KB) is untouched.
 
 ### 7.3 Protocol
 
-Two small server changes, both public and identical for every viewer:
+- `startedAt` (server ms) in the game view, set once when the game starts.
+- `serverNow` and `createdAt` on `room_update`, which today carries no time (`protocol.ts`).
 
-- `startedAt` (server ms) in the game view, set once when the game starts. It is a timestamp; the deal draws from the
-  OS CSPRNG and is independent of it (DECISIONS "Randomness never reaches the wire" is unaffected).
-- `serverNow` and `createdAt` on `room_update`, so the waiting room's score is synchronised as well. Today
-  `room_update` carries no server time (`protocol.ts`).
-
-Tests: the redaction tests assert both fields are byte-identical in every viewer's message; the RNG wire test is
-rerun.
+Both are timestamps, identical for every viewer, and independent of the deal's CSPRNG. Tests: the redaction tests assert
+they are byte-identical in every viewer's message; the RNG wire test is rerun.
 
 ---
 
 ## 8. The rest of the soundtrack, in the same key
 
-Small changes, each one measurable, that make the existing sounds part of the same music.
-
-1. **The wind sings partials 5 and 11.** `WIND_BANDS` 310 → 290 Hz and 640 → 638 Hz. Its ±12 % random walk and its
-   whistle stay, so it is still wind; its centres now sit on the score's key, and the night's accent comes from the
-   world, not a horn. Re-run the ambience check (#17) and the wind's lab page.
-2. **The last-set knock can never be muted by the music slider.** `world.dark.01` is on the Music bus
-   (`cuesheet.ts`), so a player who turns music down loses an informative knock. Split it: the knock stays
-   `world.dark.01` on **Table**; the bare partial-4 note becomes `mus.home` on **Music**, placed 0 ms after it. The
-   echo-exempt list, `soundtwins.test.ts` and the cue-sheet test follow.
-3. **Home is a rule in data.** A unit test fails if any in-game phrase ends on, or contains, partial 4; if the call
-   (`mus.start`) ends anywhere but partial 5; or if `mus.home` and `mus.podium` end anywhere but partial 4.
-4. **The seat planks are not retuned.** Planks A 180, B 320, C 620 Hz are close to partials 3, 5.5 and 11 — tempting.
-   They are left alone: their job is identity, measured by the confusability check and (not yet run) the blindfold
-   test, and they are struck, inharmonic bars that do not read as pitches in a key. Retuning them would trade a
-   measured property for an aesthetic one.
-5. **The podium is unchanged** — bare, one breath, 6 → 5 → 4. What changes is what it means: it is now the only
-   cadence to home in the whole game.
+1. **`world.dark.01` split (A8).** The knock stays `world.dark.01`, now on Table; the bare partial-4 note becomes
+   `mus.home` on Music, 0 ms after it. `ECHO_EXEMPT`, `soundtwins.test.ts` and the cue-sheet test follow.
+2. **Home is a rule in data.** A unit test fails if any in-play phrase sustains partial 4 or 8 (§3.4), if the hum's
+   in-play voicings contain partial 2, 4 or 8, if `mus.start` ends anywhere but partial 5, or if `mus.home` and
+   `mus.podium` end anywhere but partial 4.
+3. **The headphones clock gets its margin back (A9).** +2 dB on the Clock bus in headphones: from 10.2 LU over the bed
+   today to about 12.4 with the score on. This is an improvement in its own right.
+4. **The seat planks are not retuned.** A 180, B 320, C 620 Hz sit near partials 3, 5.5 and 11 — tempting, and wrong:
+   their job is identity, measured by confusability and (not yet run) the blindfold test, and they are struck,
+   inharmonic bars that do not read as pitches in a key.
+5. **The podium is unchanged** — bare, one breath, 6 → 5 → 4. What changes is what it means: after `mus.home`, it is
+   the only cadence to the tonic in the whole game.
 
 ---
 
-## 9. Tooling: the score in the lab
+## 9. Tooling
 
-`?lab=audio` (development only) gets a **Score** panel: the state (lobby, dusk, evening, night wet/dry, the gate, the
-last set, finale), the profile, the seed, "jump to server time", a play-through that walks the stages at 10× with the
-real `world.dark.*` knocks, per-partial meters for the hum, a timeline of the slot schedule (which phrase, which take,
-which slots the speaker arrangement skips), and "solo phrase N" for the whole library. The composer and the consultant
-review the library here, not in a DAW.
-
-The bot table (`?table=bots`) plays the score like any other client, so a six-seat game at 4× shows the whole arc in
-five minutes; `?table=bots&clients=6` (new) opens six presenters on one engine with injected jitter for the agreement
-test (§10.2).
+- **Week 1 (in the spike):** a minimal Score panel in `?lab=audio` (development only): pick a state and a profile, hear
+  the hum; type a phrase in Appendix A's notation and hear it on the legato voice. The composer works here from day 1.
+- **With the engine:** the full panel — a timeline of slots (which phrase, which take, which slots the speaker
+  arrangement skips), "jump to server time", a 10× walk through the stages with the real `world.dark.*` knocks,
+  per-partial meters, and a check-run of `phrases.test.ts` on the typed phrase.
+- **`?table=bots&clients=6`** (new): six presenters on one bot-table engine with injected delivery jitter, for the
+  agreement test.
 
 ---
 
 ## 10. Measurement
 
-### 10.1 The audio harness: 13 checks become 21
+### 10.1 The audio harness: 13 checks become 23
 
-`npm run audio:check` renders the score offline (the same `plan.ts` and renderers, `OfflineAudioContext` at 48 kHz)
-through the product's chain. New checks, each able to fail:
+`npm run audio:check` renders the score through the product's chain in 60 s chunks. The existing 13 must still pass
+with the score on; the calibration is regenerated.
 
 | # | Check | Pass |
 |---|---|---|
-| 14 | **The key** | every sustained spectral peak of the hum and of every phrase (FFT, 40 ms frames, held notes only) within 10 ¢ of `58 × n`, n ∈ 2..12; scoops and sags excluded by their design windows |
-| 15 | **No pulse, no transient** | onset detection on a 20-minute render per profile: no rise faster than 80 ms to within 6 dB of a note's peak; no three consecutive inter-onset intervals within ±10 %; the existing confusability check run on the score's onsets against the seat signatures, the clock and the asked roll, with zero violations |
-| 16 | **Speech room** | the score's 1–4 kHz band short-term max ≥ 30 LU (speaker) / 28 LU (headphones) under the anchor |
-| 17 | **The world window** | pond or wind plus hum, short-term, 12–20 LU under the anchor in all 24 states; lobby ≤ window + 6 dB |
-| 18 | **Distance** | every call's momentary max ≥ 10 LU (speaker) / 8 LU (headphones) under the anchor |
-| 19 | **The clock over the world** | every Clock cue ≥ 10 LU over pond + score in every state |
-| 20 | **Cuts land on knocks** | every voicing change's 10–90 % ramp lies within 10–35 ms and starts within 5 ms of its knock's onset; click ratio ≤ 1.5 (the darkening check's method) |
-| 21 | **Rejoin equals staying** | a render entered at t = 137 s (after its 1.5 s swell) is sample-identical to the full render from that point |
-
-The existing 13 must still pass with the score on (peaks, headroom, balance and the palette in particular), and the
-calibration is regenerated.
+| 14 | **The key** | hum: long-term spectrum over 60 s, each partial's peak within 5 ¢ of `58 × n`; phrases: held notes only, their stable middle ≥ 300 ms, parabolic-interpolated FFT, within **15 ¢** of their partial (the existing `horn.test.ts` allows 2.5 %, ≈ 43 ¢, from 40 ms frames; the longer window is what makes 15 ¢ measurable) |
+| 15 | **No pulse, no transient, no loop** | onsets: no rise faster than 80 ms to within 6 dB of a note's peak; slurs dip ≤ 3 dB; no three consecutive inter-onset intervals within ±10 %; hum envelope autocorrelation ≤ 0.3 at every lag 0.3–3 s; the confusability check over the score's onsets vs seat signatures, the clock and the asked roll: zero violations |
+| 16 | **Speech room** | the score's 1–4 kHz short-term max ≥ 30 LU (speaker) / 28 LU (headphones) under the anchor |
+| 17 | **The world window** | pond or wind + hum, short-term, 12–20 LU under the anchor in every state (6 score states × wet/dry × 4 darkening steps where they apply × 2 profiles), and within 0.3 dB of today's value for the same pond state |
+| 18 | **Presence** | every hum partial ≥ 0 dB over the pond or wind in its own third-octave band, in every state |
+| 19 | **Distance and the clock** | every call's momentary max ≤ anchor − 12 LU; every Clock cue ≥ 10 LU over the world stem and over any call, both profiles |
+| 20 | **Cuts land on knocks** | each voicing change's 10–90 % ramp is 10–35 ms, starts within 5 ms of its cue's onset, click ratio ≤ 1.5; no score duck is active at a cut |
+| 21 | **Rejoin equals staying** | a render entered at *t* = 137 s has the same slots, phrases, takes and voicing as the full render, and after its 1.5 s swell its short-term level is within 1 dB of it |
+| 22 | **The lobby** | world stem ≥ 7 LU under the anchor; calls ≥ 6 LU under |
+| 23 | **Cost** | the worklet's DSP renders 60 s of the worst state ≥ 70× faster than real time in headless Chromium on the build machine (≤ 1.43 % of a core) |
 
 ### 10.2 Unit and leak tests
 
-- **`scorefields.test.ts`**: `scoreInputOf` over a Proxy record stuffed with every private and every forbidden field;
-  fails on any read outside `SCORE_FIELDS` (and a second test proves the spy can fail) — the `soundfields` pattern.
-- **Histories** (reusing `presentation-leak.test.ts`'s real engine games): for pairs of histories with the same public
-  record — an honest no vs a Squid deny vs a Squid claim; a hidden power set of each of nine ranks; the five
-  structural-window histories vs the same without the window — the score's slot schedule, phrase ids, takes, voicing
-  cuts and seeds are identical.
-- **`phrases.test.ts`**: every phrase obeys §3.4's cadence table, the range 4–12, the no-pulse rule on its own
-  durations, ≥ 80 ms first attack and slurs after; "home" per §8.3; every stage bag ≥ its worst-case calls.
-- **Determinism**: `plan.ts` gives the same schedule for the same `(input, seed)` in Node and in the browser build.
-- **Agreement**: six presenters on one bot-table engine, 0–300 ms of injected jitter, 50 games: ≥ 99 % of slots play
-  the same phrase and take on all six.
-- **The source guard** (`soundguards.test.ts`) is extended: nothing in `score/` imports a hand, a grant, a window or
-  `SeatFacts`, and no input path awaits the score.
+- **`scorefields.test.ts`**: `scoreInputOf` over a Proxy record stuffed with every forbidden field; fails on any read
+  outside `SCORE_FIELDS`, and a second test proves the spy can fail (the `soundfields` pattern).
+- **Histories** (reusing `presentation-leak.test.ts`'s real engine games): an honest no vs a Squid deny vs a Squid
+  claim; a hidden power set of each of the nine ranks; the five structural-window histories with and without the
+  window — identical slots, phrases, takes, cuts and ducks.
+- **`plan.test.ts`**: purity; the same schedule in Node and the browser build; **no cascade** (forcing one slot's state
+  to differ changes that slot only); precedence (§4.1); the ceremony hold on server time.
+- **`phrases.test.ts`**: §3.4 for calls and answers; range 4–12; partial 11 at night only; tonic class passing-only in
+  play; calls 3–7 s, answers 1.5–3 s; the no-pulse rule on written durations; every bag has 10 calls.
+- **`scoreCuts.test.ts`**: every score state change coincides with its named cue in the same presenter step (§4.2).
+- **Agreement**: six presenters, 50 bot games, 0–300 ms delivery jitter: ≥ 99 % of slots identical on all six; with
+  up to 3 s injected on one client, only the slots D-a predicts differ.
+- **`soundguards.test.ts`** extended: nothing in `score/` imports a hand, a grant, a window or `SeatFacts`; no input
+  path awaits the score.
 
-### 10.3 Listening, call and device tests
+### 10.3 Week 1: the spike's two go/no-go tests
 
-- **The spike's go/no-go** (before any integration, §11.1): five listeners hear the rendered distant call and hum
-  against a reference recording of a real tulnic at distance. If the median for "sounds like a real horn far away"
-  is below 4 of 7, the calls go to the recorded fallback (§12, R2) before more is built on them.
-- **The call rig** (FEEL §7.5; not built yet, costed in §11): five clients on speakers in one Discord call, noise
-  suppression on and off, a headset recorder. Two readers speak 40 Harvard sentences each over a game in progress,
-  with the score on and off. Transcribe the recording with an offline ASR (whisper.cpp) and compare word error rate:
-  **pass if WER rises ≤ 2 points with the score on.** Also rated by three listeners: "the music got in the way of the
-  talk" (1–7), median ≤ 2.
-- **Blindfold, rerun with the score on** (FEEL §9.3): seat, outcome and "tell the clicks" scores no lower than with the
-  score off.
-- **Phone speaker** (FEEL §9.3): on three phones at 50 % volume, the hum's lowest sounding partial is audible in a
-  quiet room; the calls are undistorted at full volume.
+- **Realism.** Five listeners hear the rendered distant call and hum next to a reference recording of a real tulnic at
+  distance. Median "sounds like a real horn far away" (1–7) ≥ 4, else the calls go to recorded horn (D8) before
+  anything else is built on them.
+- **Does harmony carry the arc?** Ten listeners hear 20 s of the dusk, evening, night and last-set voicings with the
+  pond or wind at game level on laptop speakers, shuffled, and order them "from the start of an evening to its end".
+  Pass: ≥ 7 of 10 put dusk before night, median Kendall τ ≥ 0.5. If it fails, the arc is carried by call density and
+  cadence alone, the voicings are revised once, and if they fail again the plan stops claiming that the score tells
+  players how close the end is.
+- **Private-panel dropout run** (§5.3): on a mid-range Android, record the output while a player works through their
+  hand, the ask sheet and the answer plank during a phrase; no dropout.
 
-### 10.4 Playtests: within-subject A/B
+### 10.4 The call rig and the listening tests
 
-In the existing rounds (FEEL §9.2: five players on Discord, 45 minutes), each group plays two games, one with the
-score and one without, order alternated between rounds. Reported per round and pooled (n = 15), as counts:
+- **The rig** (FEEL §7.5, not built yet; costed in §11): five clients in one Discord call, noise suppression on and
+  off, a headset recorder; **one iPhone and one Android each running Discord and the game at once**.
+- **Listening effort** (primary): two readers read Harvard sentences over a game in progress, score on and off. From the
+  recordings, 6 matched on/off clip pairs per condition; 10 listeners rate listening effort (1–5) on each pair: 60
+  paired ratings. Pass: mean difference ≤ 0.3 with the 95 % interval's upper bound ≤ 0.5. (With a paired standard
+  deviation of ≈ 0.8, 60 pairs give a half-width of ≈ 0.2.)
+- **ESTOI** on the same recordings against the readers' close microphones (secondary): Δ ≤ 0.03. An ASR word error
+  rate is reported but decides nothing: ASR models are trained to ignore background music.
+- **Blindfold, rerun with the score on** (FEEL §9.3): seat, outcome and "tell the clicks" no lower than with it off.
+- **Phone speaker, including the payoff:** on three phones at 50 % volume, the last-set `mus.home` and the podium's
+  final 232 Hz note are identifiable ("did the music come home?") by ≥ 4 of 5 listeners; the calls are undistorted at
+  full volume.
 
-| Measure | Ship the in-game score on by default if |
-|---|---|
-| "The table feels alive" (1–7) | median with score ≥ median without + 1 |
-| "I knew how close the end was" (1–7) | median with score ≥ median without |
-| "I always knew what just happened" (1–7) | median with score ≥ median without − 0.5 |
-| Whose-turn confusions (observer) | no more with the score than without |
-| Players who switch the in-game score off or to lobby-only (`?metrics=1`) | fewer than 5 of 15 |
-| Muted by the end | no more than without (and ≤ 2 of 15, FEEL's existing target) |
+### 10.5 The playtest: dedicated and counterbalanced
 
-If the first or the last two rows fail, the default becomes **lobby only**; the in-game score stays in settings.
-If "I always knew what just happened" or whose-turn confusions fail, the score is cut back to the hum (no calls) and
-the round is repeated.
+The FEEL §9.2 rounds (45 minutes, one game) cannot hold an A/B of two 16–20 minute games. So the score gets its own:
+
+- **4 groups × 5 players (20)**, 75-minute sessions, two games each; order AB, BA, AB, BA. Each group has at least one
+  iPhone, one Android, and at least two players on speakers. In the FEEL rounds before this, the score's default is
+  lobby-only, so the two studies do not contaminate each other.
+- **The unit of analysis is the player, reported per group.** Four groups cannot support significance claims; the
+  rules below are product decisions stated in advance, not tests.
+
+| # | Measure (after each game, and once at the end) | Rule |
+|---|---|---|
+| R-a | "Which game's sound would you keep?" | ≥ 13 of 20 choose the score |
+| R-b | "The table feels alive" (1–7) | more players rate the score game higher than lower, by ≥ 6 |
+| R-c | "I always knew what just happened" (1–7); observer's whose-turn confusions | ≤ 3 of 20 rate the score game ≥ 2 points lower; confusions with score ≤ without |
+| R-d | "The music got in the way of talking" (1–7) | ≤ 3 of 20 answer ≥ 5 |
+| R-e | switched the in-game score off or to lobby-only (`?metrics=1`) | fewer than 5 of 20 |
+| R-f | "Did the music change during the game? When?" (arc probe) | ≥ 10 of 20 report a change and place it in the right third |
+
+**Decisions.** All of R-a–R-e pass → ship on. R-c or R-d fails → **lobby-only** default. Only R-b or R-f fails → ship
+on, drop the "hear the end coming" claim, revisit the voicings in the mix pass. **A result carried by one group** (three
+groups one way, one the other, deciding the outcome) → lobby-only until a fifth group is run.
 
 ---
 
@@ -582,31 +627,43 @@ the round is repeated.
 
 ### 11.1 Milestones
 
-| Milestone | Content | Days |
+| Milestone | Content | Eng. days |
 |---|---|---|
-| **M-S0 Spike** | `renderHorn` at 16 kHz with the distance recipe, partials to 12; a hum prototype; the render-cost measurement at 4× throttle; five-listener go/no-go (§10.3) | 3 |
-| **M-S1 Composition** | composer writes the library in `phrases.ts` in the lab (44 phrases, 3 takes each); consultant session (FEEL §11.8) reviews library and §3.4; one revision | composer 3; engineering 1 |
-| **M-S2 Engine** | `score/*`, the Score bus and stem, the cut-on-knock, ducking, rejoin, slow-device skip, settings, metrics, strings | 6 |
-| **M-S3 Protocol** | `startedAt`, `room_update.serverNow/createdAt`, redaction and RNG tests | 1 |
-| **M-S4 Same key** | §8: wind retune, `world.dark.01` split into knock + `mus.home`, the home rule, cue-sheet and twin tests | 1.5 |
-| **M-S5 Tests and harness** | checks 14–21; `scorefields`, histories, phrases, determinism, agreement, guard; recalibration; budgets | 5 |
-| **M-S6 Lab** | the Score panel; `clients=6` in the bot table | 2 |
-| **M-S7 Call rig and listening** | the rig if still unbuilt (2); the call test, blindfold rerun, phone-speaker pass (2) | 4 |
-| **Playtests** | inside the existing rounds; two games per session instead of one | 0 extra sessions |
-| **Total** | | **22–26 engineering days** (the range is the spike's outcome and the rig), **3 composer days** |
+| **M-S0 Spike** | `synth.ts` hum (counter noise, resonators, wander) in the worklet, and the minimal lab panel (3 d); the legato voice and its cost measurement (2 d); the §10.3 tests | 5 |
+| **M-S1 Composition** | composer writes 56 phrases (40 calls, 16 answers, 3 takes each) in the lab panel over 5 days; consultant hour at the end; one engineering day to fold in the revision | 1 (+ composer 5) |
+| **M-S2 Engine** | `input.ts`, `plan.ts`, `index.ts`, Score bus and stem, cuts, ducks, swells, rejoin, output alignment, settings, metrics, strings (4 d); calls and answers in the engine (2 d) | 6 |
+| **M-S3 Protocol** | `startedAt`; `room_update.serverNow/createdAt`; redaction and RNG tests | 1 |
+| **M-S4 Same key** | §8.1–8.3: `mus.home` split, the home rules, the headphones Clock boost, recalibration | 1 |
+| **M-S5 Harness and tests** | checks 14, 15 (hum), 16–23 and the hum-side tests (4 d); phrase-side checks, `phrases`, agreement (2 d) | 6 |
+| **M-S6 Lab** | the full panel with the phrase check-run (1 d); `?table=bots&clients=6` (1 d) | 2 |
+| **M-S7 Call rig and listening** | the rig (2 d); listening effort, ESTOI, blindfold rerun, phone-speaker payoff (3 d) | 5 |
+| **M-S8 Music playtest** | recruiting, four sessions, analysis | 2 |
+| **M-S9 Mix and tuning** | the audio lead's pass after the playtest: levels, voicings, the call-density table | 3 |
+| **Total** | | **32**, composer 5 |
+
+**If the week-1 realism test fails (D8):** the calls use recorded tulnic: the consultant finds a player (lead time
+2–4 weeks, a session at FEEL §3.6's €300–600), 12 phrases are recorded, and the whole score is **retuned to the
+recorded instrument's fundamental** (one constant, `HORN_FUNDAMENTAL`, which the ceremonies share) rather than
+pitch-shifting the recordings. Files follow FEEL §3.6's format (Opus in WebM with an AAC fallback, mono, 48 kHz),
+at ≈ 48 kbps ≈ 6 KB/s × 12 × 4 s ≈ 290 KB — **over** the 220 KB budget, so either 9 phrases (≈ 215 KB) or a lower
+bitrate after a listening check; and the 220 KB is then shared with Tier R. +5 engineering days (editing, integration,
+retune, checks), plus the session.
 
 ### 11.2 Critical path
 
-M-S0 → M-S1 → M-S2 → M-S5 → M-S7 → playtest. M-S3, M-S4 and M-S6 run beside M-S2. The spike is the gate: if the
-synthetic horn fails its listening test, M-S1 composes for the recorded fallback instead, and the path is the same.
+Week 1: book the consultant (lead time is the risk) and start M-S0. Then M-S0 (5) → M-S1 (composer 5, eng 1) →
+M-S2 (6) → M-S5 (6) → M-S7 (5) → M-S8 (2, plus recruiting lead) → M-S9 (3): **33 working days on the path, about
+seven weeks elapsed.** M-S3, M-S4 and M-S6 run beside M-S2.
 
 ### 11.3 Cut lines
 
-1. **9 days — the hum and the lobby.** No distant calls: M-S0 (hum only), M-S2 without `calls.ts`, M-S3, M-S4, and
-   checks 14–17, 19–21. This alone gives the harmonic arc and the resolution at the podium, with the least risk to
-   the call.
-2. **16 days — calls in headphones only.** The speaker arrangement stays hum-only; the call rig can wait.
-3. **Full** — as §11.1.
+Each is a sum of the milestones above.
+
+| Cut | Contents | Days |
+|---|---|---|
+| **1. The hum and the lobby** | M-S0 hum and minimal lab (3); M-S2 without calls (4); M-S3 (1); M-S4 (1); M-S5 hum side (4); M-S8 (2); M-S9, one day (1). No composer. | **16** |
+| **2. + calls in headphones only** | + M-S0 legato voice (2); M-S1 (1 + composer); M-S2 calls (2); M-S5 phrase side (2); M-S6 phrase panel (1) | **24** |
+| **3. Full** | + speaker calls, M-S7 (5), `clients=6` (1), the rest of M-S9 (2) | **32** |
 
 ---
 
@@ -614,16 +671,16 @@ synthetic horn fails its listening test, M-S1 composes for the recorded fallback
 
 | Risk | L | I | Mitigation |
 |---|---|---|---|
-| R1 The score competes with talk on the call | M | H | level window, speech-band ceiling, synchronised consonant copies, halved calls on speakers, the WER gate, the playtest gate, lobby-only fallback |
-| R2 A synthesised horn sounds cheap when heard as music, not as a 3 s ceremony | M | H | the spike's go/no-go; **fallback:** record a tulnic player (already in FEEL §3.6's Tier R session) and ship 12 phrases as Opus mono at 16 kHz, ~24 kbps: ≈ 12 × 4 s × 3 KB/s ≈ 145 KB, inside the unused 220 KB audio budget |
-| R3 Repetition over a long lobby wait or many games in a row | M | M | bags without repeats, three takes per phrase, lobby gaps widening after 3 min, the seed changes every game |
-| R4 A change later lets the score read a private field | L | H | `SCORE_FIELDS` + Proxy test + source guard + history tests (§10.2) |
-| R5 Devices disagree on a slot | L | L | the 2 s lock-in; the agreement test; disagreements are in the same key |
-| R6 Cultural misreading (a funeral or ritual signal) | L | M | new phrases from the call's cells, no transcriptions; the consultant's three questions (§3.7) |
-| R7 Low-end Android: render stalls or fps drops | L | M | 16 kHz, idle-time rendering ≥ 5 s ahead, silent-slot fallback, `perf:check` with the score on |
-| R8 The JS budget | H | L | D4: amend to 131 KB or offset first |
-| R9 iOS: other apps' audio (a user's own music) under ours | M | L | `audioSession.type = 'ambient'` already mixes with other audio; "Background music: Off" is one tap in settings |
-| R10 Players do not notice a harmony change | M | M | measured directly ("I knew how close the end was", A/B); if flat, the night's accent (partial 11) moves into the calls, not the hum |
+| R1 The score costs talk on the call | M | H | today's bed level; speech-band ceiling; synchronised copies; halved calls on speakers; listening-effort gate; playtest gate; lobby-only fallback |
+| R2 A synthesised horn sounds cheap as music | M | H | week-1 realism gate; the recorded fallback (§11.1) |
+| R3 Players do not hear the harmony change | M | M | week-1 ordering test before anything is built on it; the arc probe (R-f); then drop the claim, not the score |
+| R4 A later change lets the score read a private field | L | H | `SCORE_FIELDS` + Proxy test, history tests, source guard |
+| R5 Clients disagree | L | L | pure per-slot functions; the 2 s lock-in; D-a–D-f listed and tested |
+| R6 Cultural misreading (a funeral signal) | L | M | new phrases from the call's cells; the consultant's three questions |
+| R7 Audio-thread cost on low-end Android | L | M | 16 kHz internal synthesis; #23; the spike's device run |
+| R8 The JS budget | H | L | D4 |
+| R9 The phone running Discord ducks or cancels the game's audio | M | M | in the rig; if iOS ducks the score to inaudibility, the score's default on iOS-in-call becomes a documented limitation, not a fix |
+| R10 Repetition over long waits or many games | L | M | no repeat within 10 slots; three takes; a new seed every game |
 
 ---
 
@@ -631,53 +688,86 @@ synthetic horn fails its listening test, M-S1 composes for the recorded fallback
 
 | # | Decision | Default |
 |---|---|---|
-| D1 | Amend DESIGN §7.1 to allow a bed during play under §1.2's conditions | yes |
-| D2 | In-game default: on, pending the playtest gate (§10.4) | on (both profiles; the speaker arrangement is the sparser one) |
-| D3 | Protocol: `startedAt` in the game view; `serverNow` and `createdAt` on `room_update` | yes |
-| D4 | JS budget: raise the played-game line to 131 KB, or find ≥ 5 KB to cut first | raise, and list the cut as M5 polish |
-| D5 | Retune the wind to partials 5 and 11 | yes |
-| D6 | Split `world.dark.01` into a Table knock and `mus.home` | yes |
-| D7 | Commission a composer (3 days) for the library, or write it in-house against §3 | composer |
-| D8 | If the spike fails: the recorded fallback (R2), or cut to the hum (§11.3, line 1) | recorded fallback |
+| D1 | Amend DESIGN §7.1 (A1) and the eleven rules in §1.2 | yes |
+| D2 | In-game default before the music playtest: lobby-only; after it, per §10.5 | as stated |
+| D3 | Protocol: `startedAt`, `room_update.serverNow` and `createdAt` | yes |
+| D4 | JS budget: move the played-game line to 132 KB, or cut ≥ 6 KB first | move it, and list the cut as M5 polish |
+| D5 | Headphones Clock bus +2 dB (A9) | yes |
+| D6 | Split `world.dark.01` into a Table knock and `mus.home` (A8) | yes |
+| D7 | A composer (5 days), or the library written in-house against §3 | composer |
+| D8 | If the realism gate fails: recorded horn (and 9 phrases or a lower bitrate), or cut 1 (the hum only) | recorded horn |
 
 ---
 
-## Appendix A — Phrase library: specification and examples
+## Appendix A — Phrase library: rules and examples
 
-Notation: partial number, duration in seconds; `~` a scooped first note (−50 ¢, 70 ms, ≥ 80 ms attack); `→` a slur;
-`↓n` a sag of n cents over the note; `|t` the breath cut t ms early. Every phrase is one breath.
+Notation: partial and duration (s); `~` the phrase's one onset (a scoop from −50 ¢ over 70 ms, ≥ 80 ms swell); `→` a
+slur; `↓n` a sag of *n* cents over the note; `|t` the breath cut *t* ms early. Every phrase is one breath.
 
-| Id | Stage | Phrase | Ends | Cells |
-|---|---|---|---|---|
-| L1 | lobby | 5~ 1.2 → 6 0.6 → 8 1.4↓20 → 6 0.5 → 5 0.75 → 4 1.8 | home | leap, settle |
-| L2 | lobby | 6~ 1.0 → 8 0.7 → 9 0.3 → 8 1.2 → 6 1.6 | 6 | leap |
-| D1 | dusk | 6~ 1.0 → 8 1.8 → 9 0.3 → 8 1.3 \|40 | 8 | leap |
-| D2 | dusk | 8~ 0.9 → 10 0.4 → 9 0.5 → 8 1.4 → 6 1.5↓20 | 6 | leap, fall |
-| D3 | dusk | 6~ 1.6 → 8 0.7 → 12 1.1 → 8 1.9 | 8 | leap (wide) |
-| E1 | evening | 6~ 0.8 → 8 0.6 → 7 1.0 → 6 0.45 → 5 1.8↓25 | 5 | fall, settle |
-| E2 | evening | 5~ 1.1 → 6 0.5 → 8 0.8 → 6 0.7 → 5 1.4 \|50 | 5 | leap, settle |
-| E3 | evening | 8~ 0.7 → 7 1.2 → 6 2.0↓15 | 6 | fall |
-| N1 | night | 8~ 0.6 → 11 1.2 → 10 0.3 → 8 0.5 → 7 2.0↓35 | 7 | fall, accent |
-| N2 | night | 7~ 0.7 → 8 0.4 → 7 1.3 \|60 | 7 | fragment |
-| N3 | night | 6~ 0.9 → 8 0.5 → 11 1.6↓20 | 11 | leap, accent |
-| A1 | answer | 8~ 0.5 → 7 0.6 → 6 1.1 | 6 | fall (the valley's) |
-| A2 | answer (night) | 7~ 0.8 → 8 1.2 \|30 | 8 | fragment |
+| Id | Kind, stage | Phrase | Length | Ends | Cells |
+|---|---|---|---|---|---|
+| L1 | call, lobby | 5~ 1.2 → 6 0.6 → 8 1.4↓20 → 6 0.5 → 5 0.75 → 4 1.8 | 6.25 | 4 | leap, settle, home |
+| L2 | call, lobby | 6~ 1.0 → 8 0.7 → 9 0.3 → 8 1.2 → 6 1.6 | 4.8 | 6 | leap |
+| D1 | call, dusk | 6~ 1.0 → 8 0.4 → 9 1.6 → 12 1.3 \|40 | 4.3 | 12 | leap |
+| D2 | call, dusk | 9~ 0.9 → 10 0.45 → 9 0.6 → 8 0.3 → 6 1.9↓20 | 4.15 | 6 | fall |
+| D3 | call, dusk | 6~ 1.6 → 8 0.5 → 12 1.1 → 9 0.7 → 6 1.9 | 5.8 | 6 | leap (wide) |
+| E1 | call, evening | 6~ 0.8 → 8 0.45 → 7 1.0 → 6 0.6 → 5 1.8↓25 | 4.65 | 5 | fall, settle |
+| E2 | call, evening | 5~ 1.1 → 6 0.5 → 8 0.35 → 10 0.9 → 6 0.7 → 5 1.4 \|50 | 4.95 | 5 | leap, settle |
+| E3 | call, evening | 10~ 0.7 → 9 1.2 → 8 0.3 → 6 2.0↓15 | 4.2 | 6 | fall |
+| N1 | call, night | 9~ 0.6 → 11 1.2 → 10 0.3 → 8 0.45 → 7 2.0↓35 | 4.55 | 7 | fall, accent |
+| N2 | call, night | 6~ 0.9 → 8 0.4 → 11 1.6↓20 → 9 0.8 | 3.7 | 9 | leap, accent |
+| N3 | call, night | 7~ 1.3 → 9 0.5 → 11 0.95 → 10 0.35 → 7 1.7 \|60 | 4.8 | 7 | accent |
+| AL1 | answer, lobby | 8~ 0.5 → 7 0.6 → 6 1.1 | 2.2 | 6 | fall |
+| AE1 | answer, evening | 7~ 0.5 → 6 0.6 → 5 1.1 | 2.2 | 5 | fall, settle |
+| AE2 | answer, evening | 10~ 0.7 → 9 0.4 → 10 1.0 | 2.1 | 10 | — |
+| AN1 | answer, night | 9~ 0.45 → 8 0.3 → 7 1.4↓30 | 2.15 | 7 | fall |
+| AN2 | answer, night | 7~ 0.7 → 9 0.4 → 11 1.3 \|30 | 2.4 | 11 | accent |
 
-The durations above are written; the no-pulse test reads them. E.g. N1's inter-onset intervals are 0.6, 1.2, 0.3,
-0.5 s — no three within ±10 %, none of 0.4–1.1 s twice. The full library (10 lobby, 8 per stage, 4 + 6 answers)
-is written in M-S1.
+Every example obeys §3.4 (endings, tonic class passing ≤ 0.5 s and never first or last in play, partial 11 at night
+only), the lengths (calls 3–7 s, answers 1.5–3 s) and §3.2's no-pulse rule on its written durations (checked by
+script for this revision). The full library — 10 calls per stage and for the lobby, 4 lobby answers, 6 evening and 6
+night answers — is written in M-S1.
 
-## Appendix B — Voicing sheet
+## Appendix B — Voicing and synthesis sheet
 
-Hum band-pass Q: 60 at 232 Hz, rising linearly in log-frequency to 110 at 696 Hz. Levels in dB re the loudest partial
-of the state (§4.1); state levels re the pond bed of the same state: speaker −4 dB, headphones −2 dB (provisional;
-the harness sets them). Wander: ±3 dB per partial on smoothed random, 0.04–0.12 Hz. Low-pass 1.1 kHz, bell −6 dB at
-2 kHz. Voicing ramps 25 ms, from the knock's onset. Swells: 6 s (dusk entry), 4 s (lobby after the podium), 1.5 s
-(rejoin).
-
-Calls: `renderHorn` at 16 kHz, harmonics capped below 7 kHz, lip −26 dB, dynamics low-pass capped at 900 Hz,
-`wobble` 0.6. Answers: −6 dB, low-pass 650 Hz. Headphones repeats: −12 / −19 dB at +1.3 / +2.9 s, low-pass 520 / 380 Hz.
+- **Hum:** counter-hash noise per partial; two-pole resonators, bandwidth 1.5 Hz (spike tries 1–3 Hz); level wander
+  ±3 dB on value noise with knots every 8–25 s over absolute time; low-pass 1.1 kHz; gust lift +2 dB (pool dry); step
+  gain from `DARK_STEPS` levels. Partial levels per state: §4.1. Hum level: −3 dB re the pond (provisional, §6.1).
+- **Calls:** one phase accumulator; slur glide 45 ms, dip 3 dB over 30 ms, breath +6 dB for 40 ms; one lip onset at
+  −26 dB; dynamics low-pass capped at 900 Hz; ≤ 8 harmonics under 2 kHz; lip random walk at 0.6; synthesised at 16 kHz.
+- **Answers:** −6 dB; low-pass cap 650 Hz; start 0.9–2.5 s after the call's last note begins; headphones repeats −12 /
+  −19 dB at +1.3 / +2.9 s, low-passed 520 / 380 Hz.
+- **Slots:** gaps uniform 18–42 s; activity per state (§4.1); state locked at `T − 2 s` on broadcast `serverNow`;
+  phrase `perm(seed, state, ⌊i/10⌋)[i mod 10]`; take differs from the previous pass; speaker subset `hash(seed, i) < ½`.
+- **Swells:** 6 s (dusk entry), 4 s (lobby after the podium), 1.5 s (rejoin). **Fades:** 300 ms (a phrase cut by a
+  stage change). **Cuts:** 25 ms, on the named cue's onset.
 
 ## Appendix C — Revision history
 
-- **v1** — first plan.
+- **v1** (`6fad950`) — first plan. Scored **5.8** (`docs/music-plan-reviews/round-1.md`).
+- **v2** — every must-fix of round 1:
+  1. *The hum* no longer reads the 1 s shared noise buffer (`live/common.ts`): counter-hash noise per partial and a
+     value-noise wander over absolute time, in an AudioWorklet; check #15 now fails on any envelope period of 0.3–3 s.
+  2. *A legato voice* (`score/voice.ts` in `synth.ts`) replaces "the existing renderer", which attacks every note.
+  3. *Rendering* is real-time on the audio thread at 16 kHz, budgeted from a measurement (0.57 µs a sample), with #23;
+     no rendered buffers, so no memory figure to get wrong.
+  4. *Levels* recomputed for every state: the world stem is unchanged within 0.3 dB (the pond gives up 2 dB), the
+     headphones clock gains 2 dB (A9), calls sit 12 LU under the anchor, and the lobby's factor drops to 1.6.
+  5. *The state table* is total and consistent: explicit precedence, the pool going dry no longer re-voices, the wind
+     is no longer tuned, answers obey the cadence table, N2 is a legal call, repetition is bounded by construction.
+  6. *One sync clock:* broadcast `serverNow`, per-slot pure functions (no cascade), the ceremony hold on server time,
+     output-latency alignment, and the six divergences listed and tested.
+  7. *Ducks* are per cue and exclude the cut points; the gate cuts on the miss and the capture, not the quiet creak.
+  8. *Measures:* 15 ¢ on ≥ 300 ms windows; rejoin as same schedule and ≤ 1 dB; listening effort with a power estimate
+     instead of Whisper; presence (#18) and cost (#23) added.
+  9. *The playtest* is its own, counterbalanced, 4 groups × 5, with count rules stated in advance and a group-level rule.
+  10. *Amendments:* twelve rows instead of four.
+  11. *Production:* the milestone table sums (32), the cut lines are sums of it (16 / 24 / 32), the lab reaches the
+      composer in week 1, the recorded fallback is costed (and shown to be over budget at FEEL's bitrate), a mix pass is
+      budgeted, the consultant is on the critical path.
+  12. *Facts* corrected: the acoustic scale (six of seven pitch classes over partials 4–12), `table.asked` (no `env`),
+      `outputLatency` (visuals only today), the ambience's crossfade, turns vs asks.
+  - And from the should-fix list: the tonic class is out of the hum in play (a real V → I at the last set, not a
+    register change), the Discord-on-the-same-phone case is in the rig, the settings add a switch instead of a slider,
+    the 232 Hz payoff is tested on phone speakers, the harness renders in chunks, the imperfections that could not be
+    heard are gone.
