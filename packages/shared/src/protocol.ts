@@ -44,7 +44,17 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: 'joined'; roomCode: string; playerId: string; token: string }
-  | { type: 'room_update'; roomCode: string; players: RoomPlayerSummary[]; started: boolean; config: RoomConfig }
+  | {
+      type: 'room_update';
+      roomCode: string;
+      players: RoomPlayerSummary[];
+      started: boolean;
+      config: RoomConfig;
+      /** the server's clock when this update was sent (ms since the epoch): the same for every member */
+      serverNow: number;
+      /** when the room was created (server ms): the waiting room's score clock starts here (MUSIC_PLAN §5.1, S5) */
+      createdAt: number;
+    }
   | {
       type: 'game_state';
       view: RedactedView;

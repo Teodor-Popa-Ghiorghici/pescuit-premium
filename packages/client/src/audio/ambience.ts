@@ -17,6 +17,7 @@
 import { rng } from './util.js';
 import { type Ctx, filt, sharedNoise } from './live/common.js';
 import { drip } from './live/water.js';
+import { LOBBY_POND, POND_WITH_SCORE_DB } from './score/levels.js';
 
 export interface AmbienceInputs {
   /** cards left in the pool, and how many there were at the start (how wet the pond still is) */
@@ -26,6 +27,9 @@ export interface AmbienceInputs {
   dry?: boolean;
   /** 'lobby': the full pond, louder (the waiting room) */
   scene: 'lobby' | 'game';
+  /** the background score is sounding under the pond: the pond makes room for it (MUSIC_PLAN A2, §6.1). A setting of this
+   *  device, never a game input. */
+  scoreOn?: boolean;
 }
 
 export const BED_DB = 0; // the bed's level within the ambience bus
@@ -158,11 +162,13 @@ export class Ambience {
     this.inputs = { ...this.inputs, ...inputs };
     if (inputs.dry !== undefined) this.setDry(inputs.dry, undefined, immediate);
     if (!this.started) return;
-    const { poolCount, poolStart, scene } = this.inputs;
+    const { poolCount, poolStart, scene, scoreOn } = this.inputs;
     const t = this.ctx.currentTime;
     const wet = poolStart > 0 ? Math.min(1, poolCount / poolStart) : 1;
     // the water thins slowly as the pool drains; the wind does not (there is nothing left to drain)
-    const level = (scene === 'lobby' ? 2.2 : 1) * (this.dry ? 0.7 : 0.8 + 0.2 * wet);
+    // with the score under it the pond gives up 2 dB in play, and the waiting room's pond steps down from 2.2 to 1.6
+    const room = scene === 'lobby' ? (scoreOn ? LOBBY_POND.withScore : LOBBY_POND.alone) : scoreOn ? 10 ** (POND_WITH_SCORE_DB / 20) : 1;
+    const level = room * (this.dry ? 0.7 : 0.8 + 0.2 * wet);
     const to = (p: AudioParam, v: number, tc: number) => (immediate ? (p.value = v) : p.setTargetAtTime(v, t, tc));
     to(this.level.gain, level * 10 ** (BED_DB / 20), 1.5);
   }

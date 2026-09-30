@@ -13,7 +13,7 @@ describe('the cue sheet enforces §3.7', () => {
       'table.turn', 'table.turn.you', 'table.bonus', 'table.skipped', 'table.ask', 'table.asked', 'table.flight', 'table.give',
       'table.gofish', 'table.gofish.dry', 'table.draw', 'table.refill', 'table.poolEmpty', 'table.lay', 'table.lay.power', 'table.lay.hidden', 'table.egg', 'table.impact', 'table.tally',
       'world.dark.12', 'world.dark.06', 'world.dark.01', 'world.notch',
-      'mus.start', 'mus.podium',
+      'mus.start', 'mus.podium', 'mus.home',
       'clock.tick', 'clock.tick.urgent', 'clock.close',
       'power.granted', 'power.windup', 'power.reveal', 'power.shark', 'power.lanternfish', 'power.tortoise', 'power.jellyfish',
       'power.stickleback', 'power.stickleback.miss', 'power.mantis', 'power.whale', 'power.clownfish.bound',
@@ -59,7 +59,7 @@ describe('the cue sheet enforces §3.7', () => {
     for (const id of ['table.gofish', 'table.gofish.dry', 'table.give', 'table.flight', 'table.bonus', 'table.draw', 'table.asked', 'ui.select', 'ui.target', 'table.turn.you']) expect(band(id)).toBe('15-60');
     for (const id of ['table.lay', 'table.lay.power', 'table.lay.hidden', 'power.granted', 'power.reveal']) expect(band(id)).toBe('3-15');
     for (const id of ['world.notch', 'table.egg']) expect(band(id)).toBe('15-60');
-    for (const id of ['table.poolEmpty', 'power.whale', 'power.shark', 'mus.start', 'power.lanternfish', 'world.dark.01', 'mus.podium']) expect(band(id)).toBe('lt3');
+    for (const id of ['table.poolEmpty', 'power.whale', 'power.shark', 'mus.start', 'power.lanternfish', 'world.dark.01', 'mus.podium', 'mus.home']) expect(band(id)).toBe('lt3');
   });
 
   it('bus by family', () => {
@@ -74,7 +74,7 @@ describe('the cue sheet enforces §3.7', () => {
     expect(BUSES.UI).toMatchObject({ levelDb: -10, speakerBoostDb: 4, voices: 2 });
     expect(BUSES.Table).toMatchObject({ levelDb: 0, voices: 6 });
     expect(BUSES.Power).toMatchObject({ levelDb: 1, voices: 3 });
-    expect(BUSES.Clock).toMatchObject({ levelDb: -8, speakerBoostDb: 4, voices: 2 });
+    expect(BUSES.Clock).toMatchObject({ levelDb: -8, speakerBoostDb: 4, headphonesBoostDb: 2, voices: 2 });
     expect(BUSES.Music).toMatchObject({ levelDb: -2, voices: 2 });
     expect(BUSES.Ambience).toMatchObject({ levelDb: -26, voices: 3 });
   });
@@ -111,7 +111,7 @@ describe('the cue sheet enforces §3.7', () => {
 
   it('the rare signature cues duck the ambience; the frequent ones never do (it would pump)', () => {
     const ducking = CUES.filter((c) => c.env === 'ex').map((c) => c.id).sort();
-    expect(ducking).toEqual(['mus.podium', 'mus.start', 'power.mantis', 'power.reveal', 'power.shark', 'power.whale', 'world.dark.01', 'world.dark.06', 'world.dark.12'].sort());
+    expect(ducking).toEqual(['mus.home', 'mus.podium', 'mus.start', 'power.mantis', 'power.reveal', 'power.shark', 'power.whale', 'world.dark.01', 'world.dark.06', 'world.dark.12'].sort());
     for (const c of CUES.filter((x) => x.env === 'ex')) expect(c.plays![1], `${c.id} is rare`).toBeLessThanOrEqual(6);
   });
 
@@ -126,5 +126,18 @@ describe('the cue sheet enforces §3.7', () => {
       expect(durationOf(c.id, { count: 4 }), c.id).toBeLessThanOrEqual(1400);
     }
     expect(durationOf('nonesuch')).toBe(0);
+  });
+});
+
+describe('the score bus and its ducks (MUSIC_PLAN A7, §4.2)', () => {
+  it('the score ducks 10 dB under the powers\' strikes only - never under a cut point (the darkenings) or mus.home', () => {
+    const ducks = CUES.filter((c) => c.scoreDuckDb !== undefined);
+    expect(ducks.map((c) => c.id).sort()).toEqual(['power.mantis', 'power.reveal', 'power.shark', 'power.whale']);
+    for (const c of ducks) expect(c.scoreDuckDb).toBe(-10);
+    for (const id of ['world.dark.12', 'world.dark.06', 'world.dark.01', 'mus.home']) expect(CUES.find((c) => c.id === id)!.scoreDuckDb, id).toBeUndefined();
+  });
+  it('no cue plays on the Score bus: it is the score\'s alone', () => {
+    expect(CUES.filter((c) => c.bus === 'Score')).toEqual([]);
+    expect(BUSES.Score.voices).toBe(0);
   });
 });

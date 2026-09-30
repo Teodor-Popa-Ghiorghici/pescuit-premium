@@ -3,7 +3,7 @@ import { Totem } from '../art/table.js';
 import { useT } from '../i18n/useT.js';
 import { useGame } from '../state/store.js';
 import { getEngine } from '../audio/engine.js';
-import { useJoinSignatures, useLobbyAmbience } from '../hooks/useLobbyAudio.js';
+import { useJoinSignatures, useLobbyAmbience, useLobbyScore } from '../hooks/useLobbyAudio.js';
 import { RopeRule } from './Lobby.js';
 import { preloadTable } from '../App.js';
 import { DuskPond } from '../art/dusk.js';
@@ -15,6 +15,7 @@ const MAX_POSTS = 6;
  *  dashed outlines, so the table always shows how much of it is still empty. */
 export function WaitingRoom() {
   useLobbyAmbience();
+  useLobbyScore();
   useJoinSignatures();
   useEffect(() => preloadTable(), []);
   const { t } = useT();

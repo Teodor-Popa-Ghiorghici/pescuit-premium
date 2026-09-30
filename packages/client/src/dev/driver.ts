@@ -81,6 +81,8 @@ export class LocalDriver implements LocalSource {
   private rng: BotRng;
   private memory: MemoryBot | null;
   private started = false;
+  /** the score clock's zero, as the room would set it */
+  private readonly startedAt = Date.now();
   private pending: GameEvent[];
   private listeners = new Set<() => void>();
   lastText = '';
@@ -204,7 +206,7 @@ export class LocalDriver implements LocalSource {
   /* ---------------------------------------------------------------- engine */
 
   private view(): RedactedView {
-    const v = redactForPlayer(this.state, this.playerId, { seq: this.seq, serverNow: Date.now(), windowDeadlineAt: this.state.pendingWindow ? this.deadline : null });
+    const v = redactForPlayer(this.state, this.playerId, { seq: this.seq, serverNow: Date.now(), windowDeadlineAt: this.state.pendingWindow ? this.deadline : null, startedAt: this.startedAt });
     return this.o.viewPatch ? this.o.viewPatch(v) : v;
   }
 

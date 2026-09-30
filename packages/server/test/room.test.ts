@@ -77,6 +77,25 @@ describe('the window clock and timeouts (§3.10, §4.4)', () => {
     room.dispose();
   });
 
+  it('the score clock (MUSIC_PLAN §7.3): startedAt, and room_update serverNow/createdAt, are identical for every viewer', () => {
+    vi.setSystemTime(500_000);
+    const made = makeRoom(4, { now: () => Date.now() });
+    vi.setSystemTime(740_000);
+    made.room.start();
+    const ups = made.sockets.map((ws) => ws.messages.filter((m) => m.type === 'room_update').at(-1) as Extract<ServerMessage, { type: 'room_update' }>);
+    for (const u of ups) expect(u).toMatchObject({ serverNow: 740_000, createdAt: 500_000, started: true });
+    const views = made.sockets.map((ws) => lastState(ws).view);
+    for (const v of views) expect(v.startedAt).toBe(740_000);
+    // later views keep the same zero
+    vi.setSystemTime(800_000);
+    const s = made.room.state!;
+    const asker = s.players[s.currentPlayerIndex];
+    const target = s.players.find((p) => p.id !== asker.id)!;
+    made.room.applyAction(asker.id, { type: 'REQUEST', targetId: target.id, rank: asker.hand.find((c) => c.rank !== 'eggs')!.rank });
+    for (const ws of made.sockets) expect(lastState(ws).view).toMatchObject({ startedAt: 740_000, serverNow: 800_000 });
+    made.room.dispose();
+  });
+
   it('when nobody answers in time the server answers truthfully for them (an absent player, too)', () => {
     vi.setSystemTime(0);
     const { room, sockets, target } = toAnswerWindow(() => Date.now());

@@ -43,7 +43,7 @@ describe('settings (§3.5): per device, persisted, always behind try/catch', () 
     g.localStorage = fakeStorage({ 'pescuit:sound': 'off' });
     expect(loadSettings().muted).toBe(true);
   });
-  it('bus gains follow §3.5: Table 0 dB, Power +1, Music -2, Ambience -26; UI and Clock +4 on speakers', () => {
+  it('bus gains follow §3.5: Table 0 dB, Power +1, Music -2, Ambience -26; UI and Clock +4 on speakers; Clock +2 on headphones (MUSIC_PLAN A9)', () => {
     const db = (bus: BusName, p: 'speaker' | 'headphones') => 20 * Math.log10(busGain(bus, p, DEFAULT_SETTINGS));
     expect(db('Table', 'speaker')).toBeCloseTo(0, 6);
     expect(db('Power', 'headphones')).toBeCloseTo(1, 6);
@@ -51,7 +51,7 @@ describe('settings (§3.5): per device, persisted, always behind try/catch', () 
     expect(db('Ambience', 'headphones')).toBeCloseTo(-26, 6);
     expect(db('UI', 'headphones')).toBeCloseTo(-10, 6);
     expect(db('UI', 'speaker')).toBeCloseTo(-6, 6);
-    expect(db('Clock', 'headphones')).toBeCloseTo(-8, 6);
+    expect(db('Clock', 'headphones')).toBeCloseTo(-6, 6);
     expect(db('Clock', 'speaker')).toBeCloseTo(-4, 6);
     expect(busGain('Table', 'speaker', { ...DEFAULT_SETTINGS, effects: 0.5 })).toBeCloseTo(0.5, 6);
   });
@@ -139,5 +139,20 @@ describe('seat panning (§3.5): desktop stereo and headphones', () => {
       if (had) g.matchMedia = prev;
       else delete g.matchMedia;
     }
+  });
+});
+
+describe('the score switch (MUSIC_PLAN A12, D2)', () => {
+  it('defaults to lobby-only before the music playtest, persists, and ignores junk', () => {
+    expect(DEFAULT_SETTINGS.scoreMode).toBe('lobby');
+    g.localStorage = fakeStorage();
+    saveSettings({ ...DEFAULT_SETTINGS, scoreMode: 'on' });
+    expect(loadSettings().scoreMode).toBe('on');
+    g.localStorage = fakeStorage({ 'pescuit:audio': JSON.stringify({ scoreMode: 'loud' }) });
+    expect(loadSettings().scoreMode).toBe('lobby');
+  });
+  it('the Music slider scales the Score bus', () => {
+    const half = busGain('Score', 'speaker', { ...DEFAULT_SETTINGS, music: 0.5 });
+    expect(half / busGain('Score', 'speaker', DEFAULT_SETTINGS)).toBeCloseTo(0.5, 6);
   });
 });

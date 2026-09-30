@@ -221,14 +221,14 @@ Rhythm is the onsets in the first 300 ms; timbre is the log-mel pattern of the f
 
 | Closest same-rhythm pairs with different meanings | Timbre distance dB |
 | --- | --- |
-| ui.target / seat A1 (headphones) | 20.0 |
 | ui.target / seat A1 (speaker) | 20.0 |
-| table.turn / seat A2 (headphones) | 20.2 |
+| ui.target / seat A1 (headphones) | 20.0 |
 | table.turn / seat A2 (speaker) | 20.2 |
+| table.turn / seat A2 (headphones) | 20.2 |
 | meta.join / seat A2 (headphones) | 20.3 |
 | meta.join / seat A2 (speaker) | 20.3 |
-| table.draw / table.flight (headphones) | 20.3 |
 | table.draw / table.flight (speaker) | 20.3 |
+| table.draw / table.flight (headphones) | 20.3 |
 | table.bonus / seat A2 (headphones) | 20.4 |
 | table.bonus / seat A2 (speaker) | 20.4 |
 

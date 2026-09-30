@@ -18,6 +18,20 @@ export function useLobbyAmbience(): void {
   }, []);
 }
 
+/**
+ * The waiting room's score (MUSIC_PLAN §2.4, §4.1): the horn at home, on the room's own clock (`createdAt`). It needs the
+ * room's code and creation time, so it runs in the waiting room only - the lobby before a room exists has the pond alone.
+ * The game takes the score over when the first view arrives.
+ */
+export function useLobbyScore(): void {
+  const { roomCode, createdAt, started } = useGame();
+  useEffect(() => {
+    if (!roomCode || !createdAt || started) return;
+    const engine = getEngine();
+    engine.setScore({ roomCode, createdAt, serverNow: engine.server.serverNow(Date.now()) }, { live: false });
+  }, [roomCode, createdAt, started]);
+}
+
 /** Each player's signature as they join the waiting room, the same damped as they leave or drop (`meta.join` / `meta.leave`). */
 export function useJoinSignatures(): void {
   const { players } = useGame();

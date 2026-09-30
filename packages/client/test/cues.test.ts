@@ -164,8 +164,8 @@ describe('Law 1: presentation never adds information (§3.2, §6.5 test 1)', () 
     // two face-down 2+2 sets that are Squid+Squid in one history and Squid+Whale in the other: the public record
     // is identical, so is the tally, so is the last-set cue
     const step = (setsPossible: number) => rec(40, view({ setsPossible: 2 }), view({ setsPossible }), [{ type: 'SET_LAID', playerId: 'a', isPowerSet: false }]);
-    expect(ids(cuesFor(step(1), facts('a')))).toEqual(['table.lay', 'world.notch', 'world.dark.01']);
-    expect(ids(cuesFor(step(1), facts('c')))).toEqual(['table.lay', 'world.notch', 'world.dark.01']);
+    expect(ids(cuesFor(step(1), facts('a')))).toEqual(['table.lay', 'world.notch', 'world.dark.01', 'mus.home']);
+    expect(ids(cuesFor(step(1), facts('c')))).toEqual(['table.lay', 'world.notch', 'world.dark.01', 'mus.home']);
     expect(ids(cuesFor(step(2), facts('a')))).toEqual(['table.lay']);
   });
 
@@ -410,8 +410,16 @@ describe('the world: the rim and the light (SOUND_DESIGN §1.1)', () => {
   it('the light steps darker at 12, 6 and 1 - each with its knock, after the ticks; the last adds the bare horn', () => {
     expect(ids(cuesFor(tally(13, 12), f))).toEqual(['table.lay', 'world.notch', 'world.dark.12']);
     expect(ids(cuesFor(tally(7, 6), f))).toEqual(['table.lay', 'world.notch', 'world.dark.06']);
-    expect(ids(cuesFor(tally(2, 1), f))).toEqual(['table.lay', 'world.notch', 'world.dark.01']);
+    expect(ids(cuesFor(tally(2, 1), f))).toEqual(['table.lay', 'world.notch', 'world.dark.01', 'mus.home']);
+    // the bare horn note sounds with the knock, not after it (MUSIC_PLAN A8)
+    const last = cuesFor(tally(2, 1), f);
+    expect(last.find((x) => x.id === 'mus.home')!.at).toBe(last.find((x) => x.id === 'world.dark.01')!.at);
     expect(ids(cuesFor(tally(12, 11), f))).not.toContain('world.dark.12'); // already dark
+    // the tally jumping from 2 to 0 ends the game in the same step: the knock, but the podium is the cadence, not mus.home
+    const jump = rec(101, view({ setsPossible: 2 }), view({ setsPossible: 0, scores: { a: 3 } }), [{ type: 'SET_LAID', playerId: 'a', isPowerSet: false }, { type: 'GAME_ENDED', winners: ['a'] }]);
+    expect(ids(cuesFor(jump, f))).toContain('world.dark.01');
+    expect(ids(cuesFor(jump, f))).not.toContain('mus.home');
+    expect(ids(cuesFor(jump, f))).toContain('mus.podium');
     const c = cuesFor(tally(13, 12), f);
     expect(c.find((x) => x.id === 'world.dark.12')!.params?.step).toBe(1);
     expect(c.find((x) => x.id === 'world.dark.12')!.at).toBeGreaterThan(c.find((x) => x.id === 'world.notch')!.at);

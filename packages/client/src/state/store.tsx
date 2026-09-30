@@ -27,6 +27,8 @@ interface GameState {
   players: RoomPlayerSummary[];
   started: boolean;
   config: RoomConfig;
+  /** when the room was created (server ms): the waiting room's score clock (MUSIC_PLAN §5.1, S5); null until the server says */
+  createdAt: number | null;
   view: RedactedView | null;
   events: WireEvent[];
   /** stretches of the log the player did not watch (a rejoin, a hidden tab): "while you were away" */
@@ -87,6 +89,7 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
     players: source?.players ?? [],
     started: !!source,
     config: source?.config ?? { powerVisibility: 'ascuns' },
+    createdAt: null,
     view: null,
     events: [],
     away: [],
@@ -109,6 +112,7 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
     if (sourceRef.current) {
       presenter.reset();
       presenter.setSelf(sourceRef.current.playerId);
+      presenter.setRoom(sourceRef.current.roomCode);
       const stop = sourceRef.current.start(onMessage);
       return stop;
     }
@@ -154,12 +158,15 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
           presenter.reset();
         }
         presenter.setSelf(msg.playerId);
+        presenter.setRoom(msg.roomCode);
         activeRoom.current = msg.roomCode;
         setState((s) => ({ ...s, roomCode: msg.roomCode, playerId: msg.playerId, error: null, joining: false }));
         return;
       }
       case 'room_update': {
-        setState((s) => ({ ...s, players: msg.players, started: msg.started, config: msg.config }));
+        // the room's clock is the server's: an update samples it like a view does (the waiting room has no views)
+        if (msg.serverNow > 0) getEngine().server.sample(msg.serverNow, Date.now());
+        setState((s) => ({ ...s, players: msg.players, started: msg.started, config: msg.config, createdAt: msg.createdAt > 0 ? msg.createdAt : null }));
         return;
       }
       case 'game_state': {
@@ -184,6 +191,8 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
         activeRoom.current = null;
         lastSeq.current = 0;
         presenter.reset();
+        presenter.setRoom(null);
+        getEngine().setScore(null);
         setState((s) => ({ ...s, error: msg.reason, roomCode: null, view: null, started: false }));
         return;
       }
@@ -224,8 +233,10 @@ export function GameProvider({ children, source }: { children: React.ReactNode; 
         activeRoom.current = null;
         lastSeq.current = 0;
         presenter.reset();
+        presenter.setRoom(null);
+        getEngine().setScore(null);
         setRoomInUrl(null);
-        setState((s) => ({ ...s, roomCode: null, playerId: null, view: null, started: false, players: [], events: [], away: [] }));
+        setState((s) => ({ ...s, roomCode: null, playerId: null, view: null, started: false, players: [], events: [], away: [], createdAt: null }));
       },
     }),
     [state, send, source],

@@ -82,12 +82,23 @@ export class Presenter {
   private snapshotQueued = false;
   /** the language the proclamations are written in */
   locale: Locale = 'ro';
+  /** the room this table is in: the background score's seed (MUSIC_PLAN §5.1, S6) */
+  private room: string | null = null;
 
   /* ------------------------------------------------------------- state */
 
   setSelf(id: string | null): void {
     this.me = id;
     this.stage.me = id;
+  }
+
+  setRoom(code: string | null): void {
+    this.room = code;
+  }
+
+  /** the background score reads the public view through its own projection; the presenter only hands it over */
+  private score(view: RedactedView, opts: { live: boolean; cues?: ReadonlyArray<{ id: string; at: number }> }): void {
+    if (this.room) getEngine().setScore({ roomCode: this.room, view }, opts);
   }
 
   /** the seat whose turn the table has shown so far: the chrome (top bar, dock, ochre chip) follows it, the input follows the view */
@@ -315,6 +326,7 @@ export class Presenter {
       this.setStage(view.sets.possible, view.status === 'ENDED');
       this.tableFreeAt = 0;
       this.chain = 0;
+      this.score(view, { live: false });
       return;
     }
 
@@ -386,12 +398,14 @@ export class Presenter {
       for (const [key, id] of ctx.depart) this.ghost(key, id);
     }
 
+    const timed: Array<{ id: string; at: number }> = [];
     for (const beat of ch.beats) {
       const origin = originOf(beat);
       const lead = origin - now;
       // audio: the cues are handed to the engine's lookahead scheduler, aligned to this beat
       for (const c of beat.cues) {
         engine.play(c.id, c.params, { delayMs: lead + c.at, seed: c.seed });
+        timed.push({ id: c.id, at: lead + c.at });
         // the ambience turns with the cue that marks it: the pond to wind on the last card, one flat step darker on the knock
         if (c.id === 'table.poolEmpty') engine.worldAt({ dry: true }, lead + c.at);
         if (c.params?.step !== undefined) engine.worldAt({ step: c.params.step }, lead + c.at);
@@ -441,6 +455,9 @@ export class Presenter {
         ctx.stays.length = 0;
       });
     }
+
+    // the background score: a change of chord lands on the transient of the cue that marks it (MUSIC_PLAN §4.2)
+    this.score(view, { live: true, cues: timed });
 
     // the table lane is busy until this step has landed
     if (ch.tableMs > 0) {

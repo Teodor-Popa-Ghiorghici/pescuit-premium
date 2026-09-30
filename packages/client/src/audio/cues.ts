@@ -479,7 +479,13 @@ export function cuesFor(record: PublicRecord, facts: SeatFacts): CueRequest[] {
     for (let k = 0; k < took; k++) add('world.notch', BEAT.notch + k * BEAT.notchGap);
     const from = darkStepOf(before.setsPossible);
     const to = darkStepOf(after.setsPossible);
-    for (let s = from + 1; s <= to; s++) add(DARK_ID[s - 1], BEAT.notch + BEAT.notchGap * Math.max(0, took - 1) + BEAT.darkAfterNotch + (s - from - 1) * 260, { step: s });
+    for (let s = from + 1; s <= to; s++) {
+      const at = BEAT.notch + BEAT.notchGap * Math.max(0, took - 1) + BEAT.darkAfterNotch + (s - from - 1) * 260;
+      add(DARK_ID[s - 1], at, { step: s });
+      // the last set's bare horn note sounds with its knock (MUSIC_PLAN A8: the knock is Table, the note is Music). When the
+      // tally jumps straight to 0 the game ends in the same step: the podium is the cadence then, and the note would talk over it.
+      if (s === 3 && !has('GAME_ENDED')) add('mus.home', at);
+    }
   }
 
   return out.sort((a, b) => a.at - b.at);
@@ -568,7 +574,7 @@ export const SOUND_COLUMN: ReadonlyArray<{ signal: string; sound: string }> = [
   { signal: 'SHARK_JUMP / WHALE_SHUFFLE', sound: 'power.windup, power.shark / power.whale, table.impact' },
   { signal: 'LANTERNFISH_REFLECT / TORTOISE_BLOCK / JELLYFISH_STUN / STICKLEBACK_*', sound: 'power.lanternfish / tortoise / jellyfish / stickleback(.miss)' },
   { signal: 'the tally counts down', sound: 'world.notch, one chisel tick per notch' },
-  { signal: 'the tally crosses 12 / 6 / 1', sound: 'world.dark.12 / .06 / .01 and the ambience one flat step darker (.01 adds the bare horn: the last set)' },
+  { signal: 'the tally crosses 12 / 6 / 1', sound: 'world.dark.12 / .06 / .01 and the ambience one flat step darker (.01 with mus.home, the bare horn: the last set)' },
   { signal: 'the stall gate shuts / opens', sound: 'amb.gate' },
   { signal: 'GAME_ENDED', sound: 'mus.podium (everyone); table.tally, one unpitched tick per pip' },
   { signal: 'Squid, in any form', sound: 'silence' },

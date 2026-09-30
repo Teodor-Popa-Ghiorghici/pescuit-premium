@@ -31,9 +31,14 @@ export interface MetricsState {
   ambienceIsOff: boolean;
   /** the mute tab, for the same playtest ("muted by the end", ≤ 2 of 15) */
   mutedNow: boolean;
+  /** the background score's switch (MUSIC_PLAN §10.5, R-e: fewer than 5 of 20 turn it off or to lobby-only): how many
+   *  times this device moved it from on to off, from on to lobby-only, and where it is now */
+  scoreTurnedOff: number;
+  scoreLobbyOnly: number;
+  scoreModeNow: string;
 }
 
-const empty = (): MetricsState => ({ answerTimes: [], eligibleWindows: 0, missedWindows: 0, tallyToPodium: [], answerToRest: [], inputToPaint: [], frames: [], steps: [], ambienceOff: 0, ambienceIsOff: false, mutedNow: false });
+const empty = (): MetricsState => ({ answerTimes: [], eligibleWindows: 0, missedWindows: 0, tallyToPodium: [], answerToRest: [], inputToPaint: [], frames: [], steps: [], ambienceOff: 0, ambienceIsOff: false, mutedNow: false, scoreTurnedOff: 0, scoreLobbyOnly: 0, scoreModeNow: 'on' });
 
 export function enabled(): boolean {
   try {
@@ -79,12 +84,19 @@ class Metrics {
       let ambOn = engine.settings.ambience > 0;
       this.state.ambienceIsOff = !ambOn;
       this.state.mutedNow = engine.settings.muted;
+      let mode = engine.settings.scoreMode;
+      this.state.scoreModeNow = mode;
       engine.subscribe(() => {
         const on = engine.settings.ambience > 0;
         if (ambOn && !on) this.state.ambienceOff++;
         ambOn = on;
         this.state.ambienceIsOff = !on;
         this.state.mutedNow = engine.settings.muted;
+        const m = engine.settings.scoreMode;
+        if (mode === 'on' && m === 'off') this.state.scoreTurnedOff++;
+        if (mode === 'on' && m === 'lobby') this.state.scoreLobbyOnly++;
+        mode = m;
+        this.state.scoreModeNow = m;
       });
     } catch {
       /* no audio engine (a test): nothing to count */

@@ -2,6 +2,7 @@
  * limiter (-1.5 dBFS) -> safety clip (-1 dBFS) -> user volume. No bus compression, no ducking.
  *
  *   UI, Table, Power, Music -> main stem        Clock -> clock stem        Ambience -> ambience stem
+ *   Score -> duck -> darkening level -> score stem (MUSIC_PLAN A7: measurable on its own, off the activity envelope)
  *
  * `buildStemGraph` is the part the offline harness shares with the live mixer: everything up to
  * the sum. Each cue is mastered per voice before it reaches a bus: c·tanh(x/c), with c set per
@@ -16,6 +17,9 @@ import { BUS_NAMES, BUSES, type BusName, type Profile } from './cuesheet.js';
 import { PROFILES } from './context.js';
 import { createLimiter, type LimiterNode } from './worklet.js';
 import { fromDb } from './util.js';
+import type { ScoreMode } from './score/levels.js';
+
+export type { ScoreMode } from './score/levels.js';
 
 /* ---------------------------------------------------------------- settings */
 
@@ -32,7 +36,13 @@ export interface AudioSettings {
   softer: boolean;
   /** manual A/V offset for Bluetooth, ms (positive delays the pictures) */
   avOffsetMs: number;
+  /** the background score (MUSIC_PLAN A12): on, in the waiting room only, or off. The Music slider scales it. */
+  scoreMode: ScoreMode;
 }
+
+/** Before the music playtest the in-game score is lobby-only by default (MUSIC_PLAN D2, §10.5): the FEEL rounds must not
+ *  hear it. The playtest's rule (R-a..R-e) decides whether this becomes 'on'. */
+export const SCORE_DEFAULT_MODE: ScoreMode = 'lobby';
 
 export const DEFAULT_SETTINGS: AudioSettings = {
   master: 1,
@@ -45,6 +55,7 @@ export const DEFAULT_SETTINGS: AudioSettings = {
   mono: false,
   softer: false,
   avOffsetMs: 0,
+  scoreMode: SCORE_DEFAULT_MODE,
 };
 
 const KEY = 'pescuit:audio';
@@ -68,6 +79,7 @@ export function loadSettings(): AudioSettings {
       s.mono = j.mono === true;
       s.softer = j.softer === true;
       s.avOffsetMs = typeof j.avOffsetMs === 'number' && Number.isFinite(j.avOffsetMs) ? Math.min(400, Math.max(-100, j.avOffsetMs)) : 0;
+      s.scoreMode = j.scoreMode === 'on' || j.scoreMode === 'lobby' || j.scoreMode === 'off' ? j.scoreMode : SCORE_DEFAULT_MODE;
     } else if (localStorage.getItem(LEGACY_KEY) === 'off') {
       s.muted = true;
     }
@@ -87,11 +99,11 @@ export function saveSettings(s: AudioSettings): void {
 
 /* --------------------------------------------------------------- the graph */
 
-/** The linear gain of a bus: its §3.5 level, the speaker boost, and the player's volume. */
+/** The linear gain of a bus: its §3.5 level, the profile's boost, and the player's volume. */
 export function busGain(bus: BusName, profile: Profile, s: Pick<AudioSettings, 'effects' | 'interface' | 'ambience' | 'music'>): number {
   const b = BUSES[bus];
-  const user = bus === 'UI' ? s.interface : bus === 'Ambience' ? s.ambience : bus === 'Music' ? s.music : s.effects;
-  return fromDb(b.levelDb + (profile === 'speaker' ? b.speakerBoostDb : 0)) * user;
+  const user = bus === 'UI' ? s.interface : bus === 'Ambience' ? s.ambience : bus === 'Music' || bus === 'Score' ? s.music : s.effects;
+  return fromDb(b.levelDb + (profile === 'speaker' ? b.speakerBoostDb : b.headphonesBoostDb)) * user;
 }
 
 /**
@@ -103,14 +115,17 @@ export const DARK_RAMP_S = 0.025;
 
 export interface StemGraph {
   buses: Record<BusName, GainNode>;
-  /** the three stems after their profile EQ */
-  outputs: { main: AudioNode; clock: AudioNode; ambience: AudioNode };
+  /** the four stems after their profile EQ */
+  outputs: { main: AudioNode; clock: AudioNode; ambience: AudioNode; score: AudioNode };
   /** table activity (ambience, up to -4 dB) and ceremony (ambience fades under `ex` cues) */
   ambActivity: GainNode;
   ambCeremony: GainNode;
   /** the darkening step: a low-pass and a level on the ambience stem */
   ambStepLp: BiquadFilterNode;
   ambStepGain: GainNode;
+  /** the score's per-cue duck and its darkening step (the level column only: the low-pass does nothing under 700 Hz) */
+  scoreDuck: GainNode;
+  scoreStepGain: GainNode;
   setProfile(p: Profile): void;
   /** puts the ambience in darkening step 0-3 at context time `when` (a 25 ms ramp), or at once */
   setDarkStep(step: number, when?: number, immediate?: boolean): void;
@@ -131,7 +146,7 @@ export function buildStemGraph(ctx: BaseAudioContext, profile: Profile): StemGra
     input.connect(hp).connect(shelf);
     return { input, hp, shelf, output: shelf as AudioNode };
   };
-  const main = stem(), clock = stem(), amb = stem();
+  const main = stem(), clock = stem(), amb = stem(), score = stem();
   for (const n of ['UI', 'Table', 'Power', 'Music'] as const) buses[n].connect(main.input);
   buses.Clock.connect(clock.input);
   const ambActivity = ctx.createGain();
@@ -143,12 +158,16 @@ export function buildStemGraph(ctx: BaseAudioContext, profile: Profile): StemGra
   ambStepLp.frequency.value = DARK_STEPS.hz[0];
   const ambStepGain = ctx.createGain();
   buses.Ambience.connect(ambActivity).connect(ambCeremony).connect(ambStepLp).connect(ambStepGain).connect(amb.input);
+  // the score does NOT follow the ambience's activity envelope: that envelope also reacts to cues heard by one client only
+  const scoreDuck = ctx.createGain();
+  const scoreStepGain = ctx.createGain();
+  buses.Score.connect(scoreDuck).connect(scoreStepGain).connect(score.input);
   const setDarkStep = (step: number, when = ctx.currentTime, immediate = false) => {
     const k = Math.max(0, Math.min(3, Math.round(step)));
     const hz = DARK_STEPS.hz[k];
     const g = fromDb(DARK_STEPS.db[k]);
     const t = Math.max(when, ctx.currentTime);
-    for (const [param, v] of [[ambStepLp.frequency, hz], [ambStepGain.gain, g]] as const) {
+    for (const [param, v] of [[ambStepLp.frequency, hz], [ambStepGain.gain, g], [scoreStepGain.gain, g]] as const) {
       param.cancelScheduledValues(t);
       if (immediate) param.setValueAtTime(v, t);
       else {
@@ -159,14 +178,14 @@ export function buildStemGraph(ctx: BaseAudioContext, profile: Profile): StemGra
   };
   const setProfile = (p: Profile) => {
     const pr = PROFILES[p];
-    for (const s of [main, clock, amb]) {
+    for (const s of [main, clock, amb, score]) {
       s.hp.frequency.value = pr.highPassHz;
       s.shelf.frequency.value = pr.shelfHz;
       s.shelf.gain.value = pr.shelfDb;
     }
   };
   setProfile(profile);
-  return { buses, outputs: { main: main.output, clock: clock.output, ambience: amb.output }, ambActivity, ambCeremony, ambStepLp, ambStepGain, setProfile, setDarkStep };
+  return { buses, outputs: { main: main.output, clock: clock.output, ambience: amb.output, score: score.output }, ambActivity, ambCeremony, ambStepLp, ambStepGain, scoreDuck, scoreStepGain, setProfile, setDarkStep };
 }
 
 /* -------------------------------------------------------- per-voice mastering */
@@ -248,6 +267,15 @@ export class Mixer {
   /** the ambience steps to darkening step `step` (0-3) at context time `when`, or at once */
   setDarkStep(step: number, when?: number, immediate = false): void {
     this.graph.setDarkStep(step, when, immediate);
+  }
+
+  /** the score ducks under a power's strike (a cue's `scoreDuckDb`) and returns: in 50 ms, out over its duck length */
+  duckScore(when: number, db: number, seconds: number): void {
+    const g = this.graph.scoreDuck.gain;
+    const t = Math.max(when, this.ctx.currentTime);
+    g.cancelScheduledValues(t);
+    g.setTargetAtTime(fromDb(db), t, 0.05 / 3);
+    g.setTargetAtTime(1, t + seconds, 0.8 / 3);
   }
 
   /** rare signature cues (`ex`): the ambience ducks under them and returns. Never under a frequent cue: that would pump. */

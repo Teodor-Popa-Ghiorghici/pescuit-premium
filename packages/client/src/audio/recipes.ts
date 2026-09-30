@@ -287,11 +287,8 @@ export const RECIPES: Record<string, Recipe> = {
   // the light steps darker: a mallet on the basin rim, lower each time
   'world.dark.12': (c, o, t, s, _sp, p) => darkKnock(c, o, t + 0.005, s, 1, pt(p)),
   'world.dark.06': (c, o, t, s, _sp, p) => darkKnock(c, o, t + 0.005, s, 2, pt(p)),
-  // the last set: the same knock, lower, and one bare low note of the tulnic under it
-  'world.dark.01': (c, o, t, s, _sp, p) => {
-    darkKnock(c, o, t + 0.005, s, 3, pt(p));
-    playBuf(c, carve(c, o), t + 0.12, 'horn.last', 0.9);
-  },
+  // the last set: the same knock, lower (its bare horn note is mus.home, on the Music bus)
+  'world.dark.01': (c, o, t, s, _sp, p) => darkKnock(c, o, t + 0.005, s, 3, pt(p)),
   // a notch counts down the rim: a chisel tick, quiet
   'world.notch': (c, o, t, s, _sp, p) => {
     const take = tk(p, s);
@@ -310,6 +307,8 @@ export const RECIPES: Record<string, Recipe> = {
       playBuf(c, dark, t + 0.02 + v.at, 'horn.echo', 10 ** (v.gainDb / 20));
     }
   },
+  // the last set: one bare low note of the tulnic, partial 4, under the knock of world.dark.01 (placed 120 ms after it)
+  'mus.home': (c, o, t) => playBuf(c, carve(c, o), t + 0.12, 'horn.last', 0.9),
   // the horn returns, resolved and bare: no echo, no accompaniment
   'mus.podium': (c, o, t) => playBuf(c, carve(c, o), t + 0.02, 'horn.podium', 1),
 

@@ -310,7 +310,7 @@ function cueBeatKinds(id: string): BeatKind[] {
   if (id === 'table.bonus') return ['bonus'];
   if (id === 'table.refill') return ['refill'];
   if (id.startsWith('table.lay') || id === 'table.egg' || id === 'world.notch') return ['lay'];
-  if (id === 'world.dark.01') return ['lastSet', 'lay'];
+  if (id === 'world.dark.01' || id === 'mus.home') return ['lastSet', 'lay'];
   if (id.startsWith('world.dark.')) return ['lay'];
   if (id === 'mus.start') return ['start'];
   if (id === 'mus.podium' || id === 'table.tally') return ['end'];

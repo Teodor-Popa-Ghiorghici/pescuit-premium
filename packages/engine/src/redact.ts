@@ -76,6 +76,9 @@ export interface RedactedView {
   seq: number;
   /** the server's clock when this view was built (ms since the epoch); pairs with deadlineAt */
   serverNow: number;
+  /** the server's clock when the game started (ms since the epoch), set once; the background score's zero (MUSIC_PLAN §5.1, S5).
+   *  A timestamp, the same for every viewer and independent of the deal. 0 if the driver did not say. */
+  startedAt: number;
 }
 
 /** What only the driver knows: the room's sequence number and clock. The engine has no clock. */
@@ -84,6 +87,8 @@ export interface ViewMeta {
   serverNow?: number;
   /** the deadline the driver armed for the currently open window */
   windowDeadlineAt?: number | null;
+  /** when the game started, server ms */
+  startedAt?: number;
 }
 
 // ---- The public event stream ----
@@ -216,6 +221,7 @@ function buildView(state: GameState, viewer: PlayerViewer | null, meta: ViewMeta
     endPressure: { misses: state.staleRequestStreak, limit: state.players.length * 2 },
     seq: meta.seq ?? 0,
     serverNow: meta.serverNow ?? 0,
+    startedAt: meta.startedAt ?? 0,
   };
 }
 

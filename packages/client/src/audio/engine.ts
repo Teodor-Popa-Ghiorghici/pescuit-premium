@@ -20,6 +20,7 @@ import { RECIPES, type CueParams } from './recipes.js';
 import { fromDb } from './util.js';
 import { VoicePool } from './voices.js';
 import { loadRendered, preloadRendered } from './bank.js';
+import type { Score, ScoreSource } from './score/index.js';
 
 export interface VoiceEnv {
   ctx: BaseAudioContext;
@@ -36,6 +37,8 @@ export interface VoiceEnv {
   full?: boolean;
   onSource?: (when: number) => void;
   onCeremony?: (when: number, seconds: number) => void;
+  /** the background score ducks under this cue (its `scoreDuckDb`) */
+  onScoreDuck?: (when: number, db: number, seconds: number) => void;
 }
 
 const SEAT_PAN = [-0.6, -0.36, -0.12, 0.12, 0.36, 0.6];
@@ -86,6 +89,7 @@ export function spawnVoice(e: VoiceEnv, id: string, params: CueParams, seed: num
   }
   if (def.env === 'src') e.onSource?.(when);
   if (def.env === 'ex') e.onCeremony?.(when, (def.duckMs ?? def.maxLenMs) / 1000);
+  if (def.scoreDuckDb !== undefined) e.onScoreDuck?.(when, def.scoreDuckDb, (def.duckMs ?? def.maxLenMs) / 1000);
   if (e.pool && voiceId) {
     e.pool.attach(voiceId, () => {
       const now = ctx.currentTime;
@@ -125,6 +129,12 @@ export class AudioEngine {
   private worldQueue: Array<{ dueWall: number; patch: { dry?: boolean; step?: number } }> = [];
   private tracing = false;
   private afterPaintTick = false;
+  /** the background score: loaded lazily (its own chunk) once the audio runs and the switch allows it */
+  private score: Score | null = null;
+  private scoreLoad: Promise<void> | null = null;
+  /** what the score has been handed before it loaded, replayed into it in order (the public history it needs) */
+  private scoreQueue: Array<{ src: ScoreSource; opts: { live: boolean; cues?: ReadonlyArray<{ id: string; at: number }> } }> = [];
+  private scorePhase: 'lobby' | 'game' | null = null;
 
   constructor() {
     this.settings = loadSettings();
@@ -153,6 +163,7 @@ export class AudioEngine {
       setTimeout(() => void preloadRendered(this.settings.profile), 300);
       this.timer = setInterval(() => this.tick(), 25);
       this.syncWorld();
+      this.syncScore();
     });
     return this.starting;
   }
@@ -193,6 +204,8 @@ export class AudioEngine {
     saveSettings(this.settings);
     if (profileChanged && this.ready) void preloadRendered(this.settings.profile);
     this.mixer?.applySettings(this.settings);
+    this.score?.configure({ profile: this.settings.profile, mode: this.scoreMode(), stereo: this.scoreStereo() });
+    this.syncScore();
     this.syncWorld();
     this.emit();
   }
@@ -284,6 +297,7 @@ export class AudioEngine {
           full: q.full,
           onSource: (t) => m.bumpActivity(t),
           onCeremony: (t, s) => m.fadeAmbience(t, s),
+          onScoreDuck: (t, db, s) => m.duckScore(t, db, s),
         },
         q.id,
         q.params,
@@ -294,6 +308,7 @@ export class AudioEngine {
     }
     this.queue = rest;
     this.ambience?.schedule(ctx.currentTime + 0.3);
+    this.score?.tick();
   }
 
   /* ------------------------------------------------------ world and clock */
@@ -350,17 +365,82 @@ export class AudioEngine {
     const m = this.mixer;
     if (!m || !this.ready) return;
     const on = this.world !== null && this.settings.ambience > 0 && !this.settings.muted;
+    const scoreOn = this.scoreAudible();
     if (on && !this.ambience) {
       this.ambience = new Ambience(m.ctx, m.graph.buses.Ambience, 5);
-      this.ambience.update({ ...this.world, dry: this.dry }, true);
+      this.ambience.update({ ...this.world, dry: this.dry, scoreOn }, true);
       this.ambience.start();
     }
-    if (on && this.world) this.ambience?.update({ ...this.world, dry: this.dry });
+    if (on && this.world) this.ambience?.update({ ...this.world, dry: this.dry, scoreOn });
     if (!on && this.ambience) {
       this.ambience.stop();
       this.ambience = null;
     }
     m.setDarkStep(this.step, undefined, true);
+  }
+
+  /* ------------------------------------------------------ the background score */
+
+  /** the switch, as the score reads it: muted, or the Music slider at 0, is off */
+  private scoreMode(): 'on' | 'lobby' | 'off' {
+    return this.settings.muted || this.settings.music <= 0 ? 'off' : this.settings.scoreMode;
+  }
+  private scoreStereo(): boolean {
+    return !this.settings.mono && this.settings.profile === 'headphones';
+  }
+  /** the score is sounding now (the pond makes room for it): loaded, and the switch allows the current phase */
+  private scoreAudible(): boolean {
+    if (!this.score || this.scorePhase === null) return false;
+    const mode = this.scoreMode();
+    return mode === 'on' || (mode === 'lobby' && this.scorePhase === 'lobby');
+  }
+
+  /**
+   * Hands the score a public broadcast: the waiting room's update, or a game view (MUSIC_PLAN §5). `live` steps carry the
+   * step's cues, ms from now, so a change of chord lands on the knock that marks it; a first look or a rejoin swells in.
+   * null: the player left the room.
+   */
+  setScore(src: ScoreSource | null, opts: { live: boolean; cues?: ReadonlyArray<{ id: string; at: number }> } = { live: false }): void {
+    if (src === null) {
+      this.scoreQueue = [];
+      this.scorePhase = null;
+      this.score?.dispose();
+      this.score = null;
+      this.scoreLoad = null;
+      this.syncWorld();
+      return;
+    }
+    const phase = src.view ? 'game' : 'lobby';
+    const changed = phase !== this.scorePhase;
+    this.scorePhase = phase;
+    if (this.score) this.score.update(src, opts);
+    else {
+      this.scoreQueue.push({ src, opts: { live: false } });
+      if (this.scoreQueue.length > 400) this.scoreQueue.splice(1, this.scoreQueue.length - 400);
+      this.syncScore();
+    }
+    if (changed) this.syncWorld();
+  }
+
+  /** loads the score's chunk when there is something to play and the switch allows it */
+  private syncScore(): void {
+    const m = this.mixer;
+    if (!m || !this.ready || this.score || this.scoreLoad || !this.scoreQueue.length || this.scoreMode() === 'off') return;
+    const ctx = m.ctx;
+    this.scoreLoad = import('./score/index.js')
+      .then(({ Score }) => Score.create(ctx, m.graph.buses.Score, { serverNow: () => this.server.serverNow(Date.now()) }, { profile: this.settings.profile, mode: this.scoreMode(), stereo: this.scoreStereo() }))
+      .then((score) => {
+        if (!score || this.scorePhase === null) {
+          score?.dispose();
+          return; // no AudioWorklet: no score on this client (D-e); or the player has left
+        }
+        this.score = score;
+        for (const q of this.scoreQueue.splice(0)) score.update(q.src, q.opts);
+        this.syncWorld();
+      })
+      .catch(() => {
+        /* the chunk did not load: no score this session */
+      });
   }
 
   /** hands a window's server deadline to the click scheduler; pass null when the answer window is gone */

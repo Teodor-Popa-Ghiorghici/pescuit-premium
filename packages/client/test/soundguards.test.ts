@@ -61,3 +61,35 @@ describe('no looping music, no melody in the play', () => {
     expect(code('audio/live/water.ts').match(/createOscillator/g)?.length).toBe(1); // the drain gurgle's bubble; the drip is noise
   });
 });
+
+describe('the background score (MUSIC_PLAN §5, §10.2)', () => {
+  const scoreFiles = audioFiles('audio/score');
+  it('nothing in score/ imports a hand, a grant, a window, the seat facts, the cue mapping or the engine\'s types', () => {
+    expect(scoreFiles.length).toBeGreaterThan(5);
+    for (const f of scoreFiles) {
+      const imports = read(f).split('\n').filter((l) => /^\s*import\b/.test(l)).join('\n');
+      expect(imports, f).not.toMatch(/@pescuit\/engine|redact|seatFacts|SeatFacts|handModel|cues\.js|record\.js|presenter/);
+      expect(code(f), f).not.toMatch(/\.hand\b|ownPowerGrants|pendingWindow|youAreEligible|currentPlayerId|powerVisibility|laidSets|\.winners|\.scores\b/);
+    }
+  });
+  it('the decisions are pure: plan, conductor, phrases, voicing and input use no clock, no randomness, no timers and no DOM', () => {
+    for (const f of ['plan.ts', 'conductor.ts', 'phrases.ts', 'voicing.ts', 'input.ts', 'synth.ts']) {
+      const c = code(`audio/score/${f}`);
+      for (const bad of [/\basync\b|\bawait\b/, /setTimeout|setInterval|requestAnimationFrame/, /Math\.random/, /Date\.now|performance\./, /\bdocument\.|\bwindow\.|localStorage/]) expect(c, `${f} ${bad}`).not.toMatch(bad);
+    }
+  });
+  it('the only per-client randomness is the hum\'s grain salt, made in index.ts; nothing is looped', () => {
+    for (const f of scoreFiles) {
+      if (!f.endsWith('index.ts')) expect(code(f), f).not.toMatch(/Math\.random/);
+      expect(code(f), f).not.toMatch(/\.loop\s*=\s*true/);
+    }
+    expect(code('audio/score/index.ts').match(/Math\.random/g)).toHaveLength(1);
+  });
+  it('no input path waits on the score, and the main bundle never imports it statically (it is a lazy chunk)', () => {
+    for (const f of ['game/presenter.ts', 'components/Windows.tsx', 'components/GameTable.tsx', 'hooks/useLobbyAudio.ts', 'state/store.tsx']) expect(code(f), f).not.toMatch(/await\s+(getEngine|engine)|score\/index/);
+    const engine = read('audio/engine.ts');
+    expect(engine).toMatch(/import type \{[^}]*Score[^}]*\} from '\.\/score\/index\.js'/);
+    expect(engine).toMatch(/import\('\.\/score\/index\.js'\)/);
+    expect(engine.split('\n').filter((l) => /^import .*score\/index/.test(l) && !/^import type/.test(l))).toEqual([]);
+  });
+});

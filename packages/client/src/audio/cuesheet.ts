@@ -6,19 +6,24 @@
  */
 
 import type { Feel } from './variation.js';
+import { SCORE_BUS_DB } from './score/levels.js';
 
-export type BusName = 'UI' | 'Table' | 'Power' | 'Clock' | 'Music' | 'Ambience';
-export const BUS_NAMES: readonly BusName[] = ['UI', 'Table', 'Power', 'Clock', 'Music', 'Ambience'];
+export type BusName = 'UI' | 'Table' | 'Power' | 'Clock' | 'Music' | 'Ambience' | 'Score';
+export const BUS_NAMES: readonly BusName[] = ['UI', 'Table', 'Power', 'Clock', 'Music', 'Ambience', 'Score'];
 
-/** §3.5: levels re Table = 0 dB; UI and Clock get +4 dB on speakers; the ambience is
+/** §3.5: levels re Table = 0 dB; UI and Clock get +4 dB on speakers, the Clock +2 dB on headphones; the ambience is
  * activity-shaped on top of its -26 dB. `voices` is the per-bus cap. */
-export const BUSES: Record<BusName, { levelDb: number; speakerBoostDb: number; voices: number }> = {
-  UI: { levelDb: -10, speakerBoostDb: 4, voices: 2 },
-  Table: { levelDb: 0, speakerBoostDb: 0, voices: 6 },
-  Power: { levelDb: 1, speakerBoostDb: 0, voices: 3 },
-  Clock: { levelDb: -8, speakerBoostDb: 4, voices: 2 },
-  Music: { levelDb: -2, speakerBoostDb: 0, voices: 2 },
-  Ambience: { levelDb: -26, speakerBoostDb: 0, voices: 3 },
+export const BUSES: Record<BusName, { levelDb: number; speakerBoostDb: number; headphonesBoostDb: number; voices: number }> = {
+  UI: { levelDb: -10, speakerBoostDb: 4, headphonesBoostDb: 0, voices: 2 },
+  Table: { levelDb: 0, speakerBoostDb: 0, headphonesBoostDb: 0, voices: 6 },
+  Power: { levelDb: 1, speakerBoostDb: 0, headphonesBoostDb: 0, voices: 3 },
+  // +2 dB in headphones (MUSIC_PLAN A9): the clock keeps its margin over the world when the score is under it
+  Clock: { levelDb: -8, speakerBoostDb: 4, headphonesBoostDb: 2, voices: 2 },
+  Music: { levelDb: -2, speakerBoostDb: 0, headphonesBoostDb: 0, voices: 2 },
+  Ambience: { levelDb: -26, speakerBoostDb: 0, headphonesBoostDb: 0, voices: 3 },
+  // the background score (MUSIC_PLAN A7): its own stem, its own duck and darkening gain; no cue plays on it. Its level is
+  // measured, not set: the harness puts the hum 3 dB under the pond (check #17-#18). The Music slider scales it.
+  Score: { levelDb: SCORE_BUS_DB, speakerBoostDb: 0, headphonesBoostDb: 0, voices: 0 },
 };
 
 /** The global voice cap and the priority order it steals in (§3.5). */
@@ -69,6 +74,8 @@ export interface CueDef {
   env: Env;
   /** how long the ambience stays ducked under an 'ex' cue, ms (the cue's length if absent) */
   duckMs?: number;
+  /** the background score ducks this far under the cue, for its `duckMs` (MUSIC_PLAN §4.2); never on a cut point */
+  scoreDuckDb?: number;
   cls: CueClass;
   /** where it sits on the beat: exact, hard (on time), answer (a little late), spread (a few ms either way) */
   feel: Feel;
@@ -76,8 +83,8 @@ export interface CueDef {
   seat?: boolean;
 }
 
-type Row = Omit<CueDef, 'cooldownMs' | 'inst' | 'env' | 'cls' | 'short' | 'seat' | 'feel' | 'duckMs'> &
-  Partial<Pick<CueDef, 'cooldownMs' | 'inst' | 'env' | 'cls' | 'short' | 'seat' | 'feel' | 'duckMs'>>;
+type Row = Omit<CueDef, 'cooldownMs' | 'inst' | 'env' | 'cls' | 'short' | 'seat' | 'feel' | 'duckMs' | 'scoreDuckDb'> &
+  Partial<Pick<CueDef, 'cooldownMs' | 'inst' | 'env' | 'cls' | 'short' | 'seat' | 'feel' | 'duckMs' | 'scoreDuckDb'>>;
 const row = (r: Row): CueDef => ({ cooldownMs: 0, inst: 1, env: null, cls: 'T', short: null, feel: 'exact', ...r });
 
 /** a rare signature moment: the ambience ducks under it */
@@ -123,12 +130,15 @@ export const CUES: readonly CueDef[] = [
   // and a chisel tick for each notch that counts down the rim
   row({ id: 'world.dark.12', bus: 'Table', heard: 'all', plays: [0, 1], levelDb: -2, prio: 4, variation: 1, maxLenMs: 180, ...EX, duckMs: 600 }),
   row({ id: 'world.dark.06', bus: 'Table', heard: 'all', plays: [0, 1], levelDb: -2, prio: 4, variation: 1, maxLenMs: 180, ...EX, duckMs: 600 }),
-  row({ id: 'world.dark.01', bus: 'Music', heard: 'all', plays: [0, 1], levelDb: 0, prio: 5, variation: 1, maxLenMs: 1320, cls: 'S', ...EX, duckMs: 1400 }),
+  // the last set's knock is a table sound (MUSIC_PLAN A8): a music slider at 0 must not silence an informative knock
+  row({ id: 'world.dark.01', bus: 'Table', heard: 'all', plays: [0, 1], levelDb: -2, prio: 4, variation: 1, maxLenMs: 180, ...EX, duckMs: 600 }),
   row({ id: 'world.notch', bus: 'Table', heard: 'all', plays: [15, 30], levelDb: -12, prio: 2, inst: 3, cooldownMs: 50, variation: 3, maxLenMs: 50, short: 'same', feel: 'spread' }),
 
   // ceremony: the tulnic calls the table, and returns at the podium
   row({ id: 'mus.start', bus: 'Music', heard: 'all', plays: [1, 1], levelDb: 0, prio: 5, variation: 1, maxLenMs: 8300, cls: 'S', ...EX, duckMs: 3300 }),
   row({ id: 'mus.podium', bus: 'Music', heard: 'all', plays: [1, 1], levelDb: 0, prio: 5, variation: 1, maxLenMs: 2600, cls: 'S', ...EX, duckMs: 2600 }),
+  // the last set: one bare low note of the tulnic, partial 4, on the knock of world.dark.01 - the first tonic since the lobby
+  row({ id: 'mus.home', bus: 'Music', heard: 'all', plays: [0, 1], levelDb: 0, prio: 5, variation: 1, maxLenMs: 1320, cls: 'S', ...EX, duckMs: 1400 }),
 
   // the clock (the answer window only)
   row({ id: 'clock.tick', bus: 'Clock', heard: 'all', plays: null, levelDb: -1.2, prio: 5, cooldownMs: 900, variation: 3, maxLenMs: 60, short: 'same' }),
@@ -140,15 +150,15 @@ export const CUES: readonly CueDef[] = [
   row({ id: 'power.granted', bus: 'Power', heard: 'all', plays: [5, 8], levelDb: -2, prio: 4, variation: 3, maxLenMs: 320, short: '250 ms', env: 'src', feel: 'spread' }),
   // the power gathers itself: a swell that ends exactly on the strike (the three frame-breakers only)
   row({ id: 'power.windup', bus: 'Power', heard: 'all', plays: [3, 7], levelDb: -5, prio: 4, variation: 3, maxLenMs: 260, short: 'none', env: 'src', cls: 'S' }),
-  row({ id: 'power.reveal', bus: 'Power', heard: 'all', plays: [1, 6], levelDb: 0, prio: 4, variation: 3, maxLenMs: 400, short: 'clacks', ...EX, duckMs: 500 }),
-  row({ id: 'power.shark', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 0, prio: 4, variation: 2, maxLenMs: 460, short: 'bite', ...EX, duckMs: 700, feel: 'hard' }),
-  row({ id: 'power.mantis', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: -4.5, prio: 4, variation: 2, maxLenMs: 320, short: 'club', ...EX, duckMs: 600, feel: 'hard' }),
+  row({ id: 'power.reveal', bus: 'Power', heard: 'all', plays: [1, 6], levelDb: 0, prio: 4, variation: 3, maxLenMs: 400, short: 'clacks', ...EX, duckMs: 500 , scoreDuckDb: -10 }),
+  row({ id: 'power.shark', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 0, prio: 4, variation: 2, maxLenMs: 460, short: 'bite', ...EX, duckMs: 700, feel: 'hard' , scoreDuckDb: -10 }),
+  row({ id: 'power.mantis', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: -4.5, prio: 4, variation: 2, maxLenMs: 320, short: 'club', ...EX, duckMs: 600, feel: 'hard' , scoreDuckDb: -10 }),
   row({ id: 'power.lanternfish', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: -1.5, prio: 4, variation: 2, maxLenMs: 400, short: 'first hit', env: 'src', seat: true, feel: 'hard' }),
   row({ id: 'power.tortoise', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: -1.5, prio: 4, variation: 2, maxLenMs: 450, short: 'first hit', env: 'src', feel: 'hard' }),
   row({ id: 'power.jellyfish', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 0, prio: 4, variation: 2, maxLenMs: 460, short: 'first hit', env: 'src', feel: 'hard' }),
   row({ id: 'power.stickleback', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 0, prio: 4, variation: 2, maxLenMs: 280, short: 'first hit', env: 'src', feel: 'hard' }),
   row({ id: 'power.stickleback.miss', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 0, prio: 4, variation: 2, maxLenMs: 200, short: 'first hit', env: 'src', feel: 'hard' }),
-  row({ id: 'power.whale', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 1, prio: 4, variation: 1, maxLenMs: 1400, short: '400 ms', ...EX, duckMs: 1400, cls: 'S', feel: 'hard' }),
+  row({ id: 'power.whale', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: 1, prio: 4, variation: 1, maxLenMs: 1400, short: '400 ms', ...EX, duckMs: 1400, cls: 'S', feel: 'hard' , scoreDuckDb: -10 }),
   row({ id: 'power.clownfish.bound', bus: 'Power', heard: 'all', plays: [0, 1], levelDb: -4, prio: 3, variation: 1, maxLenMs: 220, short: 'peg' }),
 
   // world and meta
@@ -205,7 +215,7 @@ export const ANCHOR_LUFS: Record<Profile, number> = { speaker: -21, headphones: 
 export const MASTER_CAP_DB: Record<Profile, number> = { speaker: 12, headphones: 16 };
 
 /** Cues exempt from the 250 ms echo budget: heard once a game (§3.4). */
-export const ECHO_EXEMPT: ReadonlySet<string> = new Set(['mus.start', 'mus.podium', 'world.dark.01']);
+export const ECHO_EXEMPT: ReadonlySet<string> = new Set(['mus.start', 'mus.podium', 'mus.home']);
 
 /** Squid has no cue and no motif: any request naming it is silence. */
 export const SILENT_RANKS: ReadonlySet<string> = new Set(['squid']);

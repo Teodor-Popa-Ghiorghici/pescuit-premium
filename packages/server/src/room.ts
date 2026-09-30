@@ -32,7 +32,9 @@ export class Room {
   players: RoomPlayer[] = [];
   state: GameState | null = null;
   started = false;
-  createdAt = Date.now();
+  createdAt: number;
+  /** server ms when the game started; the background score's zero (MUSIC_PLAN §5.1) */
+  startedAt = 0;
   /** timestamp since the room has had zero connected players, or null while someone is connected */
   emptySince: number | null = Date.now();
   /** per-room, strictly increasing: every event is stamped with the next value, every view carries the last */
@@ -44,6 +46,7 @@ export class Room {
   constructor(code: string, config: RoomConfig, private now: () => number = Date.now) {
     this.code = code;
     this.config = config;
+    this.createdAt = now();
   }
 
   get isEmpty(): boolean {
@@ -112,6 +115,7 @@ export class Room {
     );
     this.state = state;
     this.started = true;
+    this.startedAt = this.now();
     this.broadcastRoomUpdate();
     this.publish(events);
   }
@@ -188,6 +192,7 @@ export class Room {
         seq: this.seq,
         serverNow,
         windowDeadlineAt: this.windowDeadlineAt,
+        startedAt: this.startedAt,
       });
       const msg: ServerMessage = {
         type: 'game_state',
@@ -209,6 +214,8 @@ export class Room {
       players: this.roomSummary(),
       started: this.started,
       config: this.config,
+      serverNow: this.now(),
+      createdAt: this.createdAt,
     };
     for (const player of this.players) {
       if (player.ws) send(player.ws, msg);

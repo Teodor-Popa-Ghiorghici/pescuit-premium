@@ -209,20 +209,20 @@ const SLOT: Record<string, string> = {
   'clock.tick': 'window', 'clock.tick.urgent': 'window', 'clock.close': 'window',
   'table.flight': 'outcome', 'table.give': 'outcome', 'table.gofish': 'outcome', 'table.gofish.dry': 'outcome', 'table.draw': 'outcome', 'table.refill': 'outcome',
   'power.shark': 'outcome', 'power.lanternfish': 'outcome', 'power.tortoise': 'outcome', 'power.stickleback': 'outcome', 'power.stickleback.miss': 'outcome',
-  'table.lay': 'lay', 'table.lay.power': 'lay', 'table.lay.hidden': 'lay', 'table.egg': 'lay', 'world.notch': 'lay', 'world.dark.12': 'lay', 'world.dark.06': 'lay',
+  'table.lay': 'lay', 'table.lay.power': 'lay', 'table.lay.hidden': 'lay', 'table.egg': 'lay', 'world.notch': 'lay', 'world.dark.12': 'lay', 'world.dark.06': 'lay', 'world.dark.01': 'lay',
   'power.mantis': 'lay', 'power.granted': 'lay', 'power.reveal': 'power',
   'power.jellyfish': 'power', 'power.whale': 'power', 'power.clownfish.bound': 'power',
-  'mus.start': 'ceremony', 'mus.podium': 'ceremony', 'world.dark.01': 'ceremony',
+  'mus.start': 'ceremony', 'mus.podium': 'ceremony', 'mus.home': 'ceremony',
 };
 // The tulnic's phrases are told apart by their melody and length, not by the first 50 ms of a swell, so they are
 // not compared pair by pair on timbre: test/horn.test.ts checks their pitches and shapes.
-const MELODIC = (id: string): boolean => id.startsWith('mus.') || id === 'world.dark.01';
+const MELODIC = (id: string): boolean => id.startsWith('mus.');
 /** cues that are one event and always sound together (or never at once) */
 const EVENT: Record<string, string> = {
   'table.turn': 'seat', 'table.turn.you': 'seat', 'table.bonus': 'seat', 'table.skipped': 'seat', 'table.ask': 'ask', 'table.asked': 'ask',
   'clock.tick': 'clock', 'clock.tick.urgent': 'clock', 'clock.close': 'clock',
   'table.flight': 'give', 'table.give': 'give', 'table.gofish': 'wet', 'table.draw': 'wet', 'table.refill': 'wet',
-  'table.lay': 'lay', 'table.lay.power': 'lay', 'table.lay.hidden': 'lay', 'table.egg': 'lay', 'world.notch': 'lay', 'world.dark.12': 'lay', 'world.dark.06': 'lay',
+  'table.lay': 'lay', 'table.lay.power': 'lay', 'table.lay.hidden': 'lay', 'table.egg': 'lay', 'world.notch': 'lay', 'world.dark.12': 'lay', 'world.dark.06': 'lay', 'world.dark.01': 'lay', 'mus.home': 'lay',
   'power.stickleback': 'stickleback', 'power.stickleback.miss': 'stickleback',
   'power.whale': 'whale', 'power.mantis': 'mantis', 'power.granted': 'lay',
 };

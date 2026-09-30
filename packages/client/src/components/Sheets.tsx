@@ -86,6 +86,16 @@ export function SoundSettings({ onClose }: { onClose: () => void }) {
         <Slider id="s-effects" label={t('settings.effects')} value={s.effects} onChange={(v) => set({ effects: v })} />
         <Slider id="s-interface" label={t('settings.interface')} value={s.interface} onChange={(v) => set({ interface: v })} />
         <Slider id="s-music" label={t('settings.music')} value={s.music} onChange={(v) => set({ music: v })} />
+        <div className="sheetrow" role="radiogroup" aria-label={t('settings.score')}>
+          <span className="sheetrow__label">{t('settings.score')}</span>
+          <span className="seg">
+            {(['on', 'lobby', 'off'] as const).map((m) => (
+              <button key={m} type="button" role="radio" aria-checked={s.scoreMode === m} className={`seg__btn ${s.scoreMode === m ? 'is-on' : ''}`} onClick={() => set({ scoreMode: m })} data-score-mode={m}>
+                {t(m === 'on' ? 'settings.scoreOn' : m === 'lobby' ? 'settings.scoreLobby' : 'settings.scoreOff')}
+              </button>
+            ))}
+          </span>
+        </div>
         <Toggle id="s-amb" label={t('settings.ambienceOn')} on={s.ambience > 0} onChange={(v) => set({ ambience: v ? 1 : 0 })} />
         <div className="sheetrow" role="radiogroup" aria-label={t('settings.profile')}>
           <span className="sheetrow__label">{t('settings.profile')}</span>
