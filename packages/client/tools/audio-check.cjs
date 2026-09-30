@@ -116,15 +116,16 @@ ${fmt('headphones')}
     }),
   );
   const through = table(
-    ['Cue', 'Speaker: level shift dB', 'Speaker: tail vs head at the output, dB', 'Speaker: non-linear residual dB', 'Headphones: level shift dB', 'Headphones: peak dBFS'],
-    names.map((n) => [`\`${n}\``, f1(S[n].shiftDb), f1(S[n].tailVsHeadDb), f1(S[n].nonlinearDb), f1(H[n].shiftDb), f1(H[n].peakDb)]),
+    ['Cue', 'Speaker: level shift dB', 'Speaker: tail vs head at the output, dB', 'Speaker: non-linear residual dB', 'Speaker: sample peak / true peak dB', 'Headphones: level shift dB', 'Headphones: sample peak / true peak dB'],
+    names.map((n) => [`\`${n}\``, f1(S[n].shiftDb), f1(S[n].tailVsHeadDb), f1(S[n].nonlinearDb), `${f1(S[n].peakDb)} / ${f1(S[n].truePeakDb)}`, f1(H[n].shiftDb), `${f1(H[n].peakDb)} / ${f1(H[n].truePeakDb)}`]),
   );
   const sc = res.scenes;
   const scenes = table(
     ['Profile', 'Anchor LUFS', 'Program gain dB', 'Cue stream LUFS', 'Whole mix LUFS', 'Short-term max', 'True peak dBTP', 'Six-cue burst dBTP', 'Limiter max GR dB', 'Limiter over 1 dB', 'Soft-clip samples', 'Bed short-term max (loudest state)', 'Bed under the anchor (range over pond states)'],
     Object.entries(sc).map(([p, s]) => [p, s.target, f1(s.programDb), f1(s.cueLoudness), f1(s.integrated), f1(s.shortTermMax), f1(s.truePeak), f1(s.burstTruePeak), f1(s.limiterGrMax), `${(s.limiterBusy * 100).toFixed(2)} %`, s.clipped, f1(s.bedShortTermMax), `${f1(s.target - s.bedShortTermMax)} to ${f1(s.target - s.bedShortTermMin)} LU`]),
   );
-  const beds = table(['Pond state', 'Speaker bed, short-term max LUFS', 'Headphones bed, short-term max LUFS'], ['wet', 'half', 'dry'].map((k) => [k, f1(sc.speaker.beds[k]), f1(sc.headphones.beds[k])]));
+  const beds = table(['Pond state', 'Speaker bed, short-term max LUFS', 'Headphones bed, short-term max LUFS'], Object.keys(sc.speaker.beds).map((k) => [k, f1(sc.speaker.beds[k]), f1(sc.headphones.beds[k])]));
+  const stepTable = table(['Step', 'Low-pass Hz', 'Level dB', '300 Hz: designed / measured dB', '3 kHz: designed / measured dB', 'Ramp 10-90 %, ms', 'Click ratio'], res.steps.map((s) => [s.step, s.hz, s.levelDb, `${f1(s.wantedAt300)} / ${f1(s.measuredAt300)}`, `${f1(s.wantedAt3k)} / ${f1(s.measuredAt3k)}`, s.rampMs, s.clickRatio.toFixed(2)]));
   const clockNames = Object.keys(res.overBed);
   const clock = table(['Clock cue', 'Speaker: over the bed, LU', 'Headphones: over the bed, LU'], clockNames.map((n) => [`\`${n}\``, f1(res.overBed[n].speaker), f1(res.overBed[n].headphones)]));
   const cf = res.confusability;
@@ -147,6 +148,19 @@ ${fmt('headphones')}
   const bed = scenesE.filter(([, s]) => s.target - s.bedShortTermMax < AMBIENCE_UNDER[0] || s.target - s.bedShortTermMin > AMBIENCE_UNDER[1]);
   const buried = clockNames.flatMap((n) => ['speaker', 'headphones'].filter((p) => res.overBed[n][p] < TICK_OVER_BED).map((p) => `${n} on ${p} ${f1(res.overBed[n][p])} LU`));
   const balance = names.flatMap((n) => [['speaker', S[n]], ['headphones', H[n]]].filter(([, a]) => Math.abs(a.shiftDb) > BALANCE).map(([p, a]) => `${n} on ${p} ${f1(a.shiftDb)} dB`));
+  const SIGNATURE_MS = 1400;
+  const long = names.filter((n) => !['mus.start', 'mus.podium'].includes(n) && res.cues[n].activeMs > SIGNATURE_MS).map((n) => `${n} ${res.cues[n].activeMs.toFixed(0)} ms`);
+  const stepFail = res.steps.flatMap((s) => [
+    Math.abs(s.measuredAt300 - s.wantedAt300) > 0.7 ? `step ${s.step} at 300 Hz: ${f1(s.measuredAt300)} dB, designed ${f1(s.wantedAt300)}` : null,
+    Math.abs(s.measuredAt3k - s.wantedAt3k) > 0.7 ? `step ${s.step} at 3 kHz: ${f1(s.measuredAt3k)} dB, designed ${f1(s.wantedAt3k)}` : null,
+    s.rampMs < 10 || s.rampMs > 35 ? `step ${s.step} ramp ${s.rampMs} ms` : null,
+    s.clickRatio > 1.5 ? `step ${s.step} click ratio ${s.clickRatio.toFixed(2)}` : null,
+  ]).filter(Boolean);
+  const valleyFail = res.valley.flatMap((v, i) => [
+    Math.abs(v.measuredAt - v.designedAt) > 0.08 ? `repeat ${v.k} begins at ${v.measuredAt} s, designed ${v.designedAt} s` : null,
+    Math.abs(v.measuredDb - v.designedDb) > 3 ? `repeat ${v.k} is ${f1(v.measuredDb)} dB, designed ${f1(v.designedDb)} dB` : null,
+    v.brightnessDb >= (i === 0 ? res.dryBrightness : res.valley[i - 1].brightnessDb) - 0.5 ? `repeat ${v.k} is not darker by at least 0.5 dB than the one before (${f1(v.brightnessDb)} dB)` : null,
+  ]).filter(Boolean);
   const check = (fail, text, detail) => `- ${fail.length ? 'FAIL' : 'PASS'} — ${text}${fail.length ? ` (${detail ?? fail.join('; ')})` : ''}.`;
   const checks = [
     check(res.strikes, 'plank grammar: no cue but the seat cues strikes plank A, B or C'),
@@ -157,6 +171,10 @@ ${fmt('headphones')}
     check(bed.map(([p, s]) => `${p} ${f1(s.target - s.bedShortTermMax)} to ${f1(s.target - s.bedShortTermMin)} LU under`), `ambience: the bed sits ${AMBIENCE_UNDER[0]}–${AMBIENCE_UNDER[1]} LU under the anchor in every state of the pond`),
     check(buried, `the clock: every Clock cue sounds at least ${TICK_OVER_BED} LU over the bed`),
     check(balance, `balance: the chain moves no cue more than ${BALANCE} dB from its cue-sheet level, on either profile`),
+    check(res.breaks, 'the palette: only Shark, Mantis Shrimp and Whale break the frame (a cracked-wood transient, splintering fibres, a hull groan), and all three do'),
+    check(long, `duration: every cue lasts at most ${SIGNATURE_MS} ms as rendered, but the tulnic's call and the podium`),
+    check(valleyFail, "the tulnic's valley: three repeats, each begins within 80 ms of its design time, is within 3 dB of its designed level, and is darker than the one before"),
+    check(stepFail, 'darkening: each ambience step lands within 0.7 dB of its designed level and low-pass at 300 Hz and 3 kHz, in a 10-35 ms ramp, with no click (jump at most 1.5x a steady stretch)'),
   ];
   const stale = res.stale.length ? [`- STALE — the committed src/audio/calibration.ts differs from the fresh calibration in ${res.stale.length} entries (${res.stale.slice(0, 6).join('; ')}${res.stale.length > 6 ? '; …' : ''}). Run \`node tools/audio-check.cjs --write-calibration\`.`] : ['- PASS — the committed calibration matches the fresh one.'];
   const info = [];
@@ -177,6 +195,10 @@ ${fmt('headphones')}
     scenes,
     beds,
     cpm,
+    '## The darkening steps (12, 6 and 1 sets remaining), measured on the ambience stem with a noise and a 300 Hz sine as the input',
+    stepTable,
+    "## The tulnic's valley, measured on the rendered `mus.start` (headphones variant, before mastering)",
+    table(['Repeat', 'Designed start s', 'Measured start s', 'Designed level dB', 'Measured level dB (re the dry gesture)', 'Brightness dB, energy above 1.2 kHz re below (dry: ' + f1(res.dryBrightness) + ')'], res.valley.map((v) => [v.k, v.designedAt, v.measuredAt, v.designedDb, f1(v.measuredDb), f1(v.brightnessDb)])),
     '## The clock over the bed',
     clock,
     '## Confusability',

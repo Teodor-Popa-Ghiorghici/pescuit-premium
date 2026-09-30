@@ -11,7 +11,7 @@ import { useGame } from '../state/store.js';
 export function useLobbyAmbience(): void {
   useEffect(() => {
     const engine = getEngine();
-    engine.setWorld({ scene: 'lobby', poolCount: 20, poolStart: 20, setsPossible: null });
+    engine.setWorld({ scene: 'lobby', poolCount: 20, poolStart: 20, dry: false, step: 0 });
     return () => {
       if (engine.worldScene === 'lobby') engine.setWorld(null);
     };

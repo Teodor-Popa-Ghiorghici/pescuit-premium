@@ -64,15 +64,21 @@ function shown(w: { state0: GameState; steps: Step[] }, viewer: string, o: { hea
   const out: Shown[] = [];
   const at = (state: GameState, seq: number): RedactedView => redactForPlayer(state, viewer, { seq, serverNow: 0, windowDeadlineAt: state.pendingWindow ? 1e9 : null });
   let prev: RedactedView = at(w.state0, 0);
+  // the presenter's own counters: the run of bonus turns, and the cues handed out so far (what seeds the variation)
+  let chain = 0;
+  let ordinal = 0;
   w.steps.forEach((st, i) => {
     const seq = st.events[st.events.length - 1]?.seq ?? i;
     const view = at(st.state, seq);
     const events = redactEventsForPlayer(st.state, st.events, viewer) as never[];
-    const record = recordOf(prev, view, events, seq);
+    const record = recordOf(prev, view, events, seq, chain, ordinal);
+    chain = record.chain ?? 0;
     // the answering device plays its own close at the press, so it does not play it twice (§3.2)
     const closedAnswer = prev.pendingWindow?.type === 'RESPONSE_PENDING' && view.pendingWindow?.type !== 'RESPONSE_PENDING';
     const facts = factsOf(prev, view, viewer, { headphones: !!o.headphones, closePlayedLocally: closedAnswer && !!o.local?.(i) });
-    out.push({ ch: choreograph(record, facts, DEFAULT_OPTIONS), cues: cuesFor(record, facts), haptics: hapticsFor(record, facts) });
+    const ch = choreograph(record, facts, DEFAULT_OPTIONS);
+    ordinal += ch.beats.reduce((n, b) => n + b.cues.length, 0);
+    out.push({ ch, cues: cuesFor(record, facts), haptics: hapticsFor(record, facts) });
     prev = view;
   });
   return out;
@@ -102,7 +108,7 @@ function expectSamePresentation(worlds: World[], nonOwners: string[], everyone: 
       const b = shown(w, v, opts);
       expect(j(b.map((x) => x.cues)), `audible output for ${v}`).toBe(j(a.map((x) => x.cues)));
       // the choreography carries the same cues: what is played is what cuesFor said
-      const norm = (c: CueRequest[]) => c.map((x) => ({ ...x, at: x.id.startsWith('mus.end') ? null : x.at })).sort((p, q) => (p.at ?? 0) - (q.at ?? 0) || p.id.localeCompare(q.id));
+      const norm = (c: CueRequest[]) => c.map((x) => ({ ...x, at: x.id === 'mus.podium' ? null : x.at })).sort((p, q) => (p.at ?? 0) - (q.at ?? 0) || p.id.localeCompare(q.id));
       expect(j(b.map((x) => norm(x.ch.cues))), `choreographed cues for ${v}`).toBe(j(b.map((x) => norm(x.cues))));
     }
   }
@@ -160,10 +166,12 @@ describe('presentation leak, test 1: same public record, same presentation', () 
     const lay = shown(world('squid'), 'a')[0];
     expect(lay.ch.beats.map((b) => b.kind)).toEqual(expect.arrayContaining(['lay', 'grant']));
     // the first set of the game also crowns a leader: public (the score is on the chip), the same for any rank
-    expect(lay.cues.map((c) => c.id)).toEqual(['table.lay.power', 'power.granted', 'table.lead']);
+    expect(lay.cues.map((c) => c.id)).toEqual(expect.arrayContaining(['table.lay.hidden', 'power.granted']));
+    expect(lay.cues.map((c) => c.id)).not.toContain('table.lead'); // the score race is no longer voiced
+    for (const c of lay.cues) expect(c.id).not.toMatch(/squid/i);
   });
 
-  it('a clownfish bound to different powers, in Ascuns: nothing for anyone but the owner, and the owner hears nothing without headphones', () => {
+  it('a clownfish bound to different powers, in Ascuns: nothing for anyone but the owner, and the owner hears nothing either', () => {
     const world = (bound: 'shark' | 'tortoise' | 'squid') => {
       const state = makeState({
         playerIds: ['a', 'b', 'c'],
@@ -176,10 +184,8 @@ describe('presentation leak, test 1: same public record, same presentation', () 
     };
     const worlds = [world('shark'), world('tortoise'), world('squid')];
     expectSamePresentation(worlds, ['a', 'c'], ['a', 'b', 'c']);
-    // only in headphones mode does the owner hear the private tier - the bound rank, never Squid's motif
-    const hp = (w: World) => shown(w, 'b', { headphones: true }).flatMap((s) => s.cues.map((c) => c.id));
-    expect(hp(worlds[0])).toContain('power.clownfish.bound');
-    expect(shown(worlds[0], 'b').flatMap((s) => s.cues.map((c) => c.id))).not.toContain('power.clownfish.bound');
+    // there is no private tier: not even the owner, on headphones, hears which power it is bound to - or that it is bound
+    for (const w of worlds) for (const hp of [false, true]) expect(shown(w, 'b', { headphones: hp }).flatMap((s) => s.cues.map((c) => c.id))).not.toContain('power.clownfish.bound');
   });
 
   it('different hands behind the same public actions', () => {
@@ -240,11 +246,13 @@ describe('presentation leak, test 2: a structural window erased', () => {
     for (const s of windowSteps) expect(s.ch.beats.find((b) => b.kind === 'close')!.dur).toBe(220);
     // the eligible player and the ones who cannot act present the very same beats, durations and classes
     expect(j(beatsOf(shown(held, 'c')))).toBe(j(beatsOf(shown(held, 'a'))));
-    // the eligible player's device says nothing more by default (the private tier is headphones only)
+    // the eligible player's device says nothing more - there is no private tier, on speakers or headphones
     expect(erasedCues(held, 'c')).toEqual(erasedCues(none, 'c'));
     const withHp = shown(held, 'c', { headphones: true }).flatMap((s) => s.cues.map((c) => c.id));
-    expect(withHp).toContain('clock.eligible');
-    expect(withHp.filter((i) => i !== 'clock.eligible')).toEqual(erasedCues(none, 'c').map((c) => c.id));
+    expect(withHp).not.toContain('clock.eligible');
+    expect(withHp).toEqual(erasedCues(none, 'c').map((c) => c.id));
+    // and for everyone who is not the answering player, the audible output is what it would be with no window at all
+    for (const v of ['a', 'b', 'c']) expect(erasedCues(held, v).map((c) => [c.id, c.at]), v).toEqual(erasedCues(none, v).map((c) => [c.id, c.at]));
     // and the eligible player's public haptics are the same too (the private one is opt-in)
     expect(j(publicHaptics(shown(held, 'c')).flat())).toBe(j(publicHaptics(shown(none, 'c')).flat()));
   });

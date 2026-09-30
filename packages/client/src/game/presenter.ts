@@ -18,7 +18,7 @@ import type { WireEvent } from '@pescuit/shared';
 import { rankName, t as tr, type Locale } from '@pescuit/shared';
 import { LEAD_ACCENT, POWER_ACCENT } from '../art/accent.js';
 import { SPRITE_SIZE } from '../art/sprites.js';
-import { clockTarget, metaCue } from '../audio/cues.js';
+import { clockTarget, darkStepOf, metaCue } from '../audio/cues.js';
 import { getEngine } from '../audio/engine.js';
 import { playHaptics } from '../audio/haptics.js';
 import { prefersReducedMotion, stamp } from '../motion.js';
@@ -70,6 +70,10 @@ export class Presenter {
   private listeners = new Set<() => void>();
   private localClose: string | null = null;
   private poolStart = 0;
+  /** consecutive bonus turns by the same player, from the public events (the totem rises along it) */
+  private chain = 0;
+  /** the cues handed to the engine so far this game: it seeds the variation (a public count; see PublicRecord.ordinal) */
+  private ordinal = 0;
   private windowUI: { node: HTMLElement; box: DOMRect; at: number; frame: HTMLElement | null } | null = null;
   private nudge: ReturnType<typeof setTimeout> | undefined;
   private nudgeFor: string | null = null;
@@ -107,6 +111,8 @@ export class Presenter {
     this.poolStart = 0;
     this.localClose = null;
     this.shownTally = null;
+    this.chain = 0;
+    this.ordinal = 0;
     if (typeof document !== 'undefined') {
       delete document.documentElement.dataset.light;
       delete document.documentElement.dataset.stage;
@@ -233,10 +239,20 @@ export class Presenter {
 
   /* ---------------------------------------------------------- audio world */
 
-  private world(view: RedactedView): void {
+  /**
+   * `hold` keeps the wind and the darkening step where they were: during play they turn on the beat of their own event
+   * (`worldAt`, from the cues below), not when the view arrives. A first look and a rejoin set them at once.
+   */
+  private world(view: RedactedView, hold: { dry?: boolean; step?: boolean } = {}): void {
     const engine = getEngine();
     this.poolStart = Math.max(this.poolStart, view.poolCount);
-    engine.setWorld({ poolCount: view.poolCount, poolStart: Math.max(1, this.poolStart), setsPossible: view.status === 'ENDED' ? null : view.sets.possible, scene: 'game' });
+    engine.setWorld({
+      poolCount: view.poolCount,
+      poolStart: Math.max(1, this.poolStart),
+      scene: 'game',
+      ...(hold.dry ? {} : { dry: view.poolCount <= 0 }),
+      ...(hold.step ? {} : { step: darkStepOf(view.sets.possible) }),
+    });
     engine.setAnswerWindow(view.status === 'ENDED' ? null : clockTarget(publicViewOf(view)));
   }
 
@@ -275,7 +291,11 @@ export class Presenter {
     metrics.view(desc(prev, pw), desc(view, nw), { before: prev?.sets.possible ?? null, after: view.sets.possible }, now);
 
     this.last = view;
-    this.world(view);
+    const live = !(snapshot || (!prev && !events.some((e) => e.type === 'GAME_STARTED')));
+    // the wind and the darkening turn on the beat of the event that says so; anything else is set now
+    const dryNow = live && !!prev && prev.poolCount > 0 && view.poolCount === 0 && events.some((e) => e.type === 'DREW_FROM_POOL' && e.poolEmpty);
+    const stepNow = live && !!prev && darkStepOf(view.sets.possible) !== darkStepOf(prev.sets.possible);
+    this.world(view, { dry: dryNow, step: stepNow });
     this.resetNudge();
 
     // a seat that drops or comes back: its signature, damped for the drop (public: the chips show it)
@@ -294,6 +314,7 @@ export class Presenter {
       this.setPresented(view.currentPlayerId);
       this.setStage(view.sets.possible, view.status === 'ENDED');
       this.tableFreeAt = 0;
+      this.chain = 0;
       return;
     }
 
@@ -307,7 +328,8 @@ export class Presenter {
     const hidden = typeof document !== 'undefined' && document.hidden;
     const flush = queued > BACKLOG_FLUSH_MS || hidden;
     const fast = queued > BACKLOG_FAST_MS;
-    const record = recordOf(prev, view, events, view.seq);
+    const record = recordOf(prev, view, events, view.seq, this.chain, this.ordinal);
+    this.chain = record.chain ?? 0;
     const closedAnswer = prev?.pendingWindow?.type === 'RESPONSE_PENDING' && windowKey(prev) !== windowKey(view);
     const facts = factsOf(prev, view, me, { headphones: engine.headphones, closePlayedLocally: closedAnswer && this.localClose !== null && this.localClose === windowKey(prev) });
     if (closedAnswer) {
@@ -315,6 +337,11 @@ export class Presenter {
       metrics.answerLeft(now);
     }
     const ch = choreograph(record, facts, { speed: getTableSpeed() * (fast ? 1.5 : 1), short: fast, flush, reduced });
+    // a backlog flush drops the beats the knock lived on: the ambience still turns, at once
+    const cues = ch.beats.flatMap((b) => b.cues);
+    this.ordinal += cues.length;
+    if (dryNow && !cues.some((c) => c.id === 'table.poolEmpty')) engine.worldAt({ dry: true });
+    if (stepNow && !cues.some((c) => c.params?.step !== undefined)) engine.worldAt({ step: darkStepOf(view.sets.possible) });
     if (flush) this.finalizeAll();
     // the light: after the knock if this step knocks a notch out of the rim, otherwise now
     if (!ch.beats.some((b) => b.ops.some((o) => o.op === 'notch')) || flush) this.setStage(view.sets.possible, view.status === 'ENDED');
@@ -363,7 +390,12 @@ export class Presenter {
       const origin = originOf(beat);
       const lead = origin - now;
       // audio: the cues are handed to the engine's lookahead scheduler, aligned to this beat
-      for (const c of beat.cues) engine.play(c.id, c.params, { delayMs: lead + c.at, seed: c.seed });
+      for (const c of beat.cues) {
+        engine.play(c.id, c.params, { delayMs: lead + c.at, seed: c.seed });
+        // the ambience turns with the cue that marks it: the pond to wind on the last card, one flat step darker on the knock
+        if (c.id === 'table.poolEmpty') engine.worldAt({ dry: true }, lead + c.at);
+        if (c.params?.step !== undefined) engine.worldAt({ step: c.params.step }, lead + c.at);
+      }
       if (beat.haptics.length) playHaptics(beat.haptics, lead);
       // pixels: a beat's masks, flights, effects, ops and juice
       beat.masks.forEach((m, i) => {

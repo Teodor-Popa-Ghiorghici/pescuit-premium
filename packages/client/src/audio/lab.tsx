@@ -1,5 +1,5 @@
-/* The audio lab (§7.3), reachable at `?lab=audio`. Loaded lazily (main.tsx imports it only when
- * that query is present), so it costs nothing in the game's bundle. It grows out of the prototype:
+/* The audition page (§7.3), reachable at `?lab=audio` in DEVELOPMENT ONLY: main.tsx imports it behind
+ * `import.meta.env.DEV`, so a production build carries no trace of it. It grows out of the prototype:
  *
  *   - every cue with its variations (seeds), in both profiles, before and after mastering;
  *   - the recipe of the wood family on sliders;
@@ -12,14 +12,15 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { cuesFor, type PublicRecord, type PublicView } from './cues.js';
+import { DARK_AT, cuesFor, type PublicRecord, type PublicView } from './cues.js';
 import { ANCHOR_CUE, ANCHOR_LUFS, BUS_NAMES, CUES, cueDef, type BusName } from './cuesheet.js';
 import { getEngine, spawnVoice } from './engine.js';
 import { kWeight, lufsOf, meanSquare } from './measure.js';
 import { preloadRendered } from './bank.js';
+import { drip } from './live/water.js';
 import { wood, type Plank } from './live/wood.js';
 import type { CueParams } from './recipes.js';
-import { db } from './util.js';
+import { db, rng } from './util.js';
 
 const css = `
 .lab{font:13px/1.4 system-ui,sans-serif;background:#0b222c;color:#efe2c8;min-height:100vh;padding:14px;box-sizing:border-box}
@@ -34,29 +35,40 @@ const css = `
 
 const PARAMS: Record<string, CueParams> = {
   'table.turn': { seat: 4 }, 'table.turn.you': { seat: 0 }, 'table.ask': { seat: 1 }, 'table.bonus': { seat: 4 }, 'table.skipped': { seat: 2 },
-  'ui.target': { seat: 1 }, 'power.lanternfish': { seat: 3 }, 'meta.join': { seat: 4 }, 'meta.leave': { seat: 5 }, 'meta.nudge': { seat: 0 },
+  'ui.target': { seat: 1 }, 'power.lanternfish': { seat: 3, seat2: 1 }, 'meta.join': { seat: 4 }, 'meta.leave': { seat: 5 }, 'meta.nudge': { seat: 0 },
   'table.give': { count: 2 }, 'table.gofish': { wet: 1 }, 'table.draw': { wet: 1 }, 'table.refill': { count: 3 }, 'ui.toggle': { on: true },
-  'amb.gate': { open: false }, 'table.tally': { pip: 2 }, 'power.granted.mine': { rank: 'whale' }, 'power.clownfish.bound': { rank: 'shark' }, 'power.used.clownfish': { rank: 'shark' },
+  'table.egg': { count: 3 }, 'amb.gate': { open: false }, 'table.tally': { pip: 2 }, 'table.impact': { weight: 1 }, 'world.dark.12': { step: 1 }, 'world.dark.06': { step: 2 }, 'world.dark.01': { step: 3 },
 };
 
 /** the closest same-rhythm pairs with different meanings, for the ABX player */
 const ABX_PAIRS: Array<[string, string]> = [
   ['table.give', 'table.flight'], ['power.shark', 'power.stickleback.miss'], ['table.gofish.dry', 'power.tortoise'],
   ['table.turn', 'table.bonus'], ['ui.target', 'table.ask'], ['table.lay', 'power.reveal'], ['table.turn', 'table.turn.you'],
+  ['table.lay.power', 'table.lay.hidden'], ['world.notch', 'table.egg'], ['power.mantis', 'power.shark'],
 ];
 
 const PLAYERS = ['a', 'b', 'c', 'd'];
 const view = (over: Partial<PublicView> = {}): PublicView => ({ players: PLAYERS, currentPlayerId: 'a', poolCount: 8, window: null, setsPossible: 12, ...over });
 const RP = { type: 'RESPONSE_PENDING', askerId: 'a', targetId: 'b', deadlineAt: 0 };
 const SCRIPT: Array<{ label: string; rec: PublicRecord }> = [
+  { label: 'the game starts', rec: { seq: 0, mode: 'ascuns', before: null, after: view({ setsPossible: 18 }), events: [{ type: 'GAME_STARTED' }, { type: 'TURN_STARTED', playerId: 'a' }] } },
   { label: 'ask a → b', rec: { seq: 1, mode: 'ascuns', before: view(), after: view({ window: RP }), events: [{ type: 'REQUEST_MADE', askerId: 'a', targetId: 'b' }] } },
-  { label: 'yes: give 2, bonus', rec: { seq: 2, mode: 'ascuns', before: view({ window: RP }), after: view(), events: [{ type: 'REQUEST_SUCCEEDED', askerId: 'a', targetId: 'b', count: 2 }, { type: 'BONUS_TURN', playerId: 'a' }] } },
+  { label: 'yes: give 2, bonus (chain 3)', rec: { seq: 2, chain: 3, mode: 'ascuns', before: view({ window: RP }), after: view(), events: [{ type: 'REQUEST_SUCCEEDED', askerId: 'a', targetId: 'b', count: 2 }, { type: 'BONUS_TURN', playerId: 'a' }] } },
   { label: 'no: wet go fish', rec: { seq: 3, mode: 'ascuns', before: view({ window: RP }), after: view({ currentPlayerId: 'b', poolCount: 7 }), events: [{ type: 'REQUEST_FAILED', askerId: 'a', targetId: 'b' }, { type: 'DREW_FROM_POOL', playerId: 'a' }, { type: 'TURN_STARTED', playerId: 'b' }] } },
+  { label: 'the last card leaves the pool', rec: { seq: 3, mode: 'ascuns', before: view({ window: RP, poolCount: 1 }), after: view({ currentPlayerId: 'b', poolCount: 0 }), events: [{ type: 'REQUEST_FAILED', askerId: 'a', targetId: 'b' }, { type: 'DREW_FROM_POOL', playerId: 'a', poolEmpty: true }, { type: 'TURN_STARTED', playerId: 'b' }] } },
   { label: 'no: dry go fish', rec: { seq: 4, mode: 'ascuns', before: view({ window: RP, poolCount: 0 }), after: view({ currentPlayerId: 'b', poolCount: 0 }), events: [{ type: 'REQUEST_FAILED', askerId: 'a', targetId: 'b' }, { type: 'TURN_STARTED', playerId: 'b' }] } },
-  { label: 'power set laid (Ascuns)', rec: { seq: 5, mode: 'ascuns', before: view(), after: view(), events: [{ type: 'SET_LAID', playerId: 'a', isPowerSet: true }, { type: 'POWER_GRANTED', playerId: 'a' }] } },
-  { label: 'whale used (Deschis)', rec: { seq: 6, mode: 'deschis', before: view(), after: view(), events: [{ type: 'POWER_USED', playerId: 'a', rank: 'whale' }, { type: 'WHALE_SHUFFLE', playerId: 'a' }] } },
-  { label: 'Squid (Deschis grant)', rec: { seq: 7, mode: 'deschis', before: view(), after: view(), events: [{ type: 'POWER_GRANTED', playerId: 'a', rank: 'squid' }] } },
-  { label: 'the last set', rec: { seq: 8, mode: 'ascuns', before: view({ setsPossible: 2 }), after: view({ setsPossible: 1 }), events: [{ type: 'SET_LAID', playerId: 'a', isPowerSet: false }] } },
+  { label: 'set laid, open, 1 egg', rec: { seq: 5, mode: 'ascuns', before: view(), after: view({ setsPossible: 11 }), events: [{ type: 'SET_LAID', playerId: 'a', isPowerSet: false, eggCount: 1 }] } },
+  { label: 'power set laid (Ascuns: hidden)', rec: { seq: 6, mode: 'ascuns', before: view(), after: view(), events: [{ type: 'SET_LAID', playerId: 'a', isPowerSet: true, eggCount: 2 }, { type: 'POWER_GRANTED', playerId: 'a' }] } },
+  { label: 'power set laid (Deschis: open)', rec: { seq: 7, mode: 'deschis', before: view(), after: view(), events: [{ type: 'SET_LAID', playerId: 'a', isPowerSet: true, eggCount: 0 }, { type: 'POWER_GRANTED', playerId: 'a', rank: 'whale' }] } },
+  { label: 'the tally crosses 12', rec: { seq: 8, mode: 'ascuns', before: view({ setsPossible: 13 }), after: view({ setsPossible: 12 }), events: [{ type: 'SET_LAID', playerId: 'a', isPowerSet: false }] } },
+  { label: 'the tally crosses 6 (two notches)', rec: { seq: 9, mode: 'ascuns', before: view({ setsPossible: 7 }), after: view({ setsPossible: 5 }), events: [{ type: 'SET_LAID', playerId: 'a', isPowerSet: false }] } },
+  { label: 'the last set', rec: { seq: 10, mode: 'ascuns', before: view({ setsPossible: 2 }), after: view({ setsPossible: 1 }), events: [{ type: 'SET_LAID', playerId: 'a', isPowerSet: false }] } },
+  { label: 'shark (Ascuns: reveal, then strike)', rec: { seq: 11, mode: 'ascuns', before: view(), after: view(), events: [{ type: 'POWER_USED', playerId: 'a', rank: 'shark' }, { type: 'SHARK_JUMP', playerId: 'a' }] } },
+  { label: 'mantis destroys a set', rec: { seq: 12, mode: 'deschis', before: view(), after: view(), events: [{ type: 'POWER_USED', playerId: 'a', rank: 'mantisShrimp' }, { type: 'SET_DESTROYED' }] } },
+  { label: 'whale (Deschis)', rec: { seq: 13, mode: 'deschis', before: view(), after: view(), events: [{ type: 'POWER_USED', playerId: 'a', rank: 'whale' }, { type: 'WHALE_SHUFFLE', playerId: 'a' }] } },
+  { label: 'jellyfish / lanternfish / tortoise / stickleback', rec: { seq: 14, mode: 'deschis', before: view(), after: view(), events: [{ type: 'JELLYFISH_STUN', playerId: 'a', targetId: 'b' }, { type: 'LANTERNFISH_REFLECT', playerId: 'b', fromId: 'a' }, { type: 'TORTOISE_BLOCK', playerId: 'b' }, { type: 'STICKLEBACK_WASTED', playerId: 'a', targetId: 'b' }] } },
+  { label: 'Squid (Deschis grant): silence', rec: { seq: 15, mode: 'deschis', before: view(), after: view(), events: [{ type: 'POWER_GRANTED', playerId: 'a', rank: 'squid' }] } },
+  { label: 'the game ends', rec: { seq: 16, mode: 'ascuns', before: view({ setsPossible: 1 }), after: view({ setsPossible: 0, scores: { a: 4, b: 3, c: 3, d: 1 } }), events: [{ type: 'GAME_ENDED', winners: ['a'] }] } },
 ];
 
 function useTick(ms: number): number {
@@ -210,6 +222,24 @@ function Lab(): React.ReactElement {
         </section>
 
         <section>
+          <h2>The world — pond, wind, the three dark steps</h2>
+          <div className="row">
+            <button onClick={() => engine.setWorld({ scene: 'game', poolCount: 12, poolStart: 20, dry: false, step: 0 })}>pond on</button>
+            <button onClick={() => engine.worldAt({ dry: true })}>→ wind (400 ms crossfade)</button>
+            <button onClick={() => engine.worldAt({ dry: false })}>→ pond</button>
+            <button onClick={() => engine.setWorld(null)}>ambience off</button>
+          </div>
+          <div className="row">
+            {[0, 1, 2, 3].map((k) => <button key={k} onClick={() => engine.worldAt({ step: k })}>dark step {k}{k ? ` (${DARK_AT[k - 1]} left)` : ''}</button>)}
+            <span>the step alone; the knock is <code>world.dark.*</code> in the table below</span>
+          </div>
+          <div className="row">
+            <button onClick={() => { const m = engine.mixerNode; if (m && m.ctx.state === 'running') drip(m.ctx, m.graph.buses.Ambience, m.ctx.currentTime + 0.05, rng(seed), 3); }}>drip: falls (the game's)</button>
+            <button onClick={() => { const m = engine.mixerNode; if (m && m.ctx.state === 'running') drip(m.ctx, m.graph.buses.Ambience, m.ctx.currentTime + 0.05, rng(seed), 3, 1, true); }}>drip: rises (for comparison)</button>
+          </div>
+        </section>
+
+        <section>
           <h2>ABX — the closest pairs</h2>
           <div className="row">
             <select value={abx.pair} onChange={(e) => setAbx({ pair: Number(e.target.value), x: 0, right: 0, total: 0 })}>
@@ -236,7 +266,8 @@ function Lab(): React.ReactElement {
               <td><code>{c.id}</code></td><td>{c.bus}</td><td>{c.heard}</td><td>{c.plays ? `${c.plays[0]}–${c.plays[1]}` : '—'}</td><td>{c.levelDb}</td><td>{c.prio}</td><td>{c.maxLenMs}</td><td>{c.variation}</td>
               <td>
                 <button onClick={() => play(c.id)}>▶</button>{' '}
-                {[1, 2, 3, 4].map((v) => <button key={v} onClick={() => play(c.id, seed + v)}>{v}</button>)}{' '}
+                {Array.from({ length: c.variation }, (_, i) => i).map((v) => <button key={v} title={`take ${v + 1} of ${c.variation}, pitch and gain as written`} onClick={() => play(c.id, seed + v, { ...(PARAMS[c.id] ?? {}), take: v, pitch: 1, gainDb: 0 })}>{'t'}{v + 1}</button>)}{' '}
+                <button title="a random take with the game's own pitch, gain and timing spread" onClick={() => play(c.id, Math.floor(Math.random() * 1e6))}>?</button>{' '}
                 <button title="the backlog variant" onClick={() => { const m = engine.mixerNode; if (m) spawnVoice({ ctx: m.ctx, buses: m.graph.buses, profile: s.profile, mastering: mastered, pan: false }, c.id, { ...(PARAMS[c.id] ?? {}), short: true }, seed, m.ctx.currentTime + 0.05); }}>short</button>
               </td>
             </tr>

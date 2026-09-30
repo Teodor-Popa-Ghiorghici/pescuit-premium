@@ -1,41 +1,55 @@
-/* The world's voice (§3.9): a live pond bed, its life, and the last act, all generated from a
- * looped noise buffer, modulated filters and scheduled one-shots - no long loops are stored.
- * It is driven only by public inputs: the pool count (the water: it laps and the fish jump while
- * the pool lasts, and drains to wind once it is dry) and the tally of sets still possible (the
- * last act: a low dobă pulse from 3, quickening at 1). Never compressed and never ducked per
- * cue; the mixer shapes it with the slow activity envelope. Default on, its own setting.
+/* The world's voice (SOUND_DESIGN §1.1): a live pond while the pool lasts, wind once it is dry. All of it is
+ * generated from a looped noise buffer, filters and scheduled one-shots - no long loops are stored, no oscillators,
+ * no melody. It is driven only by public inputs: the pool count (how wet it is) and the pool-empty event (the switch).
  *
- *   water  the bed and its drips              life  fish jumps, reeds, distant birds
- *   lastact a low dobă pulse
+ *   pond  noise low-passed at 500 Hz whose level wanders on smoothed random (irregular, never a regular LFO),
+ *         and sparse drips - one every 3-8 s, a resonant noise band falling 2400 -> 1300 Hz in 35 ms.
+ *         No fish, reeds or birds: nothing that could be a cartoon.
+ *   wind  noise through two narrow resonances (Q 18 at ~310 Hz, Q 30 at ~640 Hz), each drifting on its own slow
+ *         random walk - wind finding the gaps in a wall of planks - and now and then a gust.
+ *
+ * The switch from pond to wind happens on the pool-empty event, as a fixed 400 ms equal-power crossfade. The
+ * darkening (12, 6 and 1 sets remaining) is NOT here: it is a flat low-pass and level on the ambience stem
+ * (mixer.ts, DARK_STEPS). Never compressed and never ducked per cue; the mixer shapes it with the slow activity
+ * envelope and ducks it only under the rare signature cues. Default on, its own setting.
  */
 
 import { rng } from './util.js';
-import { type Ctx, env, filt, sharedNoise } from './live/common.js';
-import { doba } from './live/tabletop.js';
-import { bubble, drip, splash } from './live/water.js';
+import { type Ctx, filt, sharedNoise } from './live/common.js';
+import { drip } from './live/water.js';
 
 export interface AmbienceInputs {
-  /** cards left in the pool, and how many there were at the start */
+  /** cards left in the pool, and how many there were at the start (how wet the pond still is) */
   poolCount: number;
   poolStart: number;
-  /** the public tally of sets still possible (18 at the start), or null when unknown */
-  setsPossible: number | null;
+  /** the pool is empty: the wind. When absent it follows `poolCount`; the engine sets it from the pool-empty event. */
+  dry?: boolean;
   /** 'lobby': the full pond, louder (the waiting room) */
   scene: 'lobby' | 'game';
 }
 
-export const BED_DB = 0; // the bed's level within the ambience bus (the prototype used +1; the product's dry wind is louder, so it sits 1 dB lower)
+export const BED_DB = 0; // the bed's level within the ambience bus
+/** the switch from pond to wind, seconds */
+export const CROSSFADE_S = 0.4;
+/** the wind's two resonances: centre Hz and Q */
+export const WIND_BANDS: ReadonlyArray<{ hz: number; q: number }> = [{ hz: 310, q: 18 }, { hz: 640, q: 30 }];
+/** the wind is narrow, so its filters need making up */
+const WIND_MAKEUP = 5.37;
+const POND_MAKEUP = 10 ** (7.8 / 20);
+/** a gust: +8 dB, 700 ms in, 1.1 s out, the resonances opening 30 % */
+const GUST_GAIN = 10 ** (8 / 20);
 
 export class Ambience {
-  private inputs: AmbienceInputs = { poolCount: 1, poolStart: 1, setsPossible: null, scene: 'game' };
+  private inputs: AmbienceInputs = { poolCount: 1, poolStart: 1, scene: 'game' };
   private r: () => number;
-  private bedGain!: GainNode;
-  private lp!: BiquadFilterNode;
-  private wind!: GainNode;
+  private dry = false;
+  private level!: GainNode;
+  private pondGain!: GainNode;
+  private windGain!: GainNode;
+  private gust!: GainNode;
+  private bands: BiquadFilterNode[] = [];
   private dripBus!: GainNode;
-  private lifeBus!: GainNode;
-  private pulseBus!: GainNode;
-  private next = { drip: 0, fish: 0, reeds: 0, bird: 0, pulse: 0 };
+  private next = { drip: 0, gust: 0, drift: [0, 0], whistle: 0 };
   private started = false;
   private sources: AudioScheduledSourceNode[] = [];
 
@@ -48,38 +62,48 @@ export class Ambience {
     if (this.started) return;
     this.started = true;
     const c = this.ctx;
-    const bed = c.createBufferSource();
-    bed.buffer = sharedNoise(c);
-    bed.loop = true;
-    this.lp = filt(c, 'lowpass', 600);
-    const drift = c.createOscillator();
-    drift.frequency.value = 0.05;
-    const depth = c.createGain();
-    depth.gain.value = 150;
-    drift.connect(depth).connect(this.lp.frequency);
-    this.bedGain = c.createGain();
-    this.bedGain.gain.value = 10 ** (BED_DB / 20);
-    // wind gusts: the dry basin's bed is slowly amplitude-modulated
-    this.wind = c.createGain();
-    this.wind.gain.value = 0;
-    const gust = c.createOscillator();
-    gust.frequency.value = 0.13;
-    gust.connect(this.wind);
-    bed.connect(this.lp).connect(this.bedGain).connect(this.out);
-    this.wind.connect(this.bedGain.gain);
-    this.dripBus = c.createGain();
-    this.lifeBus = c.createGain();
-    this.pulseBus = c.createGain();
-    this.dripBus.gain.value = 10 ** ((BED_DB + 4) / 20);
-    this.lifeBus.gain.value = 10 ** ((BED_DB + 2) / 20);
-    this.pulseBus.gain.value = 0.9;
-    for (const b of [this.dripBus, this.lifeBus, this.pulseBus]) b.connect(this.out);
-    for (const s of [bed, drift, gust]) {
-      s.start(t0);
+    const noise = (offset: number): AudioBufferSourceNode => {
+      const s = c.createBufferSource();
+      s.buffer = sharedNoise(c);
+      s.loop = true;
+      s.start(t0, offset);
       this.sources.push(s);
+      return s;
+    };
+    this.level = c.createGain();
+    this.level.gain.value = 10 ** (BED_DB / 20);
+    this.level.connect(this.out);
+
+    // the pond: low noise, its level wandering on smoothed random
+    this.pondGain = c.createGain();
+    const pondAm = c.createGain();
+    // the pond is made up 7.8 dB over its first draft so that it, and the wind, sit inside the bed's window under the anchor
+    pondAm.gain.value = 0.8 * POND_MAKEUP;
+    const wander = c.createGain();
+    wander.gain.value = 60 * POND_MAKEUP;
+    noise(0.31).connect(filt(c, 'lowpass', 0.6, 0.5)).connect(wander).connect(pondAm.gain);
+    noise(0).connect(filt(c, 'lowpass', 500)).connect(pondAm).connect(this.pondGain).connect(this.level);
+
+    // the wind: two narrow resonances, a gust gain over both
+    this.windGain = c.createGain();
+    this.gust = c.createGain();
+    const windSrc = noise(0.57);
+    for (const b of WIND_BANDS) {
+      const f = filt(c, 'bandpass', b.hz, b.q);
+      windSrc.connect(f).connect(this.gust);
+      this.bands.push(f);
     }
+    const makeup = c.createGain();
+    makeup.gain.value = WIND_MAKEUP;
+    this.gust.connect(makeup).connect(this.windGain).connect(this.level);
+
+    this.dripBus = c.createGain();
+    this.dripBus.gain.value = 10 ** ((BED_DB + 4) / 20);
+    this.dripBus.connect(this.out);
+
     const r = this.r;
-    this.next = { drip: t0 + 2 + r() * 4, fish: t0 + 12 + r() * 20, reeds: t0 + 6 + r() * 10, bird: t0 + 15 + r() * 25, pulse: t0 };
+    this.next = { drip: t0 + 2 + r() * 4, gust: t0 + 12 + r() * 18, drift: [t0 + 4 + r() * 8, t0 + 6 + r() * 8], whistle: t0 + 20 + r() * 25 };
+    this.setDry(this.inputs.dry ?? this.inputs.poolCount <= 0, t0, true);
     this.update(this.inputs, true);
   }
 
@@ -92,23 +116,55 @@ export class Ambience {
       }
     }
     this.sources = [];
+    this.bands = [];
     this.started = false;
   }
 
-  /** the public inputs: the pool and the tally. `immediate` skips the glide (offline renders). */
+  /**
+   * Pond or wind. On the pool-empty event this is a fixed 400 ms equal-power crossfade at `at`; `immediate` (a first
+   * look, a rejoin, the harness) sets it at once. The two gains are cos and sin of one angle, so their power sums to one.
+   */
+  setDry(dry: boolean, at = this.ctx.currentTime, immediate = false): void {
+    const was = this.dry;
+    this.dry = dry;
+    if (!this.started) return;
+    const t = Math.max(at, this.ctx.currentTime);
+    const pond = this.pondGain.gain;
+    const wind = this.windGain.gain;
+    for (const p of [pond, wind]) p.cancelScheduledValues(t);
+    if (immediate || was === dry) {
+      pond.setValueAtTime(dry ? 0 : 1, t);
+      wind.setValueAtTime(dry ? 1 : 0, t);
+      return;
+    }
+    const N = 32;
+    const down = new Float32Array(N);
+    const up = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const a = (i / (N - 1)) * (Math.PI / 2);
+      down[i] = Math.cos(a);
+      up[i] = Math.sin(a);
+    }
+    pond.setValueCurveAtTime(dry ? down : up, t, CROSSFADE_S);
+    wind.setValueCurveAtTime(dry ? up : down, t, CROSSFADE_S);
+  }
+
+  get isDry(): boolean {
+    return this.dry;
+  }
+
+  /** the public inputs: the pool. `immediate` skips the glide (offline renders). */
   update(inputs: Partial<AmbienceInputs>, immediate = false): void {
     this.inputs = { ...this.inputs, ...inputs };
+    if (inputs.dry !== undefined) this.setDry(inputs.dry, undefined, immediate);
     if (!this.started) return;
     const { poolCount, poolStart, scene } = this.inputs;
-    const dry = poolCount <= 0;
     const t = this.ctx.currentTime;
     const wet = poolStart > 0 ? Math.min(1, poolCount / poolStart) : 1;
-    // the water thins as the pool drains; once dry it is wind: brighter, gusting, no lapping
-    const level = (scene === 'lobby' ? 2.2 : 1) * (dry ? 0.7 : 0.8 + 0.2 * wet);
+    // the water thins slowly as the pool drains; the wind does not (there is nothing left to drain)
+    const level = (scene === 'lobby' ? 2.2 : 1) * (this.dry ? 0.7 : 0.8 + 0.2 * wet);
     const to = (p: AudioParam, v: number, tc: number) => (immediate ? (p.value = v) : p.setTargetAtTime(v, t, tc));
-    to(this.bedGain.gain, level * 10 ** (BED_DB / 20), 1.5);
-    to(this.lp.frequency, dry ? 900 : 600, 2);
-    to(this.wind.gain, dry ? 0.15 * level : 0, 2);
+    to(this.level.gain, level * 10 ** (BED_DB / 20), 1.5);
   }
 
   /** Emits every one-shot due before `until` (audio-context seconds). Called by the lookahead scheduler. */
@@ -116,55 +172,47 @@ export class Ambience {
     if (!this.started) return;
     const c = this.ctx;
     const r = this.r;
-    const { poolCount, setsPossible, scene } = this.inputs;
-    const dry = poolCount <= 0;
     while (this.next.drip < until) {
-      if (!dry) drip(c, this.dripBus, Math.max(this.next.drip, c.currentTime), r);
+      const at = Math.max(this.next.drip, c.currentTime);
+      if (!this.dry) {
+        drip(c, this.dripBus, at, r, 1, 0.95 + r() * 0.1);
+        // now and then a second, smaller drip off the same reed
+        if (r() < 0.1) drip(c, this.dripBus, at + 0.09, r, 0.45, 0.9 + r() * 0.1);
+      }
       this.next.drip += 3 + r() * 5;
     }
-    if (!dry || scene === 'lobby') {
-      while (this.next.fish < until) {
-        const at = Math.max(this.next.fish, c.currentTime);
-        bubble(c, this.lifeBus, at, 420 + r() * 80, 0.09, 1);
-        splash(c, this.lifeBus, at + 0.01, r, 0.5, 1800, 0.25);
-        this.next.fish += 15 + r() * 25;
+    // the wind's resonances wander, each on its own slow random walk
+    WIND_BANDS.forEach((b, i) => {
+      while (this.next.drift[i] < until) {
+        const at = Math.max(this.next.drift[i], c.currentTime);
+        const span = 6 + r() * 8;
+        this.bands[i]?.frequency.setTargetAtTime(b.hz * (1 + (r() * 2 - 1) * 0.12), at, span / 3);
+        this.next.drift[i] += span;
       }
-      while (this.next.reeds < until) {
-        const at = Math.max(this.next.reeds, c.currentTime);
-        const g = env(c, at, 0.35, 0.3, 0.5);
-        const src = c.createBufferSource();
-        src.buffer = sharedNoise(c);
-        src.start(at, r() * 0.8, 0.9);
-        src.connect(filt(c, 'bandpass', 2600 + r() * 800, 0.7)).connect(g).connect(this.lifeBus);
-        this.next.reeds += 8 + r() * 12;
+    });
+    // an occasional gust while it is wind; while it is water the clock just moves on
+    while (this.next.gust < until) {
+      const at = Math.max(this.next.gust, c.currentTime);
+      if (this.dry) {
+        this.gust.gain.cancelScheduledValues(at);
+        this.gust.gain.setTargetAtTime(GUST_GAIN, at, 0.7 / 3);
+        this.gust.gain.setTargetAtTime(1, at + 1.0, 1.1 / 3);
+        this.bands.forEach((f, i) => {
+          f.frequency.setTargetAtTime(WIND_BANDS[i].hz * 1.3, at, 0.25);
+          f.frequency.setTargetAtTime(WIND_BANDS[i].hz, at + 1.0, 0.4);
+        });
       }
-      while (this.next.bird < until) {
-        const at = Math.max(this.next.bird, c.currentTime);
-        const n = 2 + Math.floor(r() * 2);
-        const f = 2600 + r() * 900;
-        for (let i = 0; i < n; i++) {
-          const o = c.createOscillator();
-          o.frequency.setValueAtTime(f, at + i * 0.11);
-          o.frequency.exponentialRampToValueAtTime(f * 1.25, at + i * 0.11 + 0.07);
-          o.connect(env(c, at + i * 0.11, 0.06, 0.01, 0.06)).connect(this.lifeBus);
-          o.start(at + i * 0.11);
-          o.stop(at + i * 0.11 + 0.1);
-        }
-        this.next.bird += 20 + r() * 30;
-      }
-    } else {
-      this.next.fish = Math.max(this.next.fish, until);
-      this.next.reeds = Math.max(this.next.reeds, until);
-      this.next.bird = Math.max(this.next.bird, until);
+      this.next.gust += 12 + r() * 18;
     }
-    // the last act: a low dobă pulse from 3 sets, quickening at 1
-    if (setsPossible !== null && setsPossible <= 3 && setsPossible >= 1) {
-      const period = setsPossible === 1 ? 1.6 : 3.2;
-      while (this.next.pulse < until) {
-        const at = Math.max(this.next.pulse, c.currentTime);
-        doba(c, this.pulseBus, at, 0.5, r, 0.3);
-        this.next.pulse = at + period;
+    // the 640 Hz resonance is unstable: a few times a minute it whistles for about 200 ms
+    while (this.next.whistle < until) {
+      const at = Math.max(this.next.whistle, c.currentTime);
+      if (this.dry && this.bands[1]) {
+        this.bands[1].Q.setValueAtTime(WIND_BANDS[1].q, at);
+        this.bands[1].Q.linearRampToValueAtTime(WIND_BANDS[1].q * 2.2, at + 0.05);
+        this.bands[1].Q.linearRampToValueAtTime(WIND_BANDS[1].q, at + 0.2);
       }
-    } else this.next.pulse = Math.max(this.next.pulse, until);
+      this.next.whistle += 12 + r() * 30;
+    }
   }
 }

@@ -13,6 +13,7 @@ import { ServerClock, WindowClock } from './clock.js';
 import { audioStatus, getContext, installLifecycle, onGesture, panningAvailable, unlock, visualDelayMs } from './context.js';
 import type { CueRequest } from './cues.js';
 import { BUSES, ECHO_EXEMPT, cueDef, type BusName, type Profile } from './cuesheet.js';
+import { humanize } from './variation.js';
 import { hapticsFor, playHaptics, type HapticRequest } from './haptics.js';
 import { DEFAULT_SETTINGS, Mixer, loadSettings, masterCurve, saveSettings, type AudioSettings } from './mixer.js';
 import { RECIPES, type CueParams } from './recipes.js';
@@ -58,7 +59,7 @@ export function spawnVoice(e: VoiceEnv, id: string, params: CueParams, seed: num
   // the recipe writes into `input`: a per-voice mastering shaper, or a plain gain
   let input: AudioNode;
   const level = ctx.createGain();
-  level.gain.value = fromDb(def.levelDb + (cal ? cal.norm : 0));
+  level.gain.value = fromDb(def.levelDb + (cal ? cal.norm : 0) + (params.gainDb ?? 0));
   if (cal && cal.c !== null && e.mastering !== false) {
     const shaper = ctx.createWaveShaper();
     shaper.curve = masterCurve(cal.c) as Float32Array<ArrayBuffer>;
@@ -84,7 +85,7 @@ export function spawnVoice(e: VoiceEnv, id: string, params: CueParams, seed: num
     g.linearRampToValueAtTime(0, when + 0.4);
   }
   if (def.env === 'src') e.onSource?.(when);
-  if (def.env === 'ex') e.onCeremony?.(when, def.maxLenMs / 1000);
+  if (def.env === 'ex') e.onCeremony?.(when, (def.duckMs ?? def.maxLenMs) / 1000);
   if (e.pool && voiceId) {
     e.pool.attach(voiceId, () => {
       const now = ctx.currentTime;
@@ -119,6 +120,9 @@ export class AudioEngine {
   readonly server = new ServerClock();
   readonly windowClock: WindowClock;
   private world: Partial<AmbienceInputs> | null = null;
+  private dry = false;
+  private step = 0;
+  private worldQueue: Array<{ dueWall: number; patch: { dry?: boolean; step?: number } }> = [];
   private tracing = false;
   private afterPaintTick = false;
 
@@ -202,15 +206,21 @@ export class AudioEngine {
 
   /* -------------------------------------------------------------- playing */
 
-  /** Plays one cue, `delayMs` from now. Private-tier cues are dropped unless headphones mode is on. */
+  /** Plays one cue, `delayMs` from now. A cue the mapping layer placed already carries its take, pitch and gain; a local one
+   * (a press, a toggle) gets them here from its seed, in the same way. */
   play(id: string, params?: CueParams, opts: { delayMs?: number; seed?: number; full?: boolean; afterPaint?: boolean } = {}): boolean {
     const def = cueDef(id);
     if (!def) return false;
-    if ((def.heard === 'private' || params?.private) && !this.headphones) return false; // defence in depth (§3.2)
     if (this.settings.muted) return false;
     void this.ensure();
+    const seed = opts.seed ?? (Math.random() * 2 ** 31) >>> 0;
+    let p = params ?? {};
+    if (p.take === undefined || p.pitch === undefined || p.gainDb === undefined) {
+      const h = humanize(seed, def.variation, 'exact');
+      p = { take: h.take, pitch: h.pitch, gainDb: h.gainDb, ...p };
+    }
     if (this.tracing) this.trace.push({ at: Date.now(), id, played: true });
-    this.queue.push({ dueWall: performance.now() + (opts.delayMs ?? 0), id, params: params ?? {}, seed: opts.seed ?? (Math.random() * 2 ** 31) >>> 0, full: !!opts.full });
+    this.queue.push({ dueWall: performance.now() + (opts.delayMs ?? 0), id, params: p, seed, full: !!opts.full });
     if (!this.ready) return true;
     if (opts.afterPaint && typeof requestAnimationFrame === 'function') {
       // the sound of a press follows the frame that shows it: synthesising its voice (6-10 nodes) inside the input
@@ -247,6 +257,7 @@ export class AudioEngine {
     const m = this.mixer;
     if (!this.ready || !m) return;
     const ctx = m.ctx;
+    this.runWorld(performance.now());
     if (ctx.state !== 'running') {
       // nothing can be heard: drop what has gone stale rather than play it late on resume
       const now = performance.now();
@@ -287,10 +298,47 @@ export class AudioEngine {
 
   /* ------------------------------------------------------ world and clock */
 
-  /** Drives the pond from public inputs (§3.9); null stops it. */
-  setWorld(inputs: Partial<AmbienceInputs> | null): void {
-    this.world = inputs;
+  /**
+   * Drives the pond from public inputs (§3.9); null stops it. `dry` (the wind) and `step` (the darkening, 0-3) are set
+   * here only when they are given - a first look, a rejoin, the lobby. During play they change on the beat of their own
+   * event, through `worldAt`, so the ambience turns exactly when the table's picture does.
+   */
+  setWorld(inputs: (Partial<AmbienceInputs> & { step?: number }) | null): void {
+    if (inputs === null) this.world = null;
+    else {
+      const { step, ...rest } = inputs;
+      this.world = { ...(this.world ?? {}), ...rest };
+      if (rest.dry !== undefined) this.dry = rest.dry;
+      if (step !== undefined) this.applyStep(step, undefined, true);
+    }
     this.syncWorld();
+  }
+
+  /** the ambience turns to wind, or steps one flat step darker, `delayMs` from now: on the beat of the event that says so */
+  worldAt(patch: { dry?: boolean; step?: number }, delayMs = 0): void {
+    this.worldQueue.push({ dueWall: performance.now() + delayMs, patch });
+    if (delayMs <= 0) this.runWorld(performance.now());
+  }
+
+  /** applies what has come due; a change of state is never dropped, however late (a hidden tab, a suspended context) */
+  private runWorld(nowWall: number): void {
+    if (!this.worldQueue.length) return;
+    const due = this.worldQueue.filter((q) => q.dueWall <= nowWall + 30);
+    if (!due.length) return;
+    this.worldQueue = this.worldQueue.filter((q) => !due.includes(q));
+    for (const q of due) {
+      const when = this.mixer ? this.mixer.ctx.currentTime + Math.max(0, (q.dueWall - nowWall) / 1000) : undefined;
+      if (q.patch.dry !== undefined) {
+        this.dry = q.patch.dry;
+        this.ambience?.setDry(q.patch.dry, when);
+      }
+      if (q.patch.step !== undefined) this.applyStep(q.patch.step, when, false);
+    }
+  }
+
+  private applyStep(step: number, when: number | undefined, immediate: boolean): void {
+    this.step = Math.max(0, Math.min(3, Math.round(step)));
+    this.mixer?.setDarkStep(this.step, when, immediate);
   }
 
   /** which scene the pond is playing, if any: the lobby hands over to the game without a gap */
@@ -304,13 +352,15 @@ export class AudioEngine {
     const on = this.world !== null && this.settings.ambience > 0 && !this.settings.muted;
     if (on && !this.ambience) {
       this.ambience = new Ambience(m.ctx, m.graph.buses.Ambience, 5);
+      this.ambience.update({ ...this.world, dry: this.dry }, true);
       this.ambience.start();
     }
-    if (on && this.world) this.ambience?.update(this.world);
+    if (on && this.world) this.ambience?.update({ ...this.world, dry: this.dry });
     if (!on && this.ambience) {
       this.ambience.stop();
       this.ambience = null;
     }
+    m.setDarkStep(this.step, undefined, true);
   }
 
   /** hands a window's server deadline to the click scheduler; pass null when the answer window is gone */

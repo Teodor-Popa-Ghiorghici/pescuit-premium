@@ -1,5 +1,5 @@
-/* The Codex (§5.8): the nine powers, each with its carving, seal, one-line rule and a stave with a button
- * to hear its motif. This file is a chunk of its own: it loads with the Codex, not with the table. */
+/* The Codex (§5.8): the nine powers, each with its carving, seal, one-line rule and a button
+ * to hear its sound. This file is a chunk of its own: it loads with the Codex, not with the table. */
 .rules-tabs {
   align-self: flex-start;
   max-width: 100%;
@@ -96,14 +96,8 @@
   color: var(--ink);
 }
 
-.codex__stave {
-  flex: none;
-  max-width: 100%;
-  background: var(--hartie-2);
-  border: var(--line-hair) solid var(--ink);
-}
-
-.codex__motif.is-playing .codex__stave {
+/* the button lights while its sound plays (and says so in words: "Se aude…") */
+.codex__motif.is-playing .codex__play {
   background: var(--ocru);
 }
 

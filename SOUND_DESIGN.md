@@ -1,6 +1,6 @@
 # Sound design — Pescuiește Extins
 
-**Status: Step 1, for review. Nothing has been built or changed except this file.**
+**Status: implemented (Step 2). Sections marked _[as built]_ record where the build differs from the design that was reviewed; §9 lists what was measured and what was not.**
 
 The sound is *carved and printed, not polished*: dry, close, material, slightly off-square. Two values, one accent, no
 gradients or glow — in audio terms: one dry register (wood, paper, ink), one accent (the horn), and no reverb wash.
@@ -78,7 +78,7 @@ for all-client public cues (existing echo budget, checked by `audio:check`).
 ### 1.1 Ceremony and world
 
 **`mus.start` — tulnic call** · RETUNE (currently two equal-tempered notes, 45 and 50 MIDI, which are *not* on one
-harmonic series, no lip attack, no valley) · ≈ 3.1 s dry + echoes ≈ 7 s · ambience ducks −10 dB
+harmonic series, no lip attack, no valley) · 3.2 s dry + repeats ≈ 8.3 s · ambience ducks −10 dB for 3.3 s
 - *Source:* a tulnic — 3 m conical spruce horn, no finger holes, so only partials of one fundamental. Fundamental
   **58 Hz** (never sounded; natural-horn low notes are weak). Phrase, one breath, no gap > 60 ms:
   partial 6 (348 Hz) → 8 (464) → 7 (≈406) → 6 (348) → 5 (290). Every note is `58 × n`; nothing is rounded to equal
@@ -89,13 +89,16 @@ harmonic series, no lip attack, no valley) · ≈ 3.1 s dry + echoes ≈ 7 s · 
   a 380 Hz bell bump. Unsteady lip: ±5 cent random walk near 5 Hz (not a regular vibrato).
 - *L (breath):* noise, bandpass 300–900 Hz, −24 dB re body while held, rising to −12 dB as the last two notes sag
   (−35 then −60 cents) — the breath running out. The phrase *falls off* at the end.
-- *Space:* not a reverb. **Three discrete repeats** of only the final falling gesture (partials 7→6→5, ≈ 1.2 s), starting
-  at 3.5 s, 4.9 s, 6.6 s after the call begins: −9, −16, −23 dB, low-passed 2600 / 1500 / 800 Hz (each darker). Irregular
-  spacing, like walls at different distances.
+- *Space:* not a reverb. **Three discrete repeats** of only the final falling gesture (partials 7→6→5, 1.55 s), starting
+  at 3.5 s, 4.9 s, 6.6 s after the call begins: −9, −16, −23 dB, low-passed at **1000 / 650 / 420 Hz** _[as built: the design's
+  2600 / 1500 / 800 Hz sat above the horn's own ~1 kHz roll-off, so the first two repeats were not measurably darker]_ (each
+  darker, and carved for speech like the call). Irregular spacing, like walls at different distances. The call is 3.2 s; the
+  last repeat ends at ≈ 8.2 s (`mus.start` is 8.3 s).
 - **I:** the 7th partial is left ≈ 31 cents flat of its equal-tempered neighbour (true to a natural horn), and the last
   note is cut ≈ 40 ms early (the breath ran out before the note finished).
 - *Never blocks input:* fire-and-forget on the Music bus; the first turn's cues (`BEAT.start = 2400 ms`) and all input run
-  independent of it; it counts as one voice group for the cap.
+  independent of it (a source guard asserts no input path awaits an engine call). _[as built: it takes one voice from the pool
+  and the pool's `inst` cap; the repeats are extra buffer sources inside that one voice, not extra voices]_
 
 **`mus.podium` — the horn returns, resolved and bare** · NEW (replaces `mus.end.win/tie/lose`) · ≈ 2.4 s · ducks ambience
 - Same instrument and fundamental. One breath, stepwise down to home: partial 6 → 5 → **4** (348 → 290 → 232 Hz), held and
@@ -171,7 +174,7 @@ named aloud").
 **`table.gofish` — the "Pescuiește!" refusal** · RETUNE
 - The current one is one large bubble with an *upward chirp* plus small bubbles — a cartoon bloop, the "casual mobile pop".
   New: a flat hand on the board (dull thud, weight 0.9) → if the pool has water, one drip (the §1.1 drip recipe) 40 ms later.
-  Pool empty (`table.gofish.dry`, KEEP): thud only, plus a short skid of plank-D ticks. Lands **late** like the give.
+  Pool empty (`table.gofish.dry`, KEEP): thud only, plus a short skid of plank-D ticks. Lands **late** like the give. _[as built: the drip follows the hand by 115 ms, not 40: at 40 ms it shared a rhythm with the Shark's flam, and at 100 ms with a seat's second knock (75 ms) — the confusability check caught both]_
 - Identical for honest refusal and Squid deny/claim — see §4.
 
 **`table.flight`** · KEEP (paper flutter) · **`table.draw`** · RETUNE — a card lifted from the water: paper lift + one small
@@ -218,7 +221,7 @@ wood/paper/board.
 - *T:* a heavy plank slam, cracked-wood front (0–120 ms). *B:* a wooden **hull groan** 60–700 ms — a 55 Hz pulse
   low-passed and swept 300 → 120 Hz, resonant creak (bandpass 90–140 Hz Q 10, swept down over 400 ms), plus its
   harmonics at 165 / 220 / 330 Hz through tanh so phones hear it. *L:* the shuffle of the two hands — paper riffle
-  (30–45 clicks, sparse-dense-sparse, 500–1300 ms) and three landing slaps at ~1.2 / 1.28 / 1.36 s.
+  (30–45 clicks, sparse-dense-sparse, 500–1300 ms) and three landing slaps at 1.14 / 1.22 / 1.30 s _[as built: earlier than designed so the cue ends inside 1.4 s]_.
 - **I (the wrong partial):** the groan's 3rd harmonic is 45 cents sharp.
 - Speaker variant unchanged in spirit: riffle in 170 ms + one landing (≤ 250 ms).
 
@@ -229,7 +232,7 @@ Whale (1.0); currently it also plays under Tortoise, Jellyfish, Stickleback and 
 **`power.tortoise`** · KEEP (in palette) — two board thuds, then the cards slap back. No impact layer.
 
 **`power.jellyfish`** · RETUNE — the drâmbă (jaw harp, metal) goes. *Source:* a wooden rattle that loses its rhythm: five
-damped plank-D taps, gaps 40 / 55 / 80 / 120 / 180 ms, f0 falling 1100 → 800 Hz. **I:** the last tap starts mid-envelope
+damped plank-D taps, gaps 32 / 44 / 64 / 96 / 144 ms _[as built: the design's 40 / 55 / 80 / 120 / 180 would have run past 460 ms]_, f0 falling 1100 → 800 Hz. **I:** the last tap starts mid-envelope
 (missing its attack — "stuttering broken stroke"). ≤ 450 ms.
 
 **`power.lanternfish` (reflect)** · RETUNE — the țambal glint goes. *Source:* the ask coming back. The target's signature
@@ -328,11 +331,12 @@ nothing to voice and nothing for a cue to key on — by construction, not by dis
 
 ## 3. Public fields a cue may read — and nothing else
 
-The mapping layer receives a **projected** object, built by one function (`soundInputOf`) that copies exactly these and
-drops everything else. Today `record.ts` projects the *view* but passes `events` through as raw wire objects
-(`e as unknown as PublicEvent`), so a cue could read `cardId`, `grantId` or `rank` at runtime; the tests then stuff those
-fields to prove nothing does. Step 2 makes that structural: events are projected too, and a Proxy test fails on any other
-key access.
+_[as built]_ The mapping layer (`cuesFor`, `audio/cues.ts`) receives the raw record and immediately projects it: one function,
+`soundInputOf`, copies exactly the fields below into a fresh object, and everything after it reads only that object. The list
+exists in code as `SOUND_FIELDS`. Before, `record.ts` projected the *view* but passed `events` through as raw wire objects, so a
+cue could have read `cardId`, `grantId` or `rank` at runtime and only the tests stood in the way. Now `test/soundfields.test.ts`
+hands `cuesFor` a Proxy over a record stuffed with every private field and fails on any property read that is not on this list
+(and a second test proves the spy can fail). The table below is the as-built list; it is *narrower* than the design's.
 
 **Events**
 | ID | Event | Fields |
@@ -347,13 +351,13 @@ key access.
 | E8 | `REQUEST_FAILED` | `type` |
 | E9 | `DREW_FROM_POOL` | `type`, `poolEmpty` **(never `cardId`)** |
 | E10 | `SET_LAID` | `type`, `isPowerSet`, `eggCount` **(never `rank`, `setId`)** |
-| E11 | `POWER_GRANTED` | `type`, `playerId` **(never `rank`, `unbound`, `grantId`, `sourceSetId`)** |
-| E12 | `POWER_USED` | `type`, `rank` — public at the moment of use in both modes; `rank ≠ squid` always (no such event exists for Squid) **(never `grantId`)** |
+| E11 | `POWER_GRANTED` | `type` **(never `playerId`, `rank`, `unbound`, `grantId`, `sourceSetId`)** |
+| E12 | `POWER_USED` | `type` **(never `rank` — public at the moment of use, but no cue needs it — nor `grantId`)**. A Squid use has no event; `record.ts` also drops one before anything sees it, as defence in depth |
 | E13 | `SHARK_JUMP` | `type` |
 | E14 | `SET_DESTROYED` | `type` |
 | E15 | `WHALE_SHUFFLE` | `type` |
 | E16 | `JELLYFISH_STUN` | `type` |
-| E17 | `LANTERNFISH_REFLECT` | `type`, `fromId` (the seat whose ask came back) |
+| E17 | `LANTERNFISH_REFLECT` | `type`, `playerId` (the reflector's seat), `fromId` (the seat whose ask came back) |
 | E18 | `TORTOISE_BLOCK` | `type` |
 | E19 | `STICKLEBACK_STEAL`, `STICKLEBACK_WASTED` | `type` (both are public events; `count` unused) |
 | E20 | `CLOWNFISH_BOUND` | `type` only — Deschis. **(never `boundRank`, `grantId`)** |
@@ -363,22 +367,25 @@ key access.
 **View (redacted, per viewer — but only these fields, which are identical for every viewer)**
 | ID | Field |
 |---|---|
-| V1 | `turnOrder` (seat index of a player id); the viewer's own `viewerId` (for "your turn") |
+| V1 | `players` (the turn order, as `turnOrder`: the seat index of a player id); the viewer's own id (`facts.playerId`, for "your turn" and "you were asked") |
 | V2 | `poolCount` (before / after) |
-| V3 | `pendingWindow.type === 'RESPONSE_PENDING'` and `pendingWindow.context.askerId` / `.targetId` (spoken aloud) |
-| V4 | `pendingWindow.deadlineAt`, `serverNow` (the server-clock deadline; one number for everyone) |
-| V5 | `config.powerVisibility` |
-| V6 | `sets.possible` (before / after) |
+| V3 | `window.type === 'RESPONSE_PENDING'` and `window.askerId` / `.targetId` (spoken aloud) — the answer window only |
+| V4 | `pendingWindow.deadlineAt`, `serverNow` — read by `clockTarget` and the window clock, not by `cuesFor` (one number for everyone) |
+| V5 | `mode` (`config.powerVisibility`) |
+| V6 | `setsPossible` (`sets.possible`, before / after) |
 | V7 | `endPressure.misses`, `.limit` |
-| V8 | `players[].score` (only `max`, for the number of podium pips) |
-| V9 | `players[].connected` |
+| V8 | `scores` (only the highest, for the number of podium pips) |
+| V9 | `players[].connected` — read by `presenter.ts` and the waiting-room hook to play `meta.join` / `meta.leave`, not by `cuesFor` |
+| D1 | `chain` (the run of bonus turns, kept by the presenter from `BONUS_TURN` / `TURN_STARTED` events — `chainAfter`) |
+| D2 | `ordinal` (how many cues this client has been handed: seeds the variation; see §4) |
 
-**Room message:** R1 = `room_update.players[].id`, `.connected` (waiting-room joins/leaves).
+**Room message:** R1 = `room_update.players[].id`, `.connected` (waiting-room joins/leaves; `hooks/useLobbyAudio.ts`).
 
-**Explicitly forbidden (a Proxy test asserts none is ever touched):** `hand`, `ownPowerGrants`, `pendingWindow.youAreEligible`,
-every other `pendingWindow.context` key, `cardId`, `grantId`, `sourceSetId`, `unbound`, `boundRank`, `laidSets[].rank` /
-`.spent` / `.destroyedByMantis`, `SET_LAID.rank`/`.setId`, `POWER_GRANTED.rank`, `WINDOW_OPENED.*`, `winners` (podium is
-one cue), and `seq` as a *seed* (§5).
+**Explicitly forbidden (the Proxy test asserts none is ever touched):** `hand`, `ownPowerGrants`, `pendingWindow.youAreEligible`,
+every other `pendingWindow.context` key, `cardId`, `grantId`, `sourceSetId`, `unbound`, `boundRank`, `laidSets[]` (any field),
+`SET_LAID.rank`/`.setId`, `POWER_GRANTED.*`, `POWER_USED.rank`, `WINDOW_OPENED.*`, `winners` (the podium is one cue), the
+viewer's `eligible` / `eligibleBefore` / `grantRank` / `headphones` facts (they remain in `SeatFacts` for haptics only), and the
+room's `seq`.
 
 ---
 
@@ -390,9 +397,13 @@ one cue), and `seq` as a *seed* (§5).
   "Every response is a window"); Squid emits **no** `POWER_USED` (`recordPowerUsed`, engine line ~973).
 - Every cue above reads only fields that are equal in those three worlds (E-rows and V-rows). `REQUEST_FAILED` reads
   no fields; `table.gofish` reads `poolCount`, which the draw changes identically.
-- I have *not yet* re-run this against the new code — Step 2 extends `presentation-leak.test.ts` so that the honest-no /
-  Squid-deny / Squid-claim triple is asserted equal in cue ids, delays and durations for every viewer (the test exists for
-  the current cues; it will be re-pointed at the new palette).
+- _[as built]_ Re-checked against the new code, by reading and by test. By reading: the only other places that play sound are
+  `Windows.tsx` (the answering press: `truth` and `lie` both call `send(..., { cue: true })`, which plays `localAnswerCue(view.seq)` —
+  one cue, seeded from the view being answered, whichever button), `GameTable.tsx` (`ui.*` for the table's own controls, `meta.reconnected`),
+  `presenter.ts` (the cues `cuesFor` returned; `meta.join/leave` from `connected`, `meta.nudge` from your own idle turn) and `Codex.tsx`
+  (a preview; Squid is a rest). None reads a hand, a grant or an eligibility flag. By test: `cues.test.ts` asserts an honest no, a Squid deny and
+  a Squid claim give identical `(id, at, durMs, params, seed)` for every viewer, and that a Squid grant sounds exactly like any grant;
+  `presentation-leak.test.ts` (real engine games, redacted per viewer) asserts the same through the choreography.
 - **One rules-level tell I cannot fix from audio** (already documented, `DECISIONS.md`): a third player's Clownfish that
   binds to a silently-used Squid learns, owner-only, that one was used. Not audible to anyone else; not touched.
 
@@ -419,13 +430,18 @@ across private states and fails on any difference.
 - A player who deliberates for a long time before answering is audible to the table once the clock starts ticking (last
   5 s). That is public information (the wait itself), not a leak of a hidden field.
 
-**Seeds.** Variation is currently seeded from the room `seq`. `seq` counts events a given viewer never receives (owner-only
-`CLOWNFISH_BOUND` in Ascuns), so two worlds that differ only in a hidden event would produce different micro-jitter for the
-same public step. Harmless in practice, but it would make my "identical delay" test conditional. Default (D10): seed from
-the count of public events the client has presented, which is the same for everyone who has seen the same public record.
+**Seeds.** _[as built, D10]_ Variation used to be seeded from the room `seq`, which counts events a given viewer never receives
+(owner-only `CLOWNFISH_BOUND` in Ascuns). It is now seeded from the cue's own place in the run of cues this client has been
+handed (`record.ordinal + index in the step`), which is a count of *voiced public cues*. Building that surfaced a second
+requirement my first attempt (a hash of the step's content) missed: a silent structural window splits one step into two, so
+the seed must not depend on where a step is cut. The ordinal does not: `cues.test.ts` replays the five structural-window
+histories and asserts the same cues, params, durations *and seeds* with the window in the way and out of it.
 
-**Small finding:** `cues.ts` reads `POWER_USED.viaClownfish`, which the wire never carries (a Clownfish copy is reported
-with the copied rank). It is a dead branch and goes.
+**Small findings.** `cues.ts` read `POWER_USED.viaClownfish`, which the wire never carries (a Clownfish copy is reported with
+the copied rank): a dead branch, removed (`choreography.ts` still names it for the art, behind a cast). And my first cut of the
+"two private states" test stuffed `rank: 'squid'` onto every event, `POWER_USED` included, and it failed — because a version of
+the mapping that read `POWER_USED.rank` (to stay silent for Squid) changed its own timing. That is the argument for reading
+no rank at all, and it is why the adapter, not the mapping, drops a (non-existent) Squid use.
 
 ---
 
@@ -460,15 +476,18 @@ with the copied rank). It is a dead branch and goes.
   SFX + ambience; the extra sliders already exist and stay.
 - **Hidden tab:** context suspended after 30 s hidden, resumed on return; queued cues that went stale are dropped rather
   than played late.
-- **Audio is never the only channel:** every voiced event already has a visual (plank, chip, flight, log line, `aria-live`
-  announcer). Step 2 adds a test that enumerates cue → visual/announcer twin for the *new* cues (world steps, notch ticks,
-  eggs, hidden lay).
+- **Audio is never the only channel:** every voiced event already had a visual (plank, chip, flight, log line, `aria-live`
+  announcer) — except one. _[as built]_ The eggs in a set laid (`table.egg`) were audio-only: nothing on screen or in the log
+  said how many eggs a set used, though `eggCount` is public. The log line for a set laid now says so (`log.setLaidEggs`,
+  `log.setLaidHiddenEggs`, in both languages and both lengths). `test/soundtwins.test.ts` walks from each new cue to its twin: the
+  egg line, the hidden-lay line, the rim's notch (as many ticks as notches knocked out), the light's step and its screen-reader
+  announcement, the podium, the start beat, the seconds on the plank.
 
 ---
 
-## 7. Decisions I need from you (each has a default; I will follow the default unless you veto)
+## 7. Decisions (each was applied at its default; nobody vetoed)
 
-| # | Decision | Default |
+| # | Decision | Applied |
 |---|---|---|
 | D1 | Remove the five in-palette powers' melodic motifs (Tortoise, Lanternfish, Jellyfish, Stickleback, Clownfish) and `power.granted.<rank>`; give them wood/paper/board recipes. Keep/retune Shark, Mantis, Whale as the frame-breakers. Risk: the plan (§3.2) kept tonal cues so voice-chat noise suppressors would pass them to other players; knocks have less harmonic content. | yes |
 | D2 | Remove țambal-based cues: uniform `power.granted` shimmer, Lanternfish glint, and the four score-race cues (`lead/breakaway/chase/clinch`). | yes |
@@ -477,43 +496,120 @@ with the copied rank). It is a dead branch and goes.
 | D5 | Drop the dobă heartbeat (`amb.lastact`) and the pond's "life" layer (birds/fish/reeds) — the 12/6/1 steps replace the countdown. | yes |
 | D6 | Allow ambience ducking under the rare signature cues only, overriding `DESIGN.md` §0.1 row 7.5 ("no ducking"). | yes |
 | D7 | Gate the audition lab with `import.meta.env.DEV` so production carries no lab chunk. | yes |
-| D8 | Turn totem: keep six seat signatures in one timbre family (so "who" is audible), or literally one tone for everyone. The blindfold test that validates seat identification was never run (README, "Not built"). | keep six |
-| D9 | Drip pitch: your brief says a fast pitch **drop**. Physically, an entrained bubble's pitch tends to *rise*, so the existing bubbles rise. I follow the brief. The lab will offer both directions as takes so you can choose by ear. | drop |
+| D8 | Turn totem: keep six seat signatures in one timbre family (so "who" is audible), or literally one tone for everyone. The blindfold test that validates seat identification was never run (README, "Not built"). | kept six (one timbre family, each bar's second partial 1.5 % off) |
+| D9 | Drip pitch: your brief says a fast pitch **drop**. Physically, an entrained bubble's pitch tends to *rise*, so the existing bubbles rise. I follow the brief. The lab will offer both directions as takes so you can choose by ear. | drop; the lab has both directions (a `drip: rises` button) |
 | D10 | Seed variation from the public-event ordinal, not `seq`. | yes |
-| D11 | Podium pips: unpitched ticks (default) or remove entirely. | unpitched |
+| D11 | Podium pips: unpitched ticks (default) or remove entirely. | unpitched, still one per pip |
 
 ---
 
-## 8. What Step 2 will do, and how it will be verified
+---
 
-**Build (all inside `packages/client/src/audio/`, no protocol change, no new server fields):**
-1. `cuesheet.ts` / `recipes.ts` / `render/*` / `live/*`: the palette above (new recipes for tulnic, world steps, notch,
-   egg, hidden lay, wood-rattle jellyfish, reversed-knock lantern, pond drip, wind); delete §1.5.
-2. `cues.ts`: one mapping layer over a projected input (`soundInputOf`), the ordinal seed, `durMs` on every request,
-   the threshold crossings (12/6/1), notch ticks, pool-empty crossfade on the event's beat.
-3. `mixer.ts` / `ambience.ts`: stepped low-pass/level states with a 25 ms ramp; ducking under the rare cues.
-4. `lab.tsx` + `main.tsx`: a play button per cue **and per take**, gated to dev. *I cannot listen; the page is for you.*
+## 8. As built
 
-**Tests (vitest, existing harness):**
-- Two different private states + the same public event ⇒ identical `(id, delayMs, durMs)` for every viewer — for every
-  event type in §2, including honest-no vs Squid deny vs Squid claim.
-- A Proxy over the raw wire objects: any read outside §3 fails the test.
-- No cue id contains `squid`; no cue is emitted for a Squid grant/use in either mode.
-- Signature cues ≤ 1400 ms; only `mus.start` and `mus.podium` exceed it; no cue blocks (no `await` on audio in any input path).
-- The forbidden list: no `sine`-only bleep recipes, no looped buffer, no `mus.*` loop.
-- Every repeated cue has exactly 3 takes; the chain rise is monotone and capped.
+**Where the build differs from the design that was reviewed**
+- _Seeds:_ the variation is seeded by the cue's place in the run of cues handed out (`ordinal`), not by a hash of the step (§4).
+- _POWER_USED / POWER_GRANTED:_ read no fields at all (the design allowed `rank` / `playerId`); the adapter drops a Squid use.
+- _Valley:_ low-passes 1000 / 650 / 420 Hz instead of 2600 / 1500 / 800 (the design's were above the horn's roll-off; measured, §9).
+- _Levels:_ `power.mantis` −4.5 dB, `power.lanternfish` and `power.tortoise` −1.5 dB, `table.gofish` −2.5 dB (the limiter was moving
+  them by 1-3 dB), the two clock cues −1.2 dB (ten loudness units over the loudest bed, with the bed's window at 12-20 under the anchor).
+- _Crack:_ band-limited to 3-6 kHz; at 8 kHz Mantis' inter-sample peaks crossed −1 dBTP.
+- _Confusability fixes:_ the `table.gofish` drip at +115 ms, the speaker Mantis' clicks 40 ms in, the speaker `table.egg` at 55 ms.
+- _Eggs get a log line_ (§6), which the design did not foresee.
+- _Codex:_ its "motif" buttons now play each power's own cue and the stave drawing is gone; its copy no longer says "motif" or "stave".
+- _Tests added or rewritten:_ `cues`, `cuesheet`, `recipes`, `engine`, `choreography`, `world`, `presentation-leak` (re-pointed at the new
+  palette); new `soundfields` (the Proxy), `soundguards` (source rules), `soundtwins`, `horn` (pitches by FFT). `motifs.test.ts` is gone with the motifs.
 
-**Offline measurement (I can run this here):** extend `tools/audio-check.cjs` to render each cue and take in headless
-Chromium and report, per cue and profile: true peak, integrated/momentary loudness, active duration, clipping count. I will
-also *measure* what is measurable about the spec rather than judge taste: the tulnic's pitches by FFT peak (are they
-`58·n`?), the echo delays and levels, the ambience step values, the tick spacing. I will report the numbers as they come out
-and say so for any check that fails.
-
-**What I cannot verify and will not claim:** whether it sounds carved / tense / generic (I can't hear); iOS Safari unlock;
-phone speakers; whether voice-chat noise suppression passes the cues; whether the tulnic phrase is culturally
-appropriate (`FEEL_VISUAL_SOUND_PLAN.md` §11.8 already calls for a Romanian folk-music consultant before anything is
-recorded, and this design needs the same review).
+**Removed:** 26 cue ids (§1.5), `motifs.ts`, the țambal / breath / drâmbă renderers, the private tier, the dobă pulse, the pond's birds, fish and reeds.
 
 ---
 
-*Stopping here for your review.*
+## 9. Measured, and not
+
+Measured by `npm run audio:check --workspace=packages/client` (esbuild + headless Chromium + `OfflineAudioContext` at 48 kHz, the product's
+recipes → per-voice mastering → buses → stems → profile EQ → program gain → the same limiter the worklet runs). **13 of 13 checks pass**:
+plank grammar · confusability · echo budget · peaks (true peak ≤ −1 dBTP in a 3-minute scene and the six-cue pile-up; the soft clip never
+engages) · headroom · ambience (12-20 LU under the anchor in five pond states) · clock (≥ 10 LU over the loudest bed) · balance ·
+**palette** (only Shark, Mantis, Whale break the frame, and all three do) · **duration** (nothing but the call and the podium over 1.4 s) ·
+**the valley** · **the darkening steps** · calibration. The last four are new.
+
+| Scene | Speaker | Headphones |
+|---|---|---|
+| whole mix, integrated | −29.5 LUFS | −32.2 LUFS |
+| short-term max | −22.6 LUFS | −24.3 LUFS |
+| true peak, scene / six-cue burst | −1.3 / −1.4 dBTP | −1.5 / −1.5 dBTP |
+| limiter, max gain reduction / time over 1 dB | 2.5 dB / 0.08 % | 2.5 dB / 0.002 % |
+| soft-clip samples | 0 | 0 |
+| bed under the anchor (five states) | 14.1 to 19.8 LU | 13.3 to 19.1 LU |
+
+The tulnic, measured on the rendered `mus.start` (headphones variant): each held note's pitch is its partial of 58 Hz within 2.5 %
+(`test/horn.test.ts`, FFT); the three repeats begin at 3.55 / 4.95 / 6.65 s (designed 3.5 / 4.9 / 6.6, plus half a 40 ms frame), at
+−8.2 / −14.9 / −22.0 dB re the dry gesture (designed −9 / −16 / −23) and at −22.4 / −30.8 / −38.5 dB brightness (energy above 1.2 kHz re
+below; the dry gesture is −19.3). The three darkening steps land at −1.5 / −3 / −4.5 dB at 300 Hz (measured within 0.03 dB of designed) and at the designed
+low-pass at 3 kHz (within 0.2 dB), in a 20 ms ramp (10-90 %), with a click ratio of 1.00.
+
+Per cue, one rendering (seed 3; headphones variant, before the chain; "speaker" and "headphones" columns after the chain):
+
+| Cue | Active ms (sheet max) | Raw sample peak dBFS | Active LUFS | Momentary max LUFS | Speaker: sample / true peak dB | Headphones: sample / true peak dB | Clipped samples |
+|---|---|---|---|---|---|---|---|
+| `ui.press` | 41 (60) | -6.4 | -21.9 | -31.8 | -7.9 / -7.9 | -14.4 / -14.4 | 0 |
+| `ui.press.soft` | 26 (60) | -9.5 | -23.4 | -35.3 | -12.0 / -12.0 | -19.4 / -19.3 | 0 |
+| `ui.select` | 59 (90) | -9.2 | -25.2 | -33.5 | -9.9 / -7.3 | -15.8 / -15.8 | 0 |
+| `ui.drop` | 60 (90) | -14.7 | -30.4 | -38.7 | -12.9 / -12.8 | -17.2 / -17.1 | 0 |
+| `ui.target` | 96 (90) | -10.8 | -26.8 | -33.0 | -8.0 / -8.0 | -14.8 / -14.8 | 0 |
+| `ui.error` | 89 (120) | -6.3 | -21.6 | -28.2 | -10.3 / -10.3 | -14.6 / -14.5 | 0 |
+| `ui.toggle` | 61 (120) | -11.7 | -27.9 | -36.1 | -10.8 / -8.6 | -17.1 / -16.2 | 0 |
+| `ui.copy` | 62 (120) | -6.2 | -20.4 | -28.5 | -10.8 / -10.8 | -17.0 / -17.0 | 0 |
+| `table.turn` | 207 (200) | -6.5 | -23.0 | -25.9 | -7.0 / -7.0 | -10.4 / -10.4 | 0 |
+| `table.ask` | 184 (200) | -4.5 | -22.7 | -26.1 | -4.4 / -4.4 | -7.2 / -7.2 | 0 |
+| `table.turn.you` | 193 (190) | -6.5 | -22.6 | -25.7 | -2.2 / -2.2 | -6.9 / -6.9 | 0 |
+| `table.bonus` | 214 (200) | -9.6 | -26.1 | -28.8 | -5.0 / -5.0 | -8.4 / -8.4 | 0 |
+| `table.skipped` | 150 (400) | -8.0 | -28.3 | -32.5 | -3.5 / -3.4 | -7.1 / -7.1 | 0 |
+| `table.asked` | 124 (120) | -8.0 | -24.5 | -29.6 | -3.7 / -3.7 | -5.0 / -5.0 | 0 |
+| `table.flight` | 260 (260) | -12.8 | -23.5 | -25.4 | -13.7 / -13.5 | -18.2 / -17.7 | 0 |
+| `table.give` | 342 (340) | -4.7 | -22.6 | -23.3 | -7.5 / -7.5 | -4.5 / -4.5 | 0 |
+| `table.gofish` | 167 (350) | -1.3 | -22.6 | -26.4 | -1.5 / -1.5 | -3.7 / -3.7 | 0 |
+| `table.gofish.dry` | 188 (190) | -2.3 | -23.8 | -27.1 | -2.7 / -2.6 | -4.2 / -4.2 | 0 |
+| `table.draw` | 47 (140) | -8.3 | -24.8 | -34.0 | -7.5 / -5.0 | -10.1 / -8.8 | 0 |
+| `table.refill` | 228 (360) | -7.2 | -26.8 | -29.2 | -6.8 / -2.9 | -8.4 / -6.3 | 0 |
+| `table.poolEmpty` | 1032 (1200) | -6.5 | -24.5 | -22.7 | -3.2 / -3.2 | -5.3 / -5.2 | 0 |
+| `table.lay` | 425 (450) | -3.5 | -23.0 | -23.2 | -2.9 / -2.9 | -1.5 / -1.5 | 0 |
+| `table.lay.power` | 524 (450) | -2.1 | -19.4 | -18.4 | -1.5 / -1.5 | -2.4 / -2.4 | 0 |
+| `table.lay.hidden` | 524 (450) | -2.1 | -20.0 | -19.2 | -2.7 / -2.7 | -2.3 / -2.3 | 0 |
+| `table.egg` | 225 (330) | -2.5 | -21.6 | -24.1 | -9.5 / -9.5 | -11.2 / -11.2 | 0 |
+| `table.impact` | 234 (380) | 5.3 | -12.7 | -15.1 | -2.4 / -2.4 | -3.9 / -3.9 | 0 |
+| `table.tally` | 48 (90) | -8.3 | -24.3 | -33.5 | -7.9 / -7.9 | -10.0 / -10.0 | 0 |
+| `world.dark.12` | 204 (180) | -7.6 | -24.1 | -27.0 | -2.7 / -2.7 | -3.9 / -3.9 | 0 |
+| `world.dark.06` | 204 (180) | -7.7 | -23.7 | -26.6 | -6.4 / -6.4 | -2.8 / -2.8 | 0 |
+| `world.dark.01` | 1267 (1320) | -7.5 | -16.4 | -14.0 | -11.7 / -11.7 | -16.3 / -16.3 | 0 |
+| `world.notch` | 11 (50) | -9.6 | -21.2 | -36.8 | -16.4 / -16.3 | -20.6 / -20.6 | 0 |
+| `mus.start` | 7961 (8300) | -7.0 | -18.4 | -12.1 | -13.6 / -13.6 | -18.5 / -18.5 | 0 |
+| `mus.podium` | 2386 (2600) | -6.2 | -14.9 | -12.6 | -11.5 / -11.5 | -16.9 / -16.9 | 0 |
+| `clock.tick` | 17 (60) | -13.9 | -28.3 | -42.0 | -6.7 / -6.6 | -13.7 / -13.7 | 0 |
+| `clock.tick.urgent` | 64 (60) | -13.9 | -31.1 | -39.1 | -6.2 / -5.5 | -12.1 / -12.1 | 0 |
+| `clock.close` | 56 (60) | -6.2 | -21.0 | -29.6 | -7.2 / -7.2 | -12.1 / -12.1 | 0 |
+| `power.granted` | 265 (320) | -8.7 | -29.3 | -31.1 | -1.6 / -1.5 | -3.6 / -3.6 | 0 |
+| `power.windup` | 245 (260) | -3.9 | -22.9 | -25.0 | -5.8 / -5.8 | -9.7 / -9.5 | 0 |
+| `power.reveal` | 318 (400) | -3.6 | -22.0 | -23.0 | -1.6 / -1.6 | -1.5 / -1.5 | 0 |
+| `power.shark` | 449 (460) | 2.5 | -15.2 | -14.7 | -1.5 / -1.5 | -1.7 / -1.7 | 0 |
+| `power.mantis` | 202 (320) | -0.4 | -23.5 | -26.4 | -1.5 / -1.4 | -4.7 / -4.7 | 0 |
+| `power.lanternfish` | 369 (400) | -5.8 | -23.8 | -24.2 | -1.5 / -1.5 | -3.6 / -3.6 | 0 |
+| `power.tortoise` | 350 (450) | -0.1 | -21.8 | -22.4 | -1.5 / -1.5 | -2.3 / -2.3 | 0 |
+| `power.jellyfish` | 412 (460) | -7.5 | -27.8 | -28.2 | -1.5 / -1.5 | -2.0 / -2.0 | 0 |
+| `power.stickleback` | 229 (280) | -6.7 | -19.9 | -22.4 | -1.5 / -0.8 | -4.7 / -4.3 | 0 |
+| `power.stickleback.miss` | 208 (200) | -13.5 | -31.8 | -34.6 | -1.5 / -1.5 | -1.6 / -1.6 | 0 |
+| `power.whale` | 1334 (1400) | 1.0 | -19.8 | -15.1 | -1.5 / -0.1 | -1.5 / -1.5 | 0 |
+| `power.clownfish.bound` | 200 (220) | -8.6 | -27.4 | -30.4 | -5.2 / -5.2 | -5.8 / -5.8 | 0 |
+| `amb.gate` | 279 (400) | -34.4 | -46.4 | -47.9 | -49.5 / -49.5 | -52.9 / -52.9 | 0 |
+| `meta.join` | 208 (200) | -8.4 | -24.9 | -27.7 | -5.0 / -5.0 | -8.4 / -8.4 | 0 |
+| `meta.leave` | 135 (200) | -9.2 | -27.2 | -31.9 | -4.8 / -4.8 | -7.1 / -7.1 | 0 |
+| `meta.reconnected` | 62 (200) | -6.2 | -20.3 | -28.4 | -12.7 / -12.7 | -17.7 / -17.6 | 0 |
+| `meta.nudge` | 193 (200) | -6.5 | -22.6 | -25.7 | -4.2 / -4.2 | -8.9 / -8.9 | 0 |
+
+**Not verified, and not claimed:** how any of it sounds (that is what the audition page and your ears are for); whether "carved,
+dry, tense" is what a listener would say; iOS Safari's unlock and the silent switch; phone speakers, headphones, Bluetooth latency;
+whether voice-chat noise suppression passes the knocks to the other players (the earlier plan kept tonal cues for that reason; D1
+gives it up, unmeasured); whether the tulnic phrase and its partials are culturally right (`FEEL_VISUAL_SOUND_PLAN.md` §11.8 asks for a
+Romanian folk-music consultant before anything is recorded, and this needs the same); real-device performance of the added nodes (Mantis
+is 62 nodes, Shark 56, Whale 53, against a budget of 10 a hit that the harness reports but does not gate — the frame-breakers are rare);
+the seat-signature blindfold test (D8), never run in this repo.

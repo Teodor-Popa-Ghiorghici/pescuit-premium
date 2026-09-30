@@ -298,7 +298,7 @@ const LOG_WORTHY = new Set<string>([
 /** which beat a cue belongs to, in order of preference: the first kind present wins */
 function cueBeatKinds(id: string): BeatKind[] {
   if (id === 'clock.close') return ['close'];
-  if (id === 'table.asked' || id === 'clock.eligible') return ['hold', 'close'];
+  if (id === 'table.asked') return ['hold', 'close'];
   if (id === 'table.ask') return ['ask'];
   if (id === 'table.flight' || id === 'table.give') return ['give'];
   if (id === 'table.gofish') return ['gofish'];
@@ -309,15 +309,15 @@ function cueBeatKinds(id: string): BeatKind[] {
   if (id === 'table.skipped') return ['skip', 'turn'];
   if (id === 'table.bonus') return ['bonus'];
   if (id === 'table.refill') return ['refill'];
-  if (id.startsWith('table.lay')) return ['lay'];
-  if (id === 'mus.lastset') return ['lastSet', 'lay'];
+  if (id.startsWith('table.lay') || id === 'table.egg' || id === 'world.notch') return ['lay'];
+  if (id === 'world.dark.01') return ['lastSet', 'lay'];
+  if (id.startsWith('world.dark.')) return ['lay'];
   if (id === 'mus.start') return ['start'];
-  if (id.startsWith('mus.end') || id === 'table.tally') return ['end'];
+  if (id === 'mus.podium' || id === 'table.tally') return ['end'];
   if (id === 'amb.gate') return ['gate'];
   if (id === 'power.reveal') return ['reveal'];
   if (id.startsWith('power.granted')) return ['grant', 'lay'];
   if (id === 'power.clownfish.bound') return ['bound'];
-  if (id.startsWith('power.used.')) return ['reveal', 'spent', 'shark', 'reflect', 'block', 'stun', 'steal', 'miss', 'mantis', 'whale'];
   if (id === 'power.shark') return ['shark'];
   if (id === 'power.lanternfish') return ['reflect'];
   if (id === 'power.tortoise') return ['block'];
@@ -326,7 +326,6 @@ function cueBeatKinds(id: string): BeatKind[] {
   if (id === 'power.mantis') return ['mantis'];
   if (id === 'power.whale') return ['whale'];
   if (id === 'power.windup' || id === 'table.impact') return ['shark', 'reflect', 'block', 'stun', 'steal', 'miss', 'mantis', 'whale'];
-  if (id === 'table.lead' || id === 'table.breakaway' || id === 'table.chase' || id === 'table.clinch') return ['lead'];
   return [];
 }
 
@@ -603,7 +602,8 @@ export function choreograph(record: PublicRecord, facts: SeatFacts, opts: Choreo
   const used = events.find((e) => e.type === 'POWER_USED' && !SILENT_RANKS.has(e.rank));
   const E = used && !ascuns ? BEAT.effectOpen : BEAT.effect;
   const W = Math.max(0, E - TIME.windup);
-  const via = used && used.type === 'POWER_USED' && used.viaClownfish ? 'clownfish' : undefined;
+  // the wire never says a use was a Clownfish's copy (it reports the copied rank), so this stays undefined; kept for the art
+  const via = used && used.type === 'POWER_USED' && (used as { viaClownfish?: boolean }).viaClownfish ? 'clownfish' : undefined;
   if (used && used.type === 'POWER_USED') {
     if (ascuns) {
       // the plate flips at its owner's seat, then rises into the proclamation at the strike
@@ -835,7 +835,7 @@ export function choreograph(record: PublicRecord, facts: SeatFacts, opts: Choreo
   place(haptics, (h) => hapticBeatKinds(h.signal), (b, h) => b.haptics.push(h));
 
   // the podium: the ceremony's cue waits for it
-  for (const b of beats) if (b.kind === 'end' && podiumAt !== null) b.cues = b.cues.map((c) => (c.id.startsWith('mus.end') ? { ...c, at: podiumAt! } : c.id === 'table.tally' ? { ...c, at: podiumAt! + c.at } : c));
+  for (const b of beats) if (b.kind === 'end' && podiumAt !== null) b.cues = b.cues.map((c) => (c.id === 'mus.podium' ? { ...c, at: podiumAt! } : c.id === 'table.tally' ? { ...c, at: podiumAt! + c.at } : c));
 
   return finish({ seq, beats, tableMs: 0, podiumAt, cues: [], haptics: [] }, opts);
 }

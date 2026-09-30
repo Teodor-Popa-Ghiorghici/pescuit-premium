@@ -93,14 +93,15 @@ describe('the podium (§5.7)', () => {
     return { c: choreograph(r, facts(who), DEFAULT_OPTIONS), cues: cuesFor(r, facts(who)) };
   };
 
-  it('counts the pips up with table.tally, one cue per pip, a step higher each - the same for every viewer', () => {
+  it('counts the pips up with table.tally, one cue per pip - the same for every viewer', () => {
     const scores = { a: 5, b: 3, c: 2, d: 0 };
     const tallies = (who: string) => ended(scores, ['a'], 'decided', who).cues.filter((c) => c.id === 'table.tally');
     const mine = tallies('c');
     expect(mine).toHaveLength(5);
     expect(mine.map((c) => c.params?.pip)).toEqual([0, 1, 2, 3, 4]);
-    expect(mine.map((c) => c.at)).toEqual([0, 1, 2, 3, 4].map((k) => BEAT.tallyStart + k * BEAT.tallyStep));
-    // the winner and a loser hear the same pips (only the ceremony's cue differs)
+    // each pip sits on its step, give or take the few ms of spread every quiet, frequent cue has
+    mine.forEach((c, k) => expect(Math.abs(c.at - (BEAT.tallyStart + k * BEAT.tallyStep))).toBeLessThanOrEqual(6));
+    // the winner and a loser hear the same pips, and the same podium
     expect(tallies('a')).toEqual(mine);
     expect(tallies('b')).toEqual(mine);
     expect(cueDef('table.tally')?.heard).toBe('all');
@@ -111,14 +112,15 @@ describe('the podium (§5.7)', () => {
     const e = c.beats.find((b) => b.kind === 'end')!;
     const tally = e.cues.filter((x) => x.id === 'table.tally');
     expect(tally).toHaveLength(3);
-    expect(tally[0].at).toBe(c.podiumAt! + BEAT.tallyStart);
-    expect(e.cues.some((x) => x.id.startsWith('mus.end'))).toBe(true);
+    expect(Math.abs(tally[0].at - (c.podiumAt! + BEAT.tallyStart))).toBeLessThanOrEqual(6);
+    expect(e.cues.some((x) => x.id === 'mus.podium')).toBe(true);
   });
 
-  it('a tie is the tie ceremony for both winners, the loss for the rest; no reason gets a different beat length', () => {
+  it('the podium is one call for everyone - a winner, a tie, a loser, a spectator; no reason gets a different beat length', () => {
     const tie = { a: 4, b: 4, c: 1, d: 0 };
-    expect(ended(tie, ['a', 'b'], 'decided', 'a').cues.map((c) => c.id)).toContain('mus.end.tie');
-    expect(ended(tie, ['a', 'b'], 'decided', 'c').cues.map((c) => c.id)).toContain('mus.end.lose');
+    const heard = (who: string) => ended(tie, ['a', 'b'], 'decided', who).cues.map((c) => [c.id, c.at, c.durMs]);
+    for (const who of ['a', 'c', 'spectator']) expect(heard(who), who).toEqual(heard('a'));
+    expect(heard('c').map((x) => x[0])).toContain('mus.podium');
     const lengths = ['decided', 'streak', 'exhausted'].map((r) => ended(tie, ['a', 'b'], r).c.podiumAt);
     expect(new Set(lengths).size).toBe(1);
   });

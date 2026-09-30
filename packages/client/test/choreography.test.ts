@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PowerMode, PublicEvent, PublicRecord, PublicView, SeatFacts } from '../src/audio/cues.js';
 import { BEAT } from '../src/audio/cues.js';
+import { publicEventsOf } from '../src/game/record.js';
 import { choreograph, DEFAULT_OPTIONS, flightMs, summarize, TIME, type Beat, type Choreography } from '../src/game/choreography.js';
 
 const PLAYERS = ['a', 'b', 'c', 'd'];
@@ -147,14 +148,17 @@ describe('the totem and your turn (§4.5)', () => {
     const c = ch(r, 'd');
     const lands = c.beats.filter((b) => b.flights.some((f) => f.what === 'totem')).map((b) => b.flights[0].land);
     expect(lands).toEqual([BEAT.turn, BEAT.turn + BEAT.turnGap]);
-    expect(c.cues.map((x) => [x.id, x.at])).toEqual([['table.skipped', BEAT.turn], ['table.turn', BEAT.turn + BEAT.turnGap]]);
+    expect(c.cues.map((x) => x.id)).toEqual(['table.skipped', 'table.turn']);
+    expect(c.cues[0].at).toBe(BEAT.turn);
+    expect(Math.abs(c.cues[1].at - (BEAT.turn + BEAT.turnGap))).toBeLessThanOrEqual(6); // the totem's bar has a few ms of spread
   });
 
   it('your turn: the totem lands at 760, with table.turn.you and the 16 ms haptic at the same moment, and turnLanded moves the chrome', () => {
     const r = rec(21, view({ currentPlayerId: 'a' }), view({ currentPlayerId: 'c' }), [{ type: 'TURN_STARTED', playerId: 'c' }]);
     const mine = ch(r, 'c');
     const t = beat(mine, 'turn');
-    expect(t.cues.map((x) => [x.id, x.at])).toEqual([['table.turn.you', 760]]);
+    expect(t.cues.map((x) => x.id)).toEqual(['table.turn.you']);
+    expect(Math.abs(t.cues[0].at - 760)).toBeLessThanOrEqual(6);
     expect(t.haptics.map((x) => [x.signal, x.pattern, x.at])).toEqual([['yourTurn', [16], 760]]);
     expect(t.ops).toEqual([{ op: 'turnLanded', at: 760, playerId: 'c' }]);
     expect(t.masks).toEqual([{ target: 'totem', until: 760 }]);
@@ -289,9 +293,9 @@ describe('sets, powers, signature moments (§5.7, Appendix A)', () => {
     expect(beat(miss, 'power').ops.find((o) => o.op === 'callout')).toMatchObject({ callout: { kind: 'miss', key: 'sticklebackMiss' } });
   });
 
-  it('Squid: nothing - no reveal, no motif, no effect beat, whatever the mode', () => {
+  it('Squid: nothing - no reveal, no motif, no effect beat, whatever the mode (the adapter drops a Squid use before anything sees it)', () => {
     for (const mode of ['ascuns', 'deschis'] as PowerMode[]) {
-      const c = ch(rec(60, view(), view(), [{ type: 'POWER_USED', playerId: 'a', rank: 'squid' }], mode));
+      const c = ch(rec(60, view(), view(), publicEventsOf([{ type: 'POWER_USED', playerId: 'a', rank: 'squid' }] as never, null), mode));
       expect(c.beats.filter((b) => b.kind !== 'log')).toEqual([]);
       expect(c.cues).toEqual([]);
     }
@@ -321,7 +325,7 @@ describe('sets, powers, signature moments (§5.7, Appendix A)', () => {
     const e = beat(c, 'end');
     expect(e.cls).toBe('ceremony');
     expect(e.masks).toEqual([{ target: 'podium', until: c.podiumAt }]);
-    expect(e.cues[0]).toMatchObject({ id: 'mus.end.win', at: c.podiumAt });
+    expect(e.cues.find((x) => x.id === 'mus.podium')).toMatchObject({ at: c.podiumAt });
   });
 });
 

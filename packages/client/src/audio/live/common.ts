@@ -71,5 +71,9 @@ export function harmonics(ctx: Ctx, source: AudioNode, into: AudioNode, dbGain =
   source.connect(shaper).connect(g).connect(into);
 }
 
-/** Observers used by the tests and the harness: the plank grammar counts every wood strike. */
-export const hooks: { strike?: (plank: 'A' | 'B' | 'C' | 'D', damping: number) => void } = {};
+/** Observers used by the tests and the harness: the plank grammar counts every wood strike, and the palette rule counts every
+ * way a frame breaks (a cracked-wood transient, splintering fibres, a hull's groan): only Shark, Mantis and Whale may use them. */
+export const hooks: {
+  strike?: (plank: 'A' | 'B' | 'C' | 'D', damping: number) => void;
+  breaks?: (kind: 'crack' | 'fibres' | 'groan') => void;
+} = {};

@@ -101,9 +101,9 @@ function fullEntryFor(
       return { key: 'log.handRefilled', params: { player: nameOf(e.playerId), count: e.count } };
     case 'SET_LAID':
       // rank is null while the set is concealed from this viewer (Mode Ascuns, not the owner)
-      return e.rank === null
-        ? { key: 'log.setLaidHidden', params: { player: nameOf(e.playerId) } }
-        : { key: 'log.setLaid', params: { player: nameOf(e.playerId), rank: rankLabel(e.rank) } };
+      // the eggs used are public (`eggCount`) and each one ticks (`table.egg`), so the line says so too: sound is never the only channel
+      if (e.rank === null) return e.eggCount > 0 ? { key: 'log.setLaidHiddenEggs', params: { player: nameOf(e.playerId), eggs: e.eggCount } } : { key: 'log.setLaidHidden', params: { player: nameOf(e.playerId) } };
+      return e.eggCount > 0 ? { key: 'log.setLaidEggs', params: { player: nameOf(e.playerId), rank: rankLabel(e.rank), eggs: e.eggCount } } : { key: 'log.setLaid', params: { player: nameOf(e.playerId), rank: rankLabel(e.rank) } };
     case 'SET_DESTROYED':
       return { key: 'log.setDestroyed', params: {} };
     case 'POWER_GRANTED':

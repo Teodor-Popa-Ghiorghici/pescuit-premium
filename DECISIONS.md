@@ -701,3 +701,30 @@ live in `client/src/i18n/codexStrings.ts` (read only by the Rules panel and the 
 `?metrics=1` read-outs moved behind a facade (`game/metrics.ts`) that downloads `metricsImpl.ts` only when the URL or the
 perf script asks (-1.3 KB from main; a player never loads it). The Rules panel, the Codex and the metrics module are 2.3 +
 1.3 + 1.9 KB more, on demand; the dev tools and labs (18.3 KB) never reach a player. Textures 13 KB of 30; audio downloads 0 KB.
+
+
+## Sound: the palette re-voiced (SOUND_DESIGN.md)
+
+The audio module (`packages/client/src/audio/`) was re-voiced against a sound brief: carved and printed, not polished. The design, the
+event → cue table, the list of public fields a cue may read, and the measured results are in `SOUND_DESIGN.md`. What was decided, and why it
+matters to the rest of the repo:
+
+- **Only Shark, Mantis Shrimp and Whale leave the palette** (they are the cards that break the rope frame in the art). The eight fluier / caval
+  motifs, the țambal cues, the four score-race cues (`table.lead / breakaway / chase / clinch`), the win / tie / lose music, the dobă pulse and the
+  pond's birds are gone. The score race is still drawn and buzzed (haptics); it is no longer voiced.
+- **No private tier.** `clock.eligible`, `power.granted.mine` and the Ascuns `power.clownfish.bound` are gone: a cue only one client can hear is a
+  tell. The eligible player still has the plank, the clock and (Android, opt-in) the private buzz — haptics are unchanged.
+- **The mapping is a projection.** `cuesFor` reads only the fields in `SOUND_FIELDS` (`audio/cues.ts`); `test/soundfields.test.ts` fails on any other
+  read. `POWER_USED` and `POWER_GRANTED` are read by type alone; a Squid use is dropped by `record.ts` before anything sees it (the engine emits none).
+- **Variation is seeded by the run of cues handed out**, not by the room `seq` (which counts events a client never receives) and not by a step's
+  content (a silent structural window splits a step in two).
+- **The world steps.** At 12, 6 and 1 sets still possible the ambience takes one flat step darker (a fixed low-pass and level, a 25 ms ramp) with a
+  knock (`world.dark.*`); each notch that counts down gets a chisel tick (`world.notch`); the pond becomes wind on the pool-empty event, in 400 ms.
+  The presenter turns them on the beat of the cue, not when the view arrives (`engine.worldAt`).
+- **Ducking is back, for rare cues only** (`DESIGN.md` §0.1, row 7.5, said none): the call, the podium, the three darkening knocks, Shark, Mantis,
+  Whale and the reveal duck the ambience 10 dB; nothing frequent does.
+- **The audition page is development-only** (`import.meta.env.DEV`); a production build contains no lab chunk.
+- **Eggs are written down.** `table.egg` ticks once per egg in a set laid; the log line for a set laid now names the eggs used (audio is never the
+  only channel).
+- **Still open, and not audio's to close:** a structural window opening at all, and how long it stays open, is visible in the public view and tells the table
+  someone holds the matching power ("Uniform windows: decided and deferred"). Every structural window is silent for every client; the pause remains.

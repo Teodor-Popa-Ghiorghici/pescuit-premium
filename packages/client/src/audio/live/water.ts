@@ -1,6 +1,6 @@
 /* Water — the pond. Bubble: a sine rising ~40 % over its 40-80 ms life (large 450 Hz, small
- * 900-1600 Hz). Plop: one large and two or three small bubbles plus a 120 ms splash. Drip: one
- * 1.8-2.6 kHz bubble. */
+ * 900-1600 Hz); only the drain gurgle (`table.poolEmpty`) still uses it. Plop: one large and two or three small
+ * bubbles plus a 120 ms splash (no longer used by a cue). Drip: a resonant noise band falling 2400 -> 1300 Hz. */
 
 import { type Ctx, env, filt, noiseSrc } from './common.js';
 
@@ -26,8 +26,18 @@ export function plop(ctx: Ctx, out: AudioNode, t: number, r: () => number, gain 
   splash(ctx, out, t + 0.005, r, 0.2 * gain);
 }
 
-export function drip(ctx: Ctx, out: AudioNode, t: number, r: () => number, gain = 1): void {
-  bubble(ctx, out, t, 1800 + r() * 800, 0.04, gain);
+/**
+ * A drip: a droplet in still water. Noise through a narrow resonant band that falls 2400 -> 1300 Hz in 35 ms (a fast
+ * pitch drop), and a dull 6 ms tap under it. Made of noise, not an oscillator: no sine bleep. 5 nodes.
+ */
+export function drip(ctx: Ctx, out: AudioNode, t: number, r: () => number, gain = 1, pitch = 1, rise = false): void {
+  // `rise` is the audition page's other direction (a real entrained bubble tends to rise); the game's drip falls
+  const [a, b] = rise ? [1300, 2400] : [2400, 1300];
+  const bp = filt(ctx, 'bandpass', a * pitch, 25);
+  bp.frequency.setValueAtTime(a * pitch * (1 + (r() - 0.5) * 0.1), t);
+  bp.frequency.exponentialRampToValueAtTime(b * pitch, t + 0.035);
+  noiseSrc(ctx, t, 0.05, r).connect(bp).connect(env(ctx, t, gain * 1.6, 0.001, 0.04)).connect(out);
+  noiseSrc(ctx, t, 0.008, r).connect(filt(ctx, 'lowpass', 700)).connect(env(ctx, t, gain * 0.5, 0.001, 0.006)).connect(out);
 }
 
 /** The water churns: a low-passed noise sweeping down. 3 nodes plus the filter. */

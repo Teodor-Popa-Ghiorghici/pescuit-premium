@@ -68,23 +68,22 @@ describe('settings (§3.5): per device, persisted, always behind try/catch', () 
   });
 });
 
-describe('the engine plays no private cue by default (Law 1, defence in depth)', () => {
-  it('drops the private tier unless headphones mode is on', () => {
+describe('the engine has no private tier (Law 1, SOUND_DESIGN §4)', () => {
+  it('plays a cue for everyone or for no one: mute is the only thing that silences it, and nothing in a cue\'s parameters can', () => {
     g.localStorage = fakeStorage();
     const e = getEngine();
     e.update({ profile: 'speaker', muted: false });
-    expect(e.play('clock.eligible')).toBe(false);
-    expect(e.play('power.granted.mine', { rank: 'whale' })).toBe(false);
-    expect(e.play('power.clownfish.bound', { private: true, rank: 'shark' })).toBe(false); // Ascuns: private
-    expect(e.play('power.clownfish.bound', { rank: 'shark' })).toBe(true); // Deschis: public
+    expect(e.play('power.clownfish.bound')).toBe(true);
     expect(e.play('table.turn', { seat: 1 })).toBe(true);
+    // a `private` flag no longer exists: even if a caller passed one, the cue plays as any other
+    expect(e.play('power.clownfish.bound', { private: true } as never)).toBe(true);
     e.update({ profile: 'headphones' });
-    expect(e.play('clock.eligible')).toBe(true);
-    expect(e.play('power.clownfish.bound', { private: true })).toBe(true);
+    expect(e.play('power.clownfish.bound')).toBe(true);
     e.update({ muted: true });
     expect(e.play('table.turn')).toBe(false);
     e.update({ profile: 'speaker', muted: false });
     expect(e.play('no.such.cue')).toBe(false);
+    for (const gone of ['clock.eligible', 'power.granted.mine']) expect(e.play(gone)).toBe(false);
   });
 });
 
@@ -94,7 +93,7 @@ describe('spawnVoice', () => {
     for (const c of CUES) {
       const { ctx, edges } = fakeCtx();
       const buses = Object.fromEntries(BUS_NAMES.map((b) => [b, { bus: b, connect: (d: unknown) => d }])) as unknown as Record<BusName, AudioNode>;
-      const ok = spawnVoice({ ctx, buses, profile: 'speaker', mastering: true, pan: false }, c.id, { seat: 1, rank: 'whale' }, 3, 0.1);
+      const ok = spawnVoice({ ctx, buses, profile: 'speaker', mastering: true, pan: false }, c.id, { seat: 1, seat2: 2 }, 3, 0.1);
       expect(ok, c.id).toBe(true);
       const reached = new Set(edges.filter(([, to]) => (to as { bus?: string }).bus).map(([, to]) => (to as { bus: string }).bus));
       expect([...reached], c.id).toEqual([c.bus]);

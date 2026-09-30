@@ -7,7 +7,8 @@
  * the sum. Each cue is mastered per voice before it reaches a bus: c·tanh(x/c), with c set per
  * cue and profile from the calibration (see calibration.ts). Ambience follows a slow *table
  * activity* envelope - rising over 1.5 s, falling over 6 s, at most -4 dB - never a per-cue duck.
- * Settings are per device and persisted in localStorage (always behind try/catch).
+ * Settings are per device and persisted in localStorage (always behind try/catch). The ambience stem also carries the
+ * darkening step (DARK_STEPS): a flat low-pass and level, changed only at 12, 6 and 1 sets remaining.
  */
 
 import { CAL, PROGRAM_DB } from './calibration.js';
@@ -93,6 +94,13 @@ export function busGain(bus: BusName, profile: Profile, s: Pick<AudioSettings, '
   return fromDb(b.levelDb + (profile === 'speaker' ? b.speakerBoostDb : 0)) * user;
 }
 
+/**
+ * The ambience's darkening (SOUND_DESIGN §1.1): at 12, 6 and 1 sets remaining it steps one FLAT step darker - a fixed
+ * low-pass and a fixed level, reached by a 25 ms linear ramp (click-free), never a sweep. Step 0 is dusk.
+ */
+export const DARK_STEPS = { hz: [4200, 3000, 2100, 1400], db: [0, -1.5, -3, -4.5] } as const;
+export const DARK_RAMP_S = 0.025;
+
 export interface StemGraph {
   buses: Record<BusName, GainNode>;
   /** the three stems after their profile EQ */
@@ -100,7 +108,12 @@ export interface StemGraph {
   /** table activity (ambience, up to -4 dB) and ceremony (ambience fades under `ex` cues) */
   ambActivity: GainNode;
   ambCeremony: GainNode;
+  /** the darkening step: a low-pass and a level on the ambience stem */
+  ambStepLp: BiquadFilterNode;
+  ambStepGain: GainNode;
   setProfile(p: Profile): void;
+  /** puts the ambience in darkening step 0-3 at context time `when` (a 25 ms ramp), or at once */
+  setDarkStep(step: number, when?: number, immediate?: boolean): void;
 }
 
 /** Everything up to the sum: buses, stems, profile EQ. Shared by the live mixer and the offline harness. */
@@ -123,7 +136,27 @@ export function buildStemGraph(ctx: BaseAudioContext, profile: Profile): StemGra
   buses.Clock.connect(clock.input);
   const ambActivity = ctx.createGain();
   const ambCeremony = ctx.createGain();
-  buses.Ambience.connect(ambActivity).connect(ambCeremony).connect(amb.input);
+  const ambStepLp = ctx.createBiquadFilter();
+  ambStepLp.type = 'lowpass';
+  // Web Audio takes a low-pass's Q in dB: -3.0103 dB is 0.707, the flat (Butterworth) response, so a step never adds a bump
+  ambStepLp.Q.value = -3.0103;
+  ambStepLp.frequency.value = DARK_STEPS.hz[0];
+  const ambStepGain = ctx.createGain();
+  buses.Ambience.connect(ambActivity).connect(ambCeremony).connect(ambStepLp).connect(ambStepGain).connect(amb.input);
+  const setDarkStep = (step: number, when = ctx.currentTime, immediate = false) => {
+    const k = Math.max(0, Math.min(3, Math.round(step)));
+    const hz = DARK_STEPS.hz[k];
+    const g = fromDb(DARK_STEPS.db[k]);
+    const t = Math.max(when, ctx.currentTime);
+    for (const [param, v] of [[ambStepLp.frequency, hz], [ambStepGain.gain, g]] as const) {
+      param.cancelScheduledValues(t);
+      if (immediate) param.setValueAtTime(v, t);
+      else {
+        param.setValueAtTime(param.value, t);
+        param.linearRampToValueAtTime(v, t + DARK_RAMP_S);
+      }
+    }
+  };
   const setProfile = (p: Profile) => {
     const pr = PROFILES[p];
     for (const s of [main, clock, amb]) {
@@ -133,7 +166,7 @@ export function buildStemGraph(ctx: BaseAudioContext, profile: Profile): StemGra
     }
   };
   setProfile(profile);
-  return { buses, outputs: { main: main.output, clock: clock.output, ambience: amb.output }, ambActivity, ambCeremony, setProfile };
+  return { buses, outputs: { main: main.output, clock: clock.output, ambience: amb.output }, ambActivity, ambCeremony, ambStepLp, ambStepGain, setProfile, setDarkStep };
 }
 
 /* -------------------------------------------------------- per-voice mastering */
@@ -212,7 +245,12 @@ export class Mixer {
     g.setTargetAtTime(1, t + 4, 6 / 3);
   }
 
-  /** ceremony cues (`ex`): the ambience fades under them and returns */
+  /** the ambience steps to darkening step `step` (0-3) at context time `when`, or at once */
+  setDarkStep(step: number, when?: number, immediate = false): void {
+    this.graph.setDarkStep(step, when, immediate);
+  }
+
+  /** rare signature cues (`ex`): the ambience ducks under them and returns. Never under a frequent cue: that would pump. */
   fadeAmbience(when: number, seconds: number): void {
     const g = this.graph.ambCeremony.gain;
     const t = Math.max(when, this.ctx.currentTime);

@@ -11,7 +11,7 @@
  * The client imports PublicEvent and nothing else from the engine's event types.
  */
 import type { PublicEvent as WireEventBody, RedactedView } from '@pescuit/engine';
-import type { PowerMode, PublicEvent, PublicRecord, PublicView, SeatFacts } from '../audio/cues.js';
+import { chainAfter, type PowerMode, type PublicEvent, type PublicRecord, type PublicView, type SeatFacts } from '../audio/cues.js';
 
 type Ctx = Record<string, unknown>;
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
@@ -42,7 +42,9 @@ export function publicViewOf(v: RedactedView): PublicView {
 /** The events of one message as the pure functions read them. A destroyed set's owner is public in the
  * view that came before it; the event itself does not carry it. */
 export function publicEventsOf(events: readonly WireEventBody[], before: PublicView | null): PublicEvent[] {
-  return events.map((e) => {
+  // The engine emits no POWER_USED for a Squid, ever (the server would be leaking); if one somehow arrived, the picture and the
+  // sound would both have to stay silent, and the simplest way to keep both silent is that nothing downstream ever sees it.
+  return events.filter((e) => !(e.type === 'POWER_USED' && e.rank === 'squid')).map((e) => {
     if (e.type === 'SET_DESTROYED') {
       const owner = before?.laidSets?.find((s) => s.id === e.setId)?.ownerId;
       return (owner ? { ...e, ownerId: owner } : e) as PublicEvent;
@@ -51,9 +53,11 @@ export function publicEventsOf(events: readonly WireEventBody[], before: PublicV
   });
 }
 
-export function recordOf(prev: RedactedView | null, next: RedactedView, events: readonly WireEventBody[], seq: number): PublicRecord {
+/** `chain` is the run of bonus turns before this step; the record carries the run after it (public: BONUS_TURN is an event everyone gets) */
+export function recordOf(prev: RedactedView | null, next: RedactedView, events: readonly WireEventBody[], seq: number, chain = 0, ordinal = 0): PublicRecord {
   const before = prev ? publicViewOf(prev) : null;
-  return { seq, mode: next.config.powerVisibility as PowerMode, before, after: publicViewOf(next), events: publicEventsOf(events, before) };
+  const pub = publicEventsOf(events, before);
+  return { seq, mode: next.config.powerVisibility as PowerMode, before, after: publicViewOf(next), events: pub, chain: chainAfter(chain, pub), ordinal };
 }
 
 export interface FactOptions {

@@ -13,13 +13,14 @@
 import { Ambience } from '../src/audio/ambience.js';
 import { loadRendered, preloadRendered } from '../src/audio/bank.js';
 import { CAL, PROGRAM_DB, type CueCal } from '../src/audio/calibration.js';
-import { ANCHOR_CUE, ANCHOR_LUFS, BUSES, CLASS_TARGET_LUFS, CUES, ECHO_EXEMPT, MASTER_CAP_DB, SEAT_CUES, cueDef, type Profile } from '../src/audio/cuesheet.js';
+import { ANCHOR_CUE, ANCHOR_LUFS, BUSES, CLASS_TARGET_LUFS, CUES, ECHO_EXEMPT, FRAME_BREAKERS, MASTER_CAP_DB, SEAT_CUES, cueDef, type Profile } from '../src/audio/cuesheet.js';
 import { DYNAMICS_DEFAULTS, runDynamics } from '../src/audio/dynamics.js';
 import { spawnVoice } from '../src/audio/engine.js';
-import { hooks } from '../src/audio/live/common.js';
+import { hooks, sharedNoise } from '../src/audio/live/common.js';
 import { signature } from '../src/audio/live/wood.js';
-import { measure, integrated, lufsOf, kWeight, meanSquare, onsets, peakOf, sameRhythm, shortTermMax, timbre, timbreDistance, truePeakDb } from '../src/audio/measure.js';
-import { DEFAULT_SETTINGS, buildStemGraph, busGain } from '../src/audio/mixer.js';
+import { fft, measure, integrated, lufsOf, kWeight, meanSquare, onsets, peakOf, sameRhythm, shortTermMax, timbre, timbreDistance, truePeakDb } from '../src/audio/measure.js';
+import { VALLEY } from '../src/audio/render/horn.js';
+import { DARK_STEPS, DEFAULT_SETTINGS, buildStemGraph, busGain } from '../src/audio/mixer.js';
 import { RECIPES, type CueParams } from '../src/audio/recipes.js';
 import { db, fromDb, rng } from '../src/audio/util.js';
 import { VoicePool } from '../src/audio/voices.js';
@@ -32,10 +33,10 @@ const log = (m: string) => console.log(`[harness] ${m}`);
 /** the parameters a cue is measured with: a representative seat, count, wetness, ... */
 const PARAMS: Record<string, CueParams> = {
   'table.turn': { seat: 4 }, 'table.turn.you': { seat: 0 }, 'table.ask': { seat: 1 }, 'table.bonus': { seat: 4 }, 'table.skipped': { seat: 2 },
-  'ui.target': { seat: 1 }, 'power.lanternfish': { seat: 3 }, 'meta.join': { seat: 4 }, 'meta.leave': { seat: 5 }, 'meta.nudge': { seat: 0 },
+  'ui.target': { seat: 1 }, 'power.lanternfish': { seat: 3, seat2: 1 }, 'meta.join': { seat: 4 }, 'meta.leave': { seat: 5 }, 'meta.nudge': { seat: 0 },
   'table.give': { count: 2 }, 'table.gofish': { wet: 1 }, 'table.draw': { wet: 1 }, 'table.refill': { count: 3 }, 'ui.toggle': { on: true },
-  'amb.gate': { open: false }, 'table.tally': { pip: 2 }, 'power.granted.mine': { rank: 'whale' }, 'power.clownfish.bound': { rank: 'shark' },
-  'power.used.clownfish': { rank: 'shark' }, 'power.granted.clownfish': { rank: 'shark' },
+  'table.egg': { count: 4 }, 'amb.gate': { open: false }, 'table.tally': { pip: 2 }, 'table.impact': { weight: 1 },
+  'world.dark.12': { step: 1 }, 'world.dark.06': { step: 2 }, 'world.dark.01': { step: 3 },
 };
 const paramsOf = (id: string): CueParams => PARAMS[id] ?? {};
 /** the seat whose signature a seat cue carries in the measurement */
@@ -187,7 +188,7 @@ function scenePlan(seconds: number, seed: number): Play[] {
     } else plan.push({ id: 'table.gofish.dry', at: t + 0.3 });
     t += 1.0;
     if (r() < 0.07) {
-      plan.push({ id: 'power.used.lanternfish', at: t });
+      plan.push({ id: 'power.lanternfish', at: t, params: { seat: 3, seat2: 1 } });
       plan.push({ id: 'power.mantis', at: t + 0.9 });
       t += 2;
     }
@@ -208,21 +209,22 @@ const SLOT: Record<string, string> = {
   'clock.tick': 'window', 'clock.tick.urgent': 'window', 'clock.close': 'window',
   'table.flight': 'outcome', 'table.give': 'outcome', 'table.gofish': 'outcome', 'table.gofish.dry': 'outcome', 'table.draw': 'outcome', 'table.refill': 'outcome',
   'power.shark': 'outcome', 'power.lanternfish': 'outcome', 'power.tortoise': 'outcome', 'power.stickleback': 'outcome', 'power.stickleback.miss': 'outcome',
-  'table.lay': 'lay', 'table.lay.power': 'lay', 'power.mantis': 'lay', 'power.granted': 'lay', 'power.reveal': 'power',
+  'table.lay': 'lay', 'table.lay.power': 'lay', 'table.lay.hidden': 'lay', 'table.egg': 'lay', 'world.notch': 'lay', 'world.dark.12': 'lay', 'world.dark.06': 'lay',
+  'power.mantis': 'lay', 'power.granted': 'lay', 'power.reveal': 'power',
   'power.jellyfish': 'power', 'power.whale': 'power', 'power.clownfish.bound': 'power',
-  'mus.start': 'ceremony', 'mus.lastset': 'ceremony', 'mus.end.win': 'ceremony', 'mus.end.tie': 'ceremony', 'mus.end.lose': 'ceremony',
+  'mus.start': 'ceremony', 'mus.podium': 'ceremony', 'world.dark.01': 'ceremony',
 };
-// The nine motifs and the ceremonies are told apart by their melody and instrument, not by the first
-// 50 ms of a swell, so they are not compared pair by pair on timbre: test/motifs.test.ts checks their
-// contours are distinct, and the Codex test (§9.2) checks that listeners can tell them apart.
-const MELODIC = (id: string): boolean => id.startsWith('mus.') || (/^power\.(used|granted)\./.test(id) && id !== 'power.granted');
+// The tulnic's phrases are told apart by their melody and length, not by the first 50 ms of a swell, so they are
+// not compared pair by pair on timbre: test/horn.test.ts checks their pitches and shapes.
+const MELODIC = (id: string): boolean => id.startsWith('mus.') || id === 'world.dark.01';
 /** cues that are one event and always sound together (or never at once) */
 const EVENT: Record<string, string> = {
   'table.turn': 'seat', 'table.turn.you': 'seat', 'table.bonus': 'seat', 'table.skipped': 'seat', 'table.ask': 'ask', 'table.asked': 'ask',
   'clock.tick': 'clock', 'clock.tick.urgent': 'clock', 'clock.close': 'clock',
   'table.flight': 'give', 'table.give': 'give', 'table.gofish': 'wet', 'table.draw': 'wet', 'table.refill': 'wet',
-  'table.lay': 'lay', 'table.lay.power': 'lay', 'power.stickleback': 'stickleback', 'power.stickleback.miss': 'stickleback',
-  'power.whale': 'whale',
+  'table.lay': 'lay', 'table.lay.power': 'lay', 'table.lay.hidden': 'lay', 'table.egg': 'lay', 'world.notch': 'lay', 'world.dark.12': 'lay', 'world.dark.06': 'lay',
+  'power.stickleback': 'stickleback', 'power.stickleback.miss': 'stickleback',
+  'power.whale': 'whale', 'power.mantis': 'mantis', 'power.granted': 'lay',
 };
 const eventOf = (id: string): string => EVENT[id] ?? id;
 
@@ -268,14 +270,21 @@ export async function run(options: Options) {
   const wavs: Record<string, string> = {};
   const raw: Record<Profile, Record<string, Float32Array>> = { speaker: {}, headphones: {} };
   const strikes: string[] = [];
+  const breaks: string[] = [];
   const nodes: Record<string, number> = {};
   const spread: Record<string, number> = {};
   for (const id of ids) {
     const spk = new Set<string>();
+    const brk = new Set<string>();
     hooks.strike = (p) => spk.add(p);
+    hooks.breaks = (k) => brk.add(k);
     raw.headphones[id] = await renderRaw(id, 3, false);
     raw.speaker[id] = await renderRaw(id, 3, true);
     hooks.strike = undefined;
+    hooks.breaks = undefined;
+    // the palette rule: only Shark, Mantis and Whale (and the strike's weight on the board, heard only with them) break the frame
+    if (brk.size && !FRAME_BREAKERS.has(id) && id !== 'table.impact') breaks.push(`${id} uses ${[...brk].join(', ')}`);
+    if (!brk.size && FRAME_BREAKERS.has(id)) breaks.push(`${id} does not break the frame at all`);
     for (const p of spk) if ('ABC'.includes(p) && !SEAT_CUES.has(id)) strikes.push(`${id} strikes plank ${p}`);
     nodes[id] = await countNodes(id);
     const levels: number[] = [];
@@ -324,7 +333,7 @@ export async function run(options: Options) {
   if (!options.useFresh && stale.length) log(`the committed calibration is stale (${stale.length} entries): checks run on the FRESH calibration`);
 
   /* ---- alone through the chain ---- */
-  const alone: Record<Profile, Record<string, { shiftDb: number; tailVsHeadDb: number; activeLufs: number; nonlinearDb: number; activeMs: number; peakDb: number; gr: number; clipped: number }>> = { speaker: {}, headphones: {} };
+  const alone: Record<Profile, Record<string, { shiftDb: number; tailVsHeadDb: number; activeLufs: number; nonlinearDb: number; activeMs: number; peakDb: number; truePeakDb: number; gr: number; clipped: number }>> = { speaker: {}, headphones: {} };
   const aloneOut: Record<Profile, Record<string, Float32Array>> = { speaker: {}, headphones: {} };
   for (const profile of ['speaker', 'headphones'] as Profile[]) {
     for (const id of ids) {
@@ -340,7 +349,7 @@ export async function run(options: Options) {
       for (let i = 0; i < c.out.length; i++) { const r = c.out[i] - alpha * lin[i]; rr += r * r; oo += c.out[i] * c.out[i]; }
       alone[profile][id] = {
         shiftDb: levelOf(id, c.out) - levelOf(id, lin),
-        tailVsHeadDb: mo.tailVsHeadDb, activeLufs: mo.activeLufs, activeMs: mo.activeMs, peakDb: mo.peakDb,
+        tailVsHeadDb: mo.tailVsHeadDb, activeLufs: mo.activeLufs, activeMs: mo.activeMs, peakDb: mo.peakDb, truePeakDb: truePeakDb(c.out),
         nonlinearDb: 10 * Math.log10(rr / oo + 1e-12), gr: c.stats.grMaxDb, clipped: c.stats.clipped,
       };
       aloneOut[profile][id] = c.out;
@@ -354,11 +363,13 @@ export async function run(options: Options) {
   const scenes: Record<string, unknown> = {};
   const bedByCondition: Record<string, Record<Profile, number>> = {};
   const drops: string[] = [];
-  const bedStems = async (profile: Profile, inputs: { poolCount: number; poolStart: number; setsPossible: number | null }) =>
+  const bedStems = async (profile: Profile, inputs: { poolCount: number; poolStart: number; dry: boolean; step?: number }) =>
     renderStems(profile, SCENE, (ctx, g) => {
       const amb = new Ambience(ctx, g.buses.Ambience, 5);
       amb.start(0);
-      amb.update({ ...inputs, scene: 'game' }, true);
+      const { step, ...rest } = inputs;
+      amb.update({ ...rest, scene: 'game' }, true);
+      g.setDarkStep(step ?? 0, 0, true);
       amb.schedule(SCENE);
     });
   for (const profile of ['speaker', 'headphones'] as Profile[]) {
@@ -367,7 +378,7 @@ export async function run(options: Options) {
     const stems = await renderStems(profile, SCENE, (ctx, g) => {
       const amb = new Ambience(ctx, g.buses.Ambience, 5);
       amb.start(0);
-      amb.update({ poolCount: 12, poolStart: 20, setsPossible: null, scene: 'game' }, true);
+      amb.update({ poolCount: 12, poolStart: 20, dry: false, scene: 'game' }, true);
       amb.schedule(SCENE);
       for (const p of plan) if (!place(ctx, g, profile, pool, p, true)) drops.push(`${profile} ${p.id}@${p.at.toFixed(1)}`);
     });
@@ -382,7 +393,7 @@ export async function run(options: Options) {
     const burst = chain(await renderStems(profile, 2, (ctx, g) => BURST.forEach((id, i) => void place(ctx, g, profile, undefined, { id, at: 0.1 + i * 0.01 }, false))), PROGRAM_DB[profile]);
     // the bed alone, in every state of the pond: the loudest is what must sit 12-20 LU under the anchor
     const beds: Record<string, number> = {};
-    for (const [name, inputs] of Object.entries({ wet: { poolCount: 20, poolStart: 20, setsPossible: null }, half: { poolCount: 10, poolStart: 20, setsPossible: null }, dry: { poolCount: 0, poolStart: 20, setsPossible: 2 } })) {
+    for (const [name, inputs] of Object.entries({ wet: { poolCount: 20, poolStart: 20, dry: false }, half: { poolCount: 10, poolStart: 20, dry: false }, 'wet, step 3': { poolCount: 20, poolStart: 20, dry: false, step: 3 }, dry: { poolCount: 0, poolStart: 20, dry: true }, 'dry, step 3': { poolCount: 0, poolStart: 20, dry: true, step: 3 } })) {
       const b = chain(await bedStems(profile, inputs), PROGRAM_DB[profile]);
       beds[name] = shortTermMax(b.out, SR);
     }
@@ -438,7 +449,7 @@ export async function run(options: Options) {
       // a seat cue carries its own signature; every other cue must not be mistaken for any seat
       seatFeat.forEach((q, i) => {
         if (seatOf(a) === i) return;
-        if (a.startsWith('mus.')) return; // a 2-3 s melody cannot be heard as a 200 ms knock
+        if (MELODIC(a)) return; // a 1-8 s horn phrase cannot be heard as a 200 ms knock
         if (sameRhythm(F[a].rhythm, q.rhythm)) pairs.push({ pair: `${a} / seat ${seatNames[i]} (${tag})`, d: timbreDistance(F[a].timbre, q.timbre) });
       });
       for (const b of ids) if (a < b && SLOT[a] && SLOT[a] === SLOT[b] && !MELODIC(a) && !MELODIC(b) && eventOf(a) !== eventOf(b) && sameRhythm(F[a].rhythm, F[b].rhythm)) pairs.push({ pair: `${a} / ${b} (${tag})`, d: timbreDistance(F[a].timbre, F[b].timbre) });
@@ -460,8 +471,106 @@ export async function run(options: Options) {
     for (const p of ['speaker', 'headphones'] as Profile[]) overBed[id][p] = alone[p][id].activeLufs - (scenes[p] as { bedShortTermMax: number }).bedShortTermMax;
   }
 
+
+
+  /* ---- the tulnic's valley: three discrete repeats, each later, quieter and darker ---- */
+  const call = raw.headphones['mus.start'];
+  const at0 = 0.01 + 0.02; // the recipe starts the call 20 ms after the cue
+  const rmsOf = (a: number, b: number): number => { let e = 0; const i0 = Math.floor(a * SR), i1 = Math.min(call.length, Math.floor(b * SR)); for (let i = i0; i < i1; i++) e += call[i] * call[i]; return Math.sqrt(e / Math.max(1, i1 - i0)); };
+  // how dark a stretch is: the energy above 1200 Hz against the energy below it, dB (the horn's own harmonics live on both sides)
+  const brightnessOf = (a: number): number => {
+    const n = 16384, re = new Float32Array(n), im = new Float32Array(n);
+    for (let i = 0; i < n; i++) re[i] = (call[Math.floor(a * SR) + i] ?? 0) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / n));
+    fft(re, im);
+    let lo = 1e-30, hi = 1e-30;
+    for (let k = Math.floor((100 * n) / SR); k < Math.floor((8000 * n) / SR); k++) { const m = re[k] * re[k] + im[k] * im[k]; if ((k * SR) / n > 1200) hi += m; else lo += m; }
+    return 10 * Math.log10(hi / lo);
+  };
+  const dryFrom = at0 + 1.65 + 0.2, dryTo = at0 + 3.0; // the dry final gesture's held part
+  const dryDb = 20 * Math.log10(rmsOf(dryFrom, dryTo));
+  const valley = VALLEY.map((v, k) => {
+    // a repeat begins when its first note does, partial 7 (406 Hz): the first 40 ms frame where the 406 Hz energy passes 20 % of
+    // its own peak around then. (The level of a broadband envelope would catch the tail of the repeat before it.)
+    const f7 = 58 * 7, frame = 0.04;
+    const at7 = (t: number): number => { let re = 0, im = 0; const i0 = Math.floor(t * SR), n = Math.floor(frame * SR); for (let i = 0; i < n; i++) { const h = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / n); re += call[i0 + i] * h * Math.cos((2 * Math.PI * f7 * i) / SR); im -= call[i0 + i] * h * Math.sin((2 * Math.PI * f7 * i) / SR); } return re * re + im * im; };
+    const ts: number[] = [], env: number[] = [];
+    for (let t = at0 + v.at - 0.3; t < at0 + v.at + 0.4; t += 0.01) { ts.push(t); env.push(at7(t)); }
+    const peak = Math.max(...env);
+    const first = env.findIndex((e) => e > 0.2 * peak);
+    return {
+      k: k + 1, designedAt: v.at, measuredAt: Math.round((ts[first] + frame / 2 - at0) * 100) / 100,
+      designedDb: v.gainDb, measuredDb: 20 * Math.log10(rmsOf(at0 + v.at + 0.2, at0 + v.at + 1.2)) - dryDb, brightnessDb: brightnessOf(at0 + v.at + 0.2),
+    };
+  });
+  const dryBrightness = brightnessOf(dryFrom);
+  log('valley measured');
+
+  /* ---- the darkening steps: a flat low-pass and level on the ambience stem, reached by a 25 ms ramp ---- */
+  const bandDb = (x: Float32Array, fc: number, from: number, to: number): number => {
+    // mean power at eight frequencies within +-6 % of fc, over 50 ms segments of [from, to): a noise input needs the average
+    const seg = Math.round(0.05 * SR);
+    let total = 0, count = 0;
+    for (let a = Math.floor(from * SR); a + seg <= Math.floor(to * SR); a += seg) {
+      for (let k = 0; k < 8; k++) {
+        const w = (2 * Math.PI * fc * (0.94 + (0.12 * k) / 7)) / SR;
+        let re = 0, im = 0;
+        for (let n = 0; n < seg; n++) { const h = 0.5 - 0.5 * Math.cos((2 * Math.PI * n) / seg); re += x[a + n] * h * Math.cos(w * n); im -= x[a + n] * h * Math.sin(w * n); }
+        total += (re * re + im * im) / seg;
+        count++;
+      }
+    }
+    return 10 * Math.log10(total / count + 1e-30);
+  };
+  // dB of the ambience stem's 2nd-order low-pass (Web Audio's Q on a low-pass is in dB: -3.0103 dB is a flat, Butterworth response)
+  const butter = (f: number, fc: number): number => { const u = f / fc, q = 10 ** (-3.0103 / 20); return -10 * Math.log10((1 - u * u) ** 2 + (u / q) ** 2); };
+  const steps: Array<Record<string, number>> = [];
+  const T0 = 2;
+  for (const k of [1, 2, 3]) {
+    const noiseStems = await renderStems('speaker', 4, (ctx, g) => {
+      const src = ctx.createBufferSource();
+      src.buffer = sharedNoise(ctx);
+      src.loop = true;
+      src.connect(g.buses.Ambience);
+      src.start(0);
+      g.setDarkStep(k, T0);
+    });
+    const sineStems = await renderStems('speaker', 4, (ctx, g) => {
+      const o = ctx.createOscillator();
+      o.frequency.value = 300;
+      o.connect(g.buses.Ambience);
+      o.start(0);
+      g.setDarkStep(k, T0);
+    });
+    const nz = noiseStems[2], sn = sineStems[2];
+    const want = (f: number) => 20 * Math.log10(10 ** (DARK_STEPS.db[k] / 20) / 10 ** (DARK_STEPS.db[0] / 20)) + butter(f, DARK_STEPS.hz[k]) - butter(f, DARK_STEPS.hz[0]);
+    const got = (f: number) => bandDb(nz, f, T0 + 0.3, T0 + 1.9) - bandDb(nz, f, 0.3, T0 - 0.1);
+    // the envelope of the 300 Hz sine, one cycle at a time: where the change starts and ends
+    const cyc = Math.round(SR / 300);
+    const env: number[] = [];
+    for (let n = 0; n + cyc < sn.length; n += cyc) { let m = 0; for (let i = n; i < n + cyc; i++) m = Math.max(m, Math.abs(sn[i])); env.push(m); }
+    const idx = (t: number) => Math.round((t * SR) / cyc);
+    const pre = env.slice(idx(1), idx(T0 - 0.1)).reduce((a, b) => a + b, 0) / (idx(T0 - 0.1) - idx(1));
+    const post = env.slice(idx(T0 + 0.3), idx(T0 + 1.5)).reduce((a, b) => a + b, 0) / (idx(T0 + 1.5) - idx(T0 + 0.3));
+    const frac = (v: number) => (v - pre) / (post - pre);
+    let t10 = NaN, t90 = NaN;
+    for (let i = idx(T0 - 0.05); i < idx(T0 + 0.3); i++) {
+      const f = frac(env[i]);
+      if (Number.isNaN(t10) && f >= 0.1) t10 = (i * cyc) / SR;
+      if (Number.isNaN(t90) && f >= 0.9) t90 = (i * cyc) / SR;
+    }
+    // no click: the largest sample-to-sample jump across the change against the largest across a steady stretch
+    const jump = (from: number, to: number) => { let m = 0; for (let i = Math.floor(from * SR); i < Math.floor(to * SR); i++) m = Math.max(m, Math.abs(sn[i] - sn[i - 1])); return m; };
+    steps.push({
+      step: k, hz: DARK_STEPS.hz[k], levelDb: DARK_STEPS.db[k],
+      wantedAt300: want(300), measuredAt300: got(300), wantedAt3k: want(3000), measuredAt3k: got(3000),
+      rampMs: Math.round((t90 - t10) * 1000), clickRatio: jump(T0 - 0.01, T0 + 0.05) / jump(1, 1.05),
+    });
+  }
+  log('darkening steps measured');
+
   void lufsOf; void kWeight; void meanSquare;
   return {
+    breaks, steps, valley, dryBrightness,
     wavs, sr: SR, ids, plan: plan.length, cuesPerMinute, drops,
     fresh, committed, stale, useFresh: options.useFresh,
     strikes, nodes, spread,
@@ -473,7 +582,7 @@ export async function run(options: Options) {
     })),
     alone, scenes, bedByCondition, overBed,
     confusability: { bar, seatRhythms: Object.fromEntries(seatFeat.map((q, i) => [seatNames[i], q.rhythm])), rhythms: Object.fromEntries(ids.map((id) => [id, feats.full[id].rhythm])), closest: pairs.slice(0, 10), violations: pairs.filter((p) => p.d < bar.d) },
-    limits: { ANCHOR_LUFS, AMBIENCE_UNDER, TICK_OVER_BED, BALANCE, ECHO, ECHO_EXEMPT: [...ECHO_EXEMPT, ...CUES.filter((c) => c.heard === 'private').map((c) => c.id)], CURVE_SAMPLES },
+    limits: { ANCHOR_LUFS, AMBIENCE_UNDER, TICK_OVER_BED, BALANCE, ECHO, ECHO_EXEMPT: [...ECHO_EXEMPT], CURVE_SAMPLES },
     aloneOutPeak: Object.fromEntries((['speaker', 'headphones'] as Profile[]).map((p) => [p, Math.max(...Object.values(aloneOut[p]).map((x) => db(peakOf(x))))])),
   };
 }
