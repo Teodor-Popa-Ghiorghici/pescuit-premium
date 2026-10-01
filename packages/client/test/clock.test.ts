@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CLOCK_T_MS, ServerClock, WindowClock, tickPlan } from '../src/audio/clock.js';
+import { CLOCK_T_MS, ropePlan, ServerClock, WindowClock, tickPlan, type RopeTickId } from '../src/audio/clock.js';
 
 describe('the window clock (§3.10)', () => {
   it('is silent until T = 5 s remain, clicks each second, then double clicks every 500 ms in the last 3 s', () => {
@@ -75,5 +75,40 @@ describe('WindowClock', () => {
     wc.stop();
     vi.advanceTimersByTime(5000);
     expect(emitted).toEqual([]);
+  });
+});
+
+describe('the turn rope (HAND_AND_TURN_PLAN #5)', () => {
+  it('is lit at the rope, smoulders each second, strains twice a second for the last five, and parts at zero', () => {
+    const plan = ropePlan(Number.MAX_SAFE_INTEGER, 15_000);
+    expect(plan[0]).toMatchObject({ id: 'clock.rope', remaining: 15_000 });
+    expect(plan.filter((t) => t.id === 'clock.rope.burn').map((t) => t.remaining)).toEqual([14_000, 13_000, 12_000, 11_000, 10_000, 9_000, 8_000, 7_000, 6_000]);
+    expect(plan.filter((t) => t.id === 'clock.rope.urgent').map((t) => t.remaining)).toEqual([5000, 4500, 4000, 3500, 3000, 2500, 2000, 1500, 1000, 500]);
+    expect(plan.at(-1)).toMatchObject({ id: 'clock.rope.out', remaining: 0 });
+    // every remaining value is distinct: the clock keys its done-set on them
+    expect(new Set(plan.map((t) => t.remaining)).size).toBe(plan.length);
+  });
+
+  it('rides the window clock against the server deadline: nothing before the rope, then the whole rope', () => {
+    vi.useFakeTimers();
+    let local = 0;
+    const server = new ServerClock();
+    server.sample(0, 0);
+    const emitted: string[] = [];
+    const rc = new WindowClock<RopeTickId>({ now: () => local, server, emit: (id) => emitted.push(id), plan: () => ropePlan(Number.MAX_SAFE_INTEGER, 15_000) });
+    rc.start(45_000);
+    for (let i = 0; i < 29_000 / 25; i++) {
+      local += 25;
+      vi.advanceTimersByTime(25);
+    }
+    expect(emitted).toEqual([]);
+    for (let i = 0; i < 17_000 / 25; i++) {
+      local += 25;
+      vi.advanceTimersByTime(25);
+    }
+    expect(emitted[0]).toBe('clock.rope');
+    expect(emitted.at(-1)).toBe('clock.rope.out');
+    expect(emitted).toHaveLength(ropePlan(Number.MAX_SAFE_INTEGER, 15_000).length);
+    vi.useRealTimers();
   });
 });

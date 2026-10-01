@@ -72,15 +72,62 @@ export interface HandLayout {
   scrolls: boolean;
   /** the x of each group's left edge */
   lefts: number[];
+  /** the fan (HAND_AND_TURN_PLAN #2): each group's tilt in degrees and its sink along the arc in px; flat when it scrolls */
+  tilts: number[];
+  sinks: number[];
+}
+
+/** the fan's limits: the outermost group tilts this far, and the arc drops it this far below the middle one */
+export const FAN_MAX_TILT = 7;
+export const FAN_MAX_SINK = 8;
+export interface FanShape {
+  tilt: number;
+  sink: number;
+}
+/** the desktop's held hand */
+export const FAN_FULL: FanShape = { tilt: FAN_MAX_TILT, sink: FAN_MAX_SINK };
+/** the phone's dock has no room for an arc: a gentle tilt only */
+export const FAN_PHONE: FanShape = { tilt: 4, sink: 0 };
+
+const rad = (deg: number) => (deg * Math.PI) / 180;
+
+/** how far a card of `w` x `h` tilted by `deg` about its centre reaches past its own box: sideways and downwards, px */
+export function tiltReach(w: number, h: number, deg: number): { x: number; y: number } {
+  const t = rad(Math.abs(deg));
+  return { x: (w / 2) * Math.cos(t) + (h / 2) * Math.sin(t) - w / 2, y: (w / 2) * Math.sin(t) + (h / 2) * Math.cos(t) - h / 2 };
 }
 
 /**
- * §5.3. Inside a group the step is 25 % of the card's width, which keeps the index strip clear. The
- * step between groups is computed from the room available, up to 60 % of the width; it never drops
- * below 30 %, the least that leaves each card's corner index uncovered - past that the dock
- * scrolls (with snap): with 104-px cards that is past eight groups at 360 px.
+ * The fan, as a held hand (HAND_AND_TURN_PLAN #2): each group turns about its centre away from the middle, and the
+ * groups follow an arc - the middle highest. The arc is lifted so that the lowest tilted corner sits on the row's
+ * baseline: the fan never reaches below the hand. A few groups barely fan; the full tilt is reached at seven. A hand
+ * that scrolls sideways lies flat (a tilted card would ride over its neighbour while it scrolls).
  */
-export function layoutHand(groups: readonly HandGroup[], cardW: number, avail: number): HandLayout {
+export function fanOf(n: number, flat: boolean, shape: FanShape = FAN_FULL, card = { w: 132, h: 198 }): { tilts: number[]; sinks: number[] } {
+  if (flat || n <= 1) return { tilts: Array(n).fill(0), sinks: Array(n).fill(0) };
+  const k = Math.min(1, (n - 1) / 6);
+  const tilts: number[] = [];
+  const arc: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const u = (i - (n - 1) / 2) / ((n - 1) / 2);
+    tilts.push(Math.round(u * shape.tilt * k * 10) / 10 || 0);
+    arc.push(u * u * shape.sink * k);
+  }
+  const lowest = Math.max(...arc.map((y, i) => y + tiltReach(card.w, card.h, tilts[i]).y));
+  return { tilts, sinks: arc.map((y) => Math.round(y - lowest)) };
+}
+
+export function layoutHand(groups: readonly HandGroup[], cardW: number, avail: number, fan: FanShape = FAN_FULL): HandLayout {
+  // the outermost cards' tilted corners need room at both ends of the row; where that room would make the dock scroll,
+  // the hand lies flat instead (eight groups still fit at 360 px, §5.3)
+  const margin = Math.ceil(tiltReach(cardW, cardW * 1.5, fan.tilt).x);
+  const fanned = rowOf(groups, cardW, avail - 2 * margin);
+  if (!fanned.scrolls && groups.length > 1 && fan.tilt > 0) return { ...fanned, ...fanOf(groups.length, false, fan, { w: cardW, h: cardW * 1.5 }) };
+  const flat = rowOf(groups, cardW, avail);
+  return { ...flat, ...fanOf(groups.length, true) };
+}
+
+function rowOf(groups: readonly HandGroup[], cardW: number, avail: number): Omit<HandLayout, 'tilts' | 'sinks'> {
   const inStep = Math.round(cardW * 0.25);
   const extra = groups.reduce((s, g) => s + (g.cards.length - 1) * inStep, 0);
   const n = groups.length;

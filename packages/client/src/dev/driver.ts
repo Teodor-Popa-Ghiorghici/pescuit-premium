@@ -42,6 +42,9 @@ export interface DriverOptions {
   openAsSnapshot?: boolean;
   /** rewrites every view before it is delivered (a fixture pins the tally or the gate) */
   viewPatch?: (v: RedactedView) => RedactedView;
+  /** the human's turn clock, ms per ask (`turn=`; the room's 45 s by default) and its rope (`rope=`, 15 s) */
+  turnMs?: number;
+  ropeMs?: number;
 }
 
 export interface DriverInfo {
@@ -77,6 +80,11 @@ export class LocalDriver implements LocalSource {
   private deliver: ((m: ServerMessage) => void) | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private deadline: number | null = null;
+  /** the human's turn clock, as the room keeps it (HAND_AND_TURN_PLAN #4): one allowance per ask, paused by a window */
+  private turnDeadline: number | null = null;
+  private turnLeft = 0;
+  private askSlot = 0;
+  private armedSlot = -1;
   private pausedAt = 0;
   private rng: BotRng;
   private memory: MemoryBot | null;
@@ -206,11 +214,37 @@ export class LocalDriver implements LocalSource {
   /* ---------------------------------------------------------------- engine */
 
   private view(): RedactedView {
-    const v = redactForPlayer(this.state, this.playerId, { seq: this.seq, serverNow: Date.now(), windowDeadlineAt: this.state.pendingWindow ? this.deadline : null, startedAt: this.startedAt });
+    const turnClock = this.turnDeadline === null ? null : { deadlineAt: this.turnDeadline, totalMs: this.turnMs, ropeMs: this.o.ropeMs ?? 15_000 };
+    const v = redactForPlayer(this.state, this.playerId, { seq: this.seq, serverNow: Date.now(), windowDeadlineAt: this.state.pendingWindow ? this.deadline : null, startedAt: this.startedAt, turnClock });
     return this.o.viewPatch ? this.o.viewPatch(v) : v;
   }
 
+  private get turnMs(): number {
+    return this.o.turnMs ?? 45_000;
+  }
+
+  /** the room's turn clock, for the human's asks only (bots answer at once) */
+  private armTurn(events: readonly GameEvent[]): void {
+    if (events.some((e) => e.type === 'TURN_STARTED' || e.type === 'REQUEST_MADE')) this.askSlot++;
+    const s = this.state;
+    const now = Date.now();
+    if (this.armedSlot !== this.askSlot) {
+      this.armedSlot = this.askSlot;
+      this.turnLeft = this.turnMs;
+      this.turnDeadline = null;
+    }
+    const cur = s.players[s.currentPlayerIndex];
+    const awaiting = s.status === 'IN_PROGRESS' && !s.pendingWindow && s.resume.kind === 'AWAIT_REQUEST' && cur?.id === this.playerId && !this.auto;
+    if (!awaiting) {
+      if (this.turnDeadline !== null) this.turnLeft = Math.max(0, this.turnDeadline - now);
+      this.turnDeadline = null;
+      return;
+    }
+    if (this.turnDeadline === null) this.turnDeadline = now + this.turnLeft;
+  }
+
   private emit(events: readonly GameEvent[], snapshot = false): void {
+    this.armTurn(events);
     const stamped = events.map((e) => ({ ...e, seq: ++this.seq }));
     const wire = redactEventsForPlayer(this.state, stamped, this.playerId) as WireEvent[];
     const msg: ServerMessage = { type: 'game_state', view: this.view(), events: wire };
@@ -253,7 +287,10 @@ export class LocalDriver implements LocalSource {
     }
     if (s.resume.kind !== 'AWAIT_REQUEST') return null;
     const cur = s.players[s.currentPlayerIndex];
-    if (!ctl(cur.id)) return null;
+    // the human's clock ran out: the room asks for them, at random, as the server does
+    const timedOut = cur.id === this.playerId && this.turnDeadline !== null && Date.now() >= this.turnDeadline;
+    if (!ctl(cur.id) && !timedOut) return null;
+    if (timedOut) this.turnDeadline = null;
     if (this.memory) return this.memory.ask(s, this.rng);
     const ranks = askableRanks(cur);
     const targets = legalRequestTargets(s, cur.id);

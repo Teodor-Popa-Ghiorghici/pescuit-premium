@@ -16,8 +16,9 @@ export const POLL_MS = 25;
 export const HORIZON_MS = 100;
 
 export type TickId = 'clock.tick' | 'clock.tick.urgent';
-export interface Tick {
-  id: TickId;
+export type RopeTickId = 'clock.rope' | 'clock.rope.burn' | 'clock.rope.urgent' | 'clock.rope.out';
+export interface Tick<Id extends string = TickId> {
+  id: Id;
   /** milliseconds from the moment the window's remaining time was `remainingMs` */
   inMs: number;
   /** what remains of the window when this tick sounds, ms */
@@ -33,6 +34,23 @@ export function tickPlan(remainingMs: number, T = CLOCK_T_MS): Tick[] {
   const ticks: Tick[] = [];
   for (let r = Math.floor(T / 1000) * 1000; r > 3000; r -= 1000) if (r <= remainingMs) ticks.push({ id: 'clock.tick', inMs: remainingMs - r, remaining: r });
   for (let r = 3000; r > 0; r -= 500) if (r <= remainingMs) ticks.push({ id: 'clock.tick.urgent', inMs: remainingMs - r, remaining: r });
+  return ticks;
+}
+
+/** the rope's last stretch, ms: from here it strains twice a second */
+export const ROPE_URGENT_MS = 5000;
+
+/**
+ * The turn's rope (HAND_AND_TURN_PLAN #5), as remaining values of the ask's clock: lit when `ropeMs` remain, a smoulder at
+ * every whole second after that down to 5 s, a strain every 500 ms from 5 s, and the rope parting at 0.
+ */
+export function ropePlan(remainingMs: number, ropeMs: number): Tick<RopeTickId>[] {
+  const ticks: Tick<RopeTickId>[] = [];
+  const add = (id: RopeTickId, r: number) => r <= remainingMs && ticks.push({ id, inMs: remainingMs - r, remaining: r });
+  add('clock.rope', ropeMs);
+  for (let r = Math.ceil(ropeMs / 1000) * 1000 - 1000; r > ROPE_URGENT_MS; r -= 1000) if (r < ropeMs) add('clock.rope.burn', r);
+  for (let r = Math.min(ROPE_URGENT_MS, ropeMs - 500); r > 0; r -= 500) add('clock.rope.urgent', r);
+  add('clock.rope.out', 0);
   return ticks;
 }
 
@@ -62,22 +80,24 @@ export class ServerClock {
   }
 }
 
-export interface WindowClockOptions {
+export interface WindowClockOptions<Id extends string = TickId> {
   /** the local clock, ms (epoch) */
   now: () => number;
   server: ServerClock;
   /** hands a tick to the audio scheduler, to sound `inMs` from now */
-  emit: (id: TickId, inMs: number) => void;
+  emit: (id: Id, inMs: number) => void;
   T?: number;
+  /** the ticks, as remaining values (the answer window's tickPlan by default; the rope's ropePlan for the turn) */
+  plan?: () => ReadonlyArray<{ id: Id; remaining: number }>;
 }
 
-export class WindowClock {
+export class WindowClock<Id extends string = TickId> {
   private deadline: number | null = null;
   private key: string | null = null;
   private done = new Set<number>();
   private timer: ReturnType<typeof setInterval> | undefined;
 
-  constructor(private readonly o: WindowClockOptions) {}
+  constructor(private readonly o: WindowClockOptions<Id>) {}
 
   /** Starts (or restarts, if the window changed) the clock for a window ending at `deadlineAt` (server ms). */
   start(deadlineAt: number, key = String(deadlineAt)): void {
@@ -108,7 +128,8 @@ export class WindowClock {
     const remaining = this.deadline - this.o.server.serverNow(this.o.now());
     // ticks sit at fixed remaining values, so compare each against what is left now
     const T = this.o.T ?? CLOCK_T_MS;
-    for (const t of tickPlan(Number.MAX_SAFE_INTEGER, T)) {
+    const plan = this.o.plan ? this.o.plan() : (tickPlan(Number.MAX_SAFE_INTEGER, T) as unknown as ReadonlyArray<{ id: Id; remaining: number }>);
+    for (const t of plan) {
       const due = remaining - t.remaining; // ms until this tick, from now (negative = already past)
       if (this.done.has(t.remaining)) continue;
       if (due < -HORIZON_MS) {
@@ -117,7 +138,7 @@ export class WindowClock {
       }
       if (due <= HORIZON_MS) {
         this.done.add(t.remaining);
-        this.o.emit(t.id, Math.max(0, due));
+        this.o.emit(t.id as Id, Math.max(0, due));
       }
     }
     if (remaining < -HORIZON_MS) this.stop();

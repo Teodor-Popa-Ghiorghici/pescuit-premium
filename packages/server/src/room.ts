@@ -1,10 +1,12 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import type WebSocket from 'ws';
 import {
   Action,
+  askableRanks,
   createGame,
   GameEvent,
   GameState,
+  legalRequestTargets,
   redactEventsForPlayer,
   redactForPlayer,
   reduce,
@@ -21,6 +23,16 @@ export interface RoomPlayer {
   connected: boolean;
   isHost: boolean;
 }
+
+const envMs = (name: string, fallback: number): number => {
+  const v = Number(typeof process !== 'undefined' ? process.env[name] : undefined);
+  return Number.isFinite(v) && v >= 1000 ? v : fallback;
+};
+/** Every ask gets this long (HAND_AND_TURN_PLAN #4); `PESCUIT_TURN_MS` overrides it. Paused while a window is open; laying a
+ *  set does not restart it. */
+export const TURN_TIMEOUT_MS = envMs('PESCUIT_TURN_MS', 45_000);
+/** The last stretch of the turn clock burns as the rope (#5); `PESCUIT_ROPE_MS` overrides it (never longer than the turn). */
+export const ROPE_MS = Math.min(TURN_TIMEOUT_MS, envMs('PESCUIT_ROPE_MS', 15_000));
 
 function send(ws: WebSocket, msg: ServerMessage) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
@@ -42,6 +54,17 @@ export class Room {
   /** the server clock (ms) at which the currently open window will be closed by the timeout, or null */
   windowDeadlineAt: number | null = null;
   private windowTimer: ReturnType<typeof setTimeout> | null = null;
+  /** a full ask's allowance and the rope's share of it; tests shorten them */
+  turnTimeoutMs = TURN_TIMEOUT_MS;
+  ropeMs = ROPE_MS;
+  /** the server clock (ms) at which the current ask will be made for the player, or null while no turn clock runs */
+  turnDeadlineAt: number | null = null;
+  private turnTimer: ReturnType<typeof setTimeout> | null = null;
+  /** counts asks: a new turn or a new request starts a new ask, with a full allowance */
+  private askSlot = 0;
+  private armedSlot = -1;
+  /** what is left of the current ask's allowance while a window has it paused */
+  private turnRemainingMs = 0;
 
   constructor(code: string, config: RoomConfig, private now: () => number = Date.now) {
     this.code = code;
@@ -139,9 +162,72 @@ export class Room {
   }
 
   private publish(events: GameEvent[]) {
-    // arm first: the views sent below carry this window's deadline
+    if (events.some((e) => e.type === 'TURN_STARTED' || e.type === 'REQUEST_MADE')) this.askSlot++;
+    // arm first: the views sent below carry this window's deadline and the turn clock
     this.armWindowTimer();
+    this.armTurnTimer();
     this.broadcastState(events);
+  }
+
+  /** the current player is at rest, awaiting their ask, with no window open */
+  private awaitingAsk(): boolean {
+    const s = this.state;
+    return !!s && s.status === 'IN_PROGRESS' && !s.pendingWindow && s.resume.kind === 'AWAIT_REQUEST';
+  }
+
+  /**
+   * The turn clock (HAND_AND_TURN_PLAN #4, closes DECISIONS.md "Absent players"). Each ask gets `turnTimeoutMs`. The
+   * clock runs only while the player is awaiting their ask: an open window pauses it (the window has its own 12 s),
+   * and it resumes with what was left. Laying a set leaves it running. When it runs out the room makes the ask for the
+   * player - a random legal request, as a bot would - so a player who stepped away or dropped never freezes the table.
+   */
+  private armTurnTimer() {
+    const now = this.now();
+    if (this.armedSlot !== this.askSlot) {
+      this.clearTurnTimer();
+      this.armedSlot = this.askSlot;
+      this.turnRemainingMs = this.turnTimeoutMs;
+    }
+    if (!this.awaitingAsk()) {
+      if (this.turnDeadlineAt !== null) this.turnRemainingMs = Math.max(0, this.turnDeadlineAt - now);
+      this.clearTurnTimer();
+      return;
+    }
+    if (this.turnTimer) return; // still running for this ask (a set was laid): keep the deadline
+    const ms = Math.max(0, this.turnRemainingMs);
+    const slot = this.askSlot;
+    this.turnDeadlineAt = now + ms;
+    this.turnTimer = setTimeout(() => {
+      this.turnTimer = null;
+      if (slot !== this.askSlot || !this.awaitingAsk()) return;
+      this.turnDeadlineAt = null;
+      this.turnRemainingMs = 0;
+      const action = this.autoAsk();
+      if (!action) return;
+      try {
+        this.commit(action);
+      } catch {
+        // the state moved in a race with the player's own ask; ignore
+      }
+    }, ms);
+    this.turnTimer.unref?.();
+  }
+
+  private clearTurnTimer() {
+    if (this.turnTimer) clearTimeout(this.turnTimer);
+    this.turnTimer = null;
+    this.turnDeadlineAt = null;
+  }
+
+  /** The ask the room makes for a player whose clock ran out: one of their askable ranks, of one legal target. */
+  autoAsk(): Action | null {
+    const s = this.state;
+    if (!s || s.resume.kind !== 'AWAIT_REQUEST') return null;
+    const player = s.players[s.currentPlayerIndex];
+    const ranks = askableRanks(player);
+    const targets = legalRequestTargets(s, player.id);
+    if (!ranks.length || !targets.length) return null;
+    return { type: 'REQUEST', playerId: player.id, targetId: targets[randomInt(targets.length)], rank: ranks[randomInt(ranks.length)] };
   }
 
   /**
@@ -174,6 +260,7 @@ export class Room {
   dispose() {
     if (this.windowTimer) clearTimeout(this.windowTimer);
     this.windowTimer = null;
+    this.clearTurnTimer();
   }
 
   /**
@@ -193,6 +280,7 @@ export class Room {
         serverNow,
         windowDeadlineAt: this.windowDeadlineAt,
         startedAt: this.startedAt,
+        turnClock: this.turnDeadlineAt === null ? null : { deadlineAt: this.turnDeadlineAt, totalMs: this.turnTimeoutMs, ropeMs: this.ropeMs },
       });
       const msg: ServerMessage = {
         type: 'game_state',

@@ -79,6 +79,13 @@ export interface RedactedView {
   /** the server's clock when the game started (ms since the epoch), set once; the background score's zero (MUSIC_PLAN §5.1, S5).
    *  A timestamp, the same for every viewer and independent of the deal. 0 if the driver did not say. */
   startedAt: number;
+  /**
+   * The turn clock (HAND_AND_TURN_PLAN #4): set while the current player is awaiting their ask and no window is open.
+   * Public and identical for every viewer. `deadlineAt` is server ms; `totalMs` is a full ask's allowance and
+   * `ropeMs` how much of its end burns as the rope. Null when no clock runs (a window is open, the game is over, or the
+   * driver keeps none).
+   */
+  turnClock: { deadlineAt: number; totalMs: number; ropeMs: number } | null;
 }
 
 /** What only the driver knows: the room's sequence number and clock. The engine has no clock. */
@@ -89,6 +96,8 @@ export interface ViewMeta {
   windowDeadlineAt?: number | null;
   /** when the game started, server ms */
   startedAt?: number;
+  /** the turn clock the driver armed for the current ask, if any */
+  turnClock?: { deadlineAt: number; totalMs: number; ropeMs: number } | null;
 }
 
 // ---- The public event stream ----
@@ -222,6 +231,7 @@ function buildView(state: GameState, viewer: PlayerViewer | null, meta: ViewMeta
     seq: meta.seq ?? 0,
     serverNow: meta.serverNow ?? 0,
     startedAt: meta.startedAt ?? 0,
+    turnClock: meta.turnClock ?? null,
   };
 }
 

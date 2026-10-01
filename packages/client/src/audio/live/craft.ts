@@ -103,3 +103,15 @@ export function groan(ctx: Ctx, out: AudioNode, t: number, dur: number, gain: nu
   bp.frequency.exponentialRampToValueAtTime(90, t + Math.min(dur, 0.4));
   noiseSrc(ctx, t, dur, r).connect(bp).connect(env(ctx, t, gain * 0.9, 0.05, dur - 0.05)).connect(out);
 }
+
+/**
+ * A smouldering rope: `n` soft ember ticks (narrow noise at 1.1-2.2 kHz, a few ms each) and the hush of the fibre glowing
+ * under them. Not a break: nothing splinters, so it stays inside the palette. 3 nodes a tick, 3 for the hush.
+ */
+export function ember(ctx: Ctx, out: AudioNode, t: number, dur: number, gain: number, r: () => number, n = 3): void {
+  for (let i = 0; i < n; i++) {
+    const at = t + dur * (i / Math.max(1, n)) * (0.7 + 0.5 * r());
+    noiseSrc(ctx, at, 0.01, r).connect(filt(ctx, 'bandpass', 1100 + r() * 1100, 4)).connect(env(ctx, at, gain * (0.5 + 0.5 * r()), 0.0006, 0.006 + 0.006 * r())).connect(out);
+  }
+  noiseSrc(ctx, t, dur, r).connect(filt(ctx, 'bandpass', 900, 0.8)).connect(env(ctx, t, gain * 0.12, dur * 0.3, dur * 0.7)).connect(out);
+}

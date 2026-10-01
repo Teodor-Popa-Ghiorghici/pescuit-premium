@@ -9,7 +9,7 @@
 
 import { Ambience, scoreWetFactor, type AmbienceInputs } from './ambience.js';
 import { CAL } from './calibration.js';
-import { ServerClock, WindowClock } from './clock.js';
+import { ropePlan, ServerClock, WindowClock, type RopeTickId } from './clock.js';
 import { audioStatus, getContext, installLifecycle, onGesture, panningAvailable, unlock, visualDelayMs } from './context.js';
 import type { CueRequest } from './cues.js';
 import { BUSES, ECHO_EXEMPT, cueDef, type BusName, type Profile } from './cuesheet.js';
@@ -123,6 +123,9 @@ export class AudioEngine {
   private listeners = new Set<() => void>();
   readonly server = new ServerClock();
   readonly windowClock: WindowClock;
+  /** the turn's rope (HAND_AND_TURN_PLAN #5): lit, smoulder, strain, out - on the server's turn deadline */
+  readonly ropeClock: WindowClock<RopeTickId>;
+  private ropeMs = 15_000;
   private world: Partial<AmbienceInputs> | null = null;
   private dry = false;
   private step = 0;
@@ -144,6 +147,12 @@ export class AudioEngine {
       now: () => Date.now(),
       server: this.server,
       emit: (id, inMs) => this.play(id, undefined, { delayMs: inMs }),
+    });
+    this.ropeClock = new WindowClock<RopeTickId>({
+      now: () => Date.now(),
+      server: this.server,
+      emit: (id, inMs) => this.play(id, undefined, { delayMs: inMs }),
+      plan: () => ropePlan(Number.MAX_SAFE_INTEGER, this.ropeMs),
     });
   }
 
@@ -456,6 +465,13 @@ export class AudioEngine {
   setAnswerWindow(target: { key: string; deadlineAt: number } | null): void {
     if (!target) this.windowClock.stop();
     else this.windowClock.start(target.deadlineAt, target.key);
+  }
+
+  /** the turn clock's rope: armed while an ask's clock runs, stopped the moment it does not (an ask, a window, the end) */
+  setTurnRope(target: { key: string; deadlineAt: number; ropeMs: number } | null): void {
+    if (!target) return this.ropeClock.stop();
+    this.ropeMs = target.ropeMs;
+    this.ropeClock.start(target.deadlineAt, target.key);
   }
 
   /** every public volume in one place, for the lab and the settings sheet */

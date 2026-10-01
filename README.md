@@ -90,6 +90,12 @@ Rooms are in-memory only (per the spec) and are dropped 10 minutes after they go
 empty; a Railway redeploy or restart clears all active rooms, same as restarting
 the process locally would.
 
+## The turn clock
+
+Every ask has 45 s, the last 15 s burning as a rope (seen and heard by everyone); a window pauses it. When it runs out
+the server makes the ask for the player. `PESCUIT_TURN_MS` and `PESCUIT_ROPE_MS` (ms) override the two lengths on the
+server. See `HAND_AND_TURN_PLAN.md` and `DECISIONS.md`.
+
 ## House rules / lobby settings
 
 - **Power visibility** (Ascuns/hidden default, or Deschis/open) is chosen by the
@@ -106,7 +112,7 @@ check it. Everything below is a query string on the dev server (`npm run dev:cli
 
 | Tool | What it does |
 |---|---|
-| `?table=bots&n=6&seed=42&seat=0&speed=1&bots=memory` | **the bot table**: runs the engine and a bot population in the tab and feeds seat 0's redacted record into the real store. Play or watch at 0.25-4x, with pause and step (`panel=1`). `bots=random` or `memory` (bots that learn only from the public record); `until=myturn\|answer\|dry\|end\|turn:N\|sets:N`; `auto=1` plays seat 0 too. |
+| `?table=bots&n=6&seed=42&seat=0&speed=1&bots=memory` | **the bot table**: runs the engine and a bot population in the tab and feeds seat 0's redacted record into the real store. Play or watch at 0.25-4x, with pause and step (`panel=1`). `bots=random` or `memory` (bots that learn only from the public record); `until=myturn\|answer\|dry\|end\|turn:N\|sets:N`; `auto=1` plays seat 0 too. `turn=` and `rope=` (ms) shorten your turn clock and its rope (45 s and 15 s by default). |
 | `?fixture=<id>` | a **scenario fixture** (`?fixture=` lists them): `myturn`, `answer`, `answer-squid`, `shark`, `mantis`, `whale`, `actives`, `pool1`, `dry`, `tally1`, `stall`, `tenhand`, `twelvehand`, `names`, `chips`. Add `n=3..6`. |
 | `?lab=audio` | the **audition page** (development only: `npm run dev:client`; a production build does not contain it): a play button per cue and per take, both profiles, before and after mastering, the pond, the wind and the three darkening steps, sliders, bus meters, an event to cue trace. |
 | `?lab=vfx` | the **VFX lab**: the thirteen stepped effects, frame by frame. |

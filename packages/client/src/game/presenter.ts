@@ -101,6 +101,15 @@ export class Presenter {
     if (this.room) getEngine().setScore({ roomCode: this.room, view }, opts);
   }
 
+  /** a game has just started, live (never on a rejoin or a table reached as a snapshot): the hand is dealt in (HAND_AND_TURN_PLAN #2) */
+  private dealListeners = new Set<() => void>();
+  /** when the last live deal happened (performance.now()): a hand mounted just after it still deals in */
+  dealtAt = -1e9;
+  onDeal = (cb: () => void): (() => void) => {
+    this.dealListeners.add(cb);
+    return () => this.dealListeners.delete(cb);
+  };
+
   /** the seat whose turn the table has shown so far: the chrome (top bar, dock, ochre chip) follows it, the input follows the view */
   getPresented = (): string | null => this.presented;
   subscribe = (cb: () => void): (() => void) => {
@@ -124,6 +133,7 @@ export class Presenter {
     this.shownTally = null;
     this.chain = 0;
     this.ordinal = 0;
+    getEngine().setTurnRope(null);
     if (typeof document !== 'undefined') {
       delete document.documentElement.dataset.light;
       delete document.documentElement.dataset.stage;
@@ -200,9 +210,11 @@ export class Presenter {
   private releaseMasksOf(target: Mask['target'], ref?: string): void {
     for (const [id, m] of [...this.masks]) if (m.target === target && (ref === undefined || m.ref === ref)) this.releaseMask(id);
   }
-  private releaseCard(id: string | undefined): void {
+  /** `landed`: the card's flight reached the hand - it is pressed in (HAND_AND_TURN_PLAN #2), not just shown */
+  private releaseCard(id: string | undefined, landed = false): void {
     if (!id || !this.cardMasks.delete(id)) return;
     this.stage.maskCard(id, false);
+    if (landed) this.stage.pressIn(id);
   }
 
   /** after every render: what React just redrew is masked again if its beat has not landed */
@@ -265,6 +277,9 @@ export class Presenter {
       ...(hold.step ? {} : { step: darkStepOf(view.sets.possible) }),
     });
     engine.setAnswerWindow(view.status === 'ENDED' ? null : clockTarget(publicViewOf(view)));
+    // the turn's rope: public, the same for every seat (HAND_AND_TURN_PLAN #5)
+    const tc = view.status === 'IN_PROGRESS' ? view.turnClock : null;
+    engine.setTurnRope(tc ? { key: `${view.currentPlayerId}:${tc.deadlineAt}`, deadlineAt: tc.deadlineAt, ropeMs: tc.ropeMs } : null);
   }
 
   /** your turn has waited 15 s: one soft knock (`meta.nudge`, §4.5) */
@@ -319,6 +334,10 @@ export class Presenter {
     }
 
     const startsGame = events.some((e) => e.type === 'GAME_STARTED');
+    if (startsGame && !snapshot && !this.stage.reduced) {
+      this.dealtAt = now;
+      this.dealListeners.forEach((l) => l());
+    }
     if (snapshot || (!prev && !startsGame)) {
       // a rejoin, or the first look at a table already in progress: never replay choreography
       this.finalizeAll();
@@ -338,8 +357,10 @@ export class Presenter {
     const reduced = this.stage.reduced;
     const queued = Math.max(0, this.tableFreeAt - now);
     const hidden = typeof document !== 'undefined' && document.hidden;
-    const flush = queued > BACKLOG_FLUSH_MS || hidden;
-    const fast = queued > BACKLOG_FAST_MS;
+    // the thresholds are in table time: a calmer table queues longer for the same backlog
+    const slow = 1 / getTableSpeed();
+    const flush = queued > BACKLOG_FLUSH_MS * slow || hidden;
+    const fast = queued > BACKLOG_FAST_MS * slow;
     const record = recordOf(prev, view, events, view.seq, this.chain, this.ordinal);
     this.chain = record.chain ?? 0;
     const closedAnswer = prev?.pendingWindow?.type === 'RESPONSE_PENDING' && windowKey(prev) !== windowKey(view);
@@ -389,8 +410,9 @@ export class Presenter {
       const f = toMe.find((x) => x.f.key === key)!;
       this.cardMasks.add(id);
       this.stage.maskCard(id, true);
-      const until = Math.min(f.t + vd - now, CARD_MASK_CAP_MS);
-      this.sched(until, () => this.releaseCard(id), () => this.releaseCard(id));
+      // the cap is in table time, like the flight it waits for: at the calm default a draw lands a third later
+      const until = Math.min(f.t + vd - now, CARD_MASK_CAP_MS / getTableSpeed());
+      this.sched(until, () => this.releaseCard(id, true), () => this.releaseCard(id));
     }
     if (!ch.beats.some((b) => b.flights.length) || this.stage.reduced) {
       /* nothing flies: nothing to ghost */
@@ -492,6 +514,7 @@ export class Presenter {
     if (f.what === 'chip' && a.k === 'seat') return role === 'to' ? s.chipSpot(a.id) : s.anchor(a, role);
     if (role === 'to' && f.toHand) return s.handCardBox(ctx.arrive.get(f.key)) ?? s.anchor(a, role);
     if (role === 'from' && f.fromHand) return s.handCardBox(ctx.depart.get(f.key)) ?? s.anchor(a, role);
+    if (f.what === 'back' && a.k === 'seat') return s.fanBox(a.id) ?? s.anchor(a, role);
     return s.anchor(a, role);
   }
 

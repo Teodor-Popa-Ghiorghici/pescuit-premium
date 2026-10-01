@@ -24,6 +24,7 @@ import { LaidRow } from './LaidSets.js';
 import { Chip, Crown, Post, useLead } from './Seats.js';
 import { HeadphonesPrompt, MenuSheet, SoundSettings } from './Sheets.js';
 import { TopBar } from './TopBar.js';
+import { TurnClock, useTurnPhase } from './TurnClock.js';
 import { Plank, WindowBanner, windowKeyOf, tooLateText } from './Windows.js';
 
 // the podium is a chunk of its own: fetched as soon as a game is on, shown when the last beat has landed
@@ -129,6 +130,10 @@ export function GameTable() {
   // the lift answers first (beat 0, 50 ms); the sheet that takes the pond's row is mounted right behind it, in the next frame
   const sheetRank = useDeferredValue(canAsk && picked !== null ? picked : null);
   const winKey = windowKeyOf(view);
+  // the turn clock (HAND_AND_TURN_PLAN #4-#5): public, on the seat whose ask it is
+  const liveClock = view && view.status === 'IN_PROGRESS' ? view.turnClock : null;
+  const myClock = isMyTurn ? liveClock : null;
+  const myPhase = useTurnPhase(myClock);
   const myWindow = !!view?.pendingWindow?.youAreEligible;
 
   const targets = useMemo(() => (view && playerId ? opponentsInOrder(view, playerId).filter((p) => !p.stunned) : []), [view, playerId]);
@@ -160,6 +165,13 @@ export function GameTable() {
     const name = other && 'playerId' in other ? (view.players.find((p) => p.id === other.playerId)?.name ?? null) : null;
     setToast(tooLateText(t, name));
   }, [winKey, events, view, playerId, t]);
+
+  // the clock ran out on our ask: the table asked for us (the server's random legal ask is already on its way)
+  useEffect(() => {
+    if (myPhase !== 'out') return;
+    setPicked(null);
+    setToast(t('turn.timedOut'));
+  }, [myPhase, t]);
 
   // a server refusal reads on the pond too
   useEffect(() => {
@@ -325,6 +337,7 @@ export function GameTable() {
     hot: p.id === shownTurn && !isGameOver,
     askable: canAsk && picked !== null && !p.stunned,
     target: activeTarget === p.id,
+    clock: p.id === view.currentPlayerId ? liveClock : null,
     onPick: () => picked && ask(p.id, picked),
     onHover: (over: boolean) => {
       if (desktop && picked && !p.stunned) setDragTarget(over ? p.id : null);
@@ -455,7 +468,8 @@ export function GameTable() {
               <Pond view={view} ticker={ticker} />
               {hpPrompt}
             </div>
-            <div className={`dk-me ${shownMine && !isGameOver ? 'is-turn' : ''}`} data-me={playerId}>
+            <div className={`dk-me ${shownMine && !isGameOver ? 'is-turn' : ''} ${myPhase === 'rope' ? 'is-roped' : ''}`} data-me={playerId}>
+              {myClock && <TurnClock key={myClock.deadlineAt} clock={myClock} variant="dock" />}
               <div className="dk-me__post">
                 {meLine}
                 <span className="dk-me__hint">{canAsk ? t('dock.drag') : ''}</span>
@@ -494,7 +508,8 @@ export function GameTable() {
         </div>
         {hpPrompt}
       </div>
-      <section className={`ph-dock ${shownMine && !isGameOver ? 'is-turn' : ''}`} data-dock data-me={playerId}>
+      <section className={`ph-dock ${shownMine && !isGameOver ? 'is-turn' : ''} ${myPhase === 'rope' ? 'is-roped' : ''}`} data-dock data-me={playerId}>
+        {myClock && <TurnClock key={myClock.deadlineAt} clock={myClock} variant="dock" />}
         <div className="dock__head">
           <div className="dock__me">{meLine}</div>
           <span className="dock__hint">{dockHint}</span>

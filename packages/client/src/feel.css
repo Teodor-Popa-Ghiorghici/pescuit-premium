@@ -1,0 +1,492 @@
+/* HAND_AND_TURN_PLAN.md: the turn clock and its rope, the hand's fan, hover and motion, the inspector, the opponents'
+ * fans. Pressed, not glided (D3): the settles overshoot a little and land; the rope burns in a stepped flicker. */
+
+/* ===================================================================== the turn clock (#4) */
+.tclock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* your own: along the top edge of the dock, with the seconds at its right end */
+.tclock--dock {
+  top: -9px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  padding-right: 52px;
+}
+
+/* an opponent's: along the foot of the post or chip */
+.tclock--seat {
+  bottom: -7px;
+  height: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.tclock__track {
+  position: relative;
+  flex: 1;
+  height: 5px;
+  background: var(--lemn-inchis);
+  border: 2px solid var(--ink);
+  overflow: hidden;
+}
+.tclock--seat .tclock__track {
+  height: 4px;
+  border-width: 1.5px;
+}
+
+.tclock__fill {
+  position: absolute;
+  inset: 0;
+  background: var(--ocru);
+  transform-origin: left center;
+  animation: tclock-drain var(--turn-ms) linear var(--turn-delay) both;
+}
+@keyframes tclock-drain {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+.tclock__secs {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 44px;
+  padding: 1px 5px;
+  text-align: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--var);
+  background: var(--ink);
+  border: 2px solid var(--ocru);
+  clip-path: polygon(5px 0, 100% 0, 100% 100%, 0 100%, 0 5px);
+}
+.tclock__secs.is-rope {
+  background: var(--rosu);
+  border-color: var(--ink);
+  animation: tclock-beat 1s steps(2, end) infinite;
+}
+@keyframes tclock-beat {
+  50% { transform: translateY(-50%) scale(1.08); }
+}
+
+.tclock.is-out .tclock__secs {
+  background: var(--ink-soft);
+  border-color: var(--rosu);
+}
+
+/* ===================================================================== the rope (#5) */
+.trope {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  display: block;
+  animation: trope-lit 420ms steps(5, end) both;
+}
+@keyframes trope-lit {
+  from { opacity: 0; transform: scaleY(0.2); }
+  60% { opacity: 1; transform: scaleY(1.25); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+/* the char the ember leaves behind: a black, flaking line */
+.trope__char {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  background: repeating-linear-gradient(90deg, var(--ink) 0 6px, transparent 6px 9px);
+  opacity: 0.7;
+}
+
+/* the twisted band - the card frame's funia rasucita - burning from its right end */
+.trope__band {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  background: repeating-linear-gradient(120deg, var(--ocru) 0 5px, var(--lemn-inchis) 5px 7px);
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  transform-origin: left center;
+  animation: trope-burn var(--rope-ms) linear var(--rope-delay) both;
+}
+.tclock--seat .trope__band {
+  border-width: 1.5px;
+  background: repeating-linear-gradient(120deg, var(--ocru) 0 3px, var(--lemn-inchis) 3px 4.5px);
+}
+@keyframes trope-burn {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* the ember rides the burning end */
+.trope__ember {
+  position: absolute;
+  right: -7px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  background: radial-gradient(circle, #fff3c4 0 18%, #ffb238 30%, var(--rosu) 58%, transparent 72%);
+  animation: trope-flicker 360ms steps(3, end) infinite;
+}
+.tclock--seat .trope__ember {
+  right: -5px;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+}
+@keyframes trope-flicker {
+  0% { transform: scale(1); opacity: 1; }
+  33% { transform: scale(1.3) rotate(20deg); opacity: 0.85; }
+  66% { transform: scale(0.85) rotate(-15deg); opacity: 1; }
+}
+
+.trope__spark {
+  position: absolute;
+  left: 5px;
+  top: 3px;
+  width: 3px;
+  height: 3px;
+  background: #ffb238;
+  animation: trope-spark 700ms steps(5, end) infinite;
+}
+.trope__spark:nth-child(2) {
+  animation-delay: 230ms;
+  --dx: -9px;
+}
+.trope__spark:nth-child(3) {
+  animation-delay: 470ms;
+  --dx: 7px;
+}
+@keyframes trope-spark {
+  from { transform: translate(0, 0); opacity: 1; }
+  to { transform: translate(var(--dx, 3px), -16px); opacity: 0; }
+}
+
+/* the last five seconds: the band strains */
+.tclock.is-rope .trope__band {
+  filter: saturate(1.2);
+}
+
+/* your own dock wears the rope's heat while it burns */
+.ph-dock.is-roped,
+.dk-me.is-roped {
+  animation: dock-heat 1s steps(2, end) infinite;
+}
+@keyframes dock-heat {
+  50% { border-top-color: var(--rosu); }
+}
+
+/* the dock is the clock's frame on desktop too */
+.dk-me {
+  position: relative;
+}
+
+/* ===================================================================== the hand (#1, #2) */
+.hand {
+  /* the fan's lift (its lowest corner sits on the baseline, so the middle rides higher) needs room above the row */
+  padding-top: 26px;
+}
+.dk .hand {
+  /* and the desktop's arc and hover rise a little more */
+  padding-top: 40px;
+}
+
+.hgroup {
+  /* the fan: each group tilts by its place and sinks along the arc (layoutHand); it glides when the hand changes */
+  transform: translateY(var(--fan-y, 0px)) rotate(var(--fan-r, 0deg));
+  transform-origin: 50% 50%;
+  transition:
+    transform 40ms var(--ease-strike),
+    left 360ms var(--ease-settle),
+    width 360ms var(--ease-settle);
+}
+.hgroup.is-layable {
+  transform: translateY(calc(var(--fan-y, 0px) - 6px)) rotate(var(--fan-r, 0deg));
+}
+.hgroup.is-selected {
+  transform: translateY(calc(var(--fan-y, 0px) - 16px)) rotate(var(--fan-r, 0deg));
+}
+
+
+.hcard {
+  transition: left 360ms var(--ease-settle);
+}
+
+/* nothing glides into its first place: the glide is for a hand that changes */
+.hand:not([data-settled]) .hgroup,
+.hand:not([data-settled]) .hcard {
+  transition: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  /* neighbours part around a hovered group */
+  .hgroup.is-parted {
+    transition:
+      transform 160ms var(--ease-settle),
+      left 360ms var(--ease-settle),
+      width 360ms var(--ease-settle);
+    transform: translate(var(--part-x, 0px), var(--fan-y, 0px)) rotate(var(--fan-r, 0deg));
+  }
+  .hgroup.is-hovered {
+    z-index: 40 !important;
+    transform: translateY(-22px) rotate(0deg) scale(1.08);
+    transition:
+      transform 160ms var(--ease-settle),
+      left 360ms var(--ease-settle),
+      width 360ms var(--ease-settle);
+    filter: drop-shadow(0 8px 0 rgba(23, 18, 14, 0.35));
+  }
+  .hgroup.is-hovered.is-selected {
+    transform: translateY(-26px) rotate(0deg) scale(1.08);
+  }
+  .hand[data-scrolls='false'] {
+    overflow: visible;
+  }
+}
+
+/* the first deal: the hand comes up group by group */
+.hand.is-dealing .hgroup {
+  animation: hgroup-deal 560ms var(--ease-settle) both;
+  animation-delay: calc(var(--gi, 0) * 90ms);
+}
+@keyframes hgroup-deal {
+  from { opacity: 0; translate: 0 70px; rotate: 8deg; }
+  70% { opacity: 1; translate: 0 -6px; rotate: -1deg; }
+  to { opacity: 1; translate: 0 0; rotate: 0deg; }
+}
+
+/* ===================================================================== the inspector (#3) */
+.inspect {
+  position: fixed;
+  z-index: 85;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  pointer-events: none;
+  animation: inspect-in 260ms var(--ease-settle) both;
+}
+@keyframes inspect-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.inspect__card {
+  flex: none;
+  filter: drop-shadow(0 10px 0 rgba(23, 18, 14, 0.4));
+}
+.inspect__card .card__plate {
+  width: var(--icw);
+  height: var(--ich);
+}
+
+.inspect__plaque {
+  width: 230px;
+  max-width: calc(100vw - var(--icw) - 40px);
+  background-color: var(--hartie);
+  background-image: var(--tex-paper);
+  border: var(--line-thin) solid var(--ink);
+  box-shadow: 6px 6px 0 var(--ink);
+  padding: 10px 12px 12px;
+  color: var(--ink);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px);
+}
+.inspect__name {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.inspect__kind {
+  margin-top: 3px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-family: var(--text);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.inspect__tag {
+  padding: 1px 5px;
+  border: 2px solid var(--ink);
+  background: var(--var);
+}
+.inspect__tag--power {
+  background: var(--indigo);
+  color: var(--var);
+}
+.inspect__tag--normal {
+  background: #14404f;
+  color: var(--var);
+}
+.inspect__tag--eggs {
+  background: var(--apa);
+  color: var(--var);
+}
+.inspect__rule {
+  height: 6px;
+  margin: 8px 0 7px;
+  background: repeating-linear-gradient(120deg, var(--ocru) 0 4px, var(--lemn-inchis) 4px 5.5px);
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+}
+.inspect__text {
+  font-family: var(--text);
+  font-size: 13.5px;
+  line-height: 1.38;
+}
+.inspect__window {
+  margin-top: 6px;
+  font-family: var(--text);
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--pe-hartie-slab);
+}
+.inspect__foot {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 12px;
+}
+.inspect__held {
+  color: var(--var);
+  background: var(--ink);
+  padding: 1px 6px;
+}
+
+/* ===================================================================== the opponents' fans (#7) */
+.ofan {
+  position: relative;
+  display: inline-block;
+  height: 30px;
+  vertical-align: bottom;
+}
+.ofan__card {
+  position: absolute;
+  bottom: 0;
+  width: 18px;
+  height: 27px;
+  transform-origin: 50% 130%;
+  transition:
+    left 360ms var(--ease-settle),
+    transform 360ms var(--ease-settle);
+}
+.ofan__card .card__plate {
+  width: 18px;
+  height: 27px;
+  display: block;
+}
+.ofan__card.is-in {
+  animation: ofan-in 480ms var(--ease-settle) both;
+}
+@keyframes ofan-in {
+  from { opacity: 0; translate: 10px -22px; scale: 1.3; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+.ofan__ghost {
+  position: absolute;
+  bottom: 0;
+  width: 18px;
+  height: 27px;
+  pointer-events: none;
+  animation: ofan-out 420ms var(--ease-strike) forwards;
+}
+.ofan__ghost .card__plate {
+  width: 18px;
+  height: 27px;
+  display: block;
+}
+@keyframes ofan-out {
+  from { opacity: 1; translate: 0 0; }
+  to { opacity: 0; translate: 0 -24px; rotate: 12deg; }
+}
+/* the seat whose turn it is lifts its hand, and one card is turned over and over: thinking */
+.ofan.is-thinking {
+  translate: 0 -3px;
+}
+.ofan.is-thinking .ofan__card.is-pondered {
+  animation: ofan-ponder 1.8s steps(6, end) infinite;
+}
+@keyframes ofan-ponder {
+  0%, 100% { translate: 0 0; }
+  40% { translate: 0 -7px; }
+  60% { translate: 0 -6px; }
+}
+.ofan__count {
+  position: absolute;
+  right: -10px;
+  top: -4px;
+  z-index: 12;
+  min-width: 16px;
+  padding: 0 3px;
+  font-family: var(--text);
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+  color: var(--ink);
+  background: var(--ocru);
+  border: 1.5px solid var(--ink);
+}
+
+/* the phone chip's mini fan: smaller backs, five at most */
+.ofan--mini {
+  height: 17px;
+}
+.ofan--mini .ofan__card,
+.ofan--mini .ofan__card .card__plate,
+.ofan--mini .ofan__ghost,
+.ofan--mini .ofan__ghost .card__plate {
+  width: 10px;
+  height: 15px;
+}
+.ofan--mini .ofan__count {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hgroup,
+  .hgroup.is-parted,
+  .hgroup.is-hovered,
+  .hcard,
+  .ofan__card {
+    transition: none !important;
+  }
+  .hand.is-dealing .hgroup,
+  .ofan__card.is-in,
+  .ofan__ghost,
+  .ofan.is-thinking .ofan__card.is-pondered,
+  .trope,
+  .trope__ember,
+  .trope__spark,
+  .tclock__secs.is-rope,
+  .ph-dock.is-roped,
+  .dk-me.is-roped,
+  .inspect {
+    animation: none !important;
+  }
+  .trope__band,
+  .tclock__fill {
+    animation-timing-function: steps(15, end);
+  }
+}

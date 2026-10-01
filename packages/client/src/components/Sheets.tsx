@@ -4,7 +4,7 @@ import { audioStatus, onAudioStatus } from '../audio/context.js';
 import { getEngine } from '../audio/engine.js';
 import { softPress } from '../audio/ui.js';
 import type { AudioSettings } from '../audio/mixer.js';
-import { getTableSpeed, setTableSpeed, subscribeTableSpeed } from '../game/presentationSettings.js';
+import { getTableSpeed, setTableSpeed, subscribeTableSpeed, TABLE_SPEEDS } from '../game/presentationSettings.js';
 import { useDialog } from '../hooks/useDialog.js';
 import { useT } from '../i18n/useT.js';
 import { useGame } from '../state/store.js';
@@ -117,9 +117,9 @@ export function SoundSettings({ onClose }: { onClose: () => void }) {
         <div className="sheetrow" role="radiogroup" aria-label={t('settings.tableSpeed')}>
           <span className="sheetrow__label">{t('settings.tableSpeed')}</span>
           <span className="seg">
-            {([1, 1.5] as const).map((v) => (
+            {TABLE_SPEEDS.map((v) => (
               <button key={v} type="button" role="radio" aria-checked={speed === v} className={`seg__btn ${speed === v ? 'is-on' : ''}`} onClick={() => setTableSpeed(v)}>
-                {v}×
+                {v === 0.75 ? t('settings.speedCalm') : `${v}×`}
               </button>
             ))}
           </span>

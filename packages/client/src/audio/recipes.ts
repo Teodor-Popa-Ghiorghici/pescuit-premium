@@ -12,7 +12,7 @@ import { renderedBuffer } from './bank.js';
 import { rng } from './util.js';
 import { VALLEY } from './render/horn.js';
 import { type Ctx, env, filt, harmonics, hooks, noiseSrc } from './live/common.js';
-import { chisel, clay, crack, fibres, groan, ropeCreak } from './live/craft.js';
+import { chisel, clay, crack, ember, fibres, groan, ropeCreak } from './live/craft.js';
 import { paperLift, paperSlide } from './live/paper.js';
 import { doba, slap, stamp, thud, creak } from './live/tabletop.js';
 import { bubble, churn, drip, splash } from './live/water.js';
@@ -324,6 +324,30 @@ export const RECIPES: Record<string, Recipe> = {
     const r = rng(s);
     paperLift(c, o, t + 0.005, 0.35, r);
     thud(c, o, t + 0.02, 0.8, r, 0.9, pt(p));
+  },
+
+  /* ------------------------------------------------------------------ the rope */
+  // the fuse is lit: a match drawn across paper, and the rope taking the load
+  'clock.rope': (c, o, t, s, sp, p) => {
+    const r = rng(s);
+    paperSlide(c, o, t + 0.005, 0.09, 0.55, r, [3800, 6200]);
+    ember(c, o, t + 0.07, 0.12, 0.5, r, 2);
+    ropeCreak(c, o, t + 0.1, sp ? 0.22 : 0.3, 0.55, r, 640, 470, pt(p));
+  },
+  // once a second while it burns: the ember eats a strand
+  'clock.rope.burn': (c, o, t, s, _sp, p) => ember(c, o, t + 0.005, 0.14, 0.7 * pt(p), rng(s), 3),
+  // the last five seconds, twice a second: the rope strains under the ember
+  'clock.rope.urgent': (c, o, t, s, _sp, p) => {
+    const r = rng(s);
+    ember(c, o, t + 0.005, 0.1, 0.75, r, 2);
+    ropeCreak(c, o, t + 0.03, 0.16, 0.45, r, 760 * pt(p), 600 * pt(p));
+  },
+  // burnt through: the rope parts with a short creak and its end drops on the table
+  'clock.rope.out': (c, o, t, s, _sp, p) => {
+    const r = rng(s);
+    ropeCreak(c, o, t + 0.005, 0.18, 0.7, r, 820, 380, pt(p));
+    thud(c, o, t + 0.2, 0.7, r, 0.8, pt(p));
+    ember(c, o, t + 0.21, 0.2, 0.35, r, 2);
   },
 
   /* ------------------------------------------------------------------- powers */

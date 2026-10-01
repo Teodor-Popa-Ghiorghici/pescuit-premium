@@ -135,6 +135,14 @@ function instrument() {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.addInitScript(instrument);
+    // the gates were set at 1x; the calm default (0.75x, HAND_AND_TURN_PLAN #6) lengthens answer -> rest by design
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('pescuit:tableSpeed', '1');
+      } catch {
+        /* the default then */
+      }
+    });
     const cdp = await ctx.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU });
     return { ctx, page, errors };

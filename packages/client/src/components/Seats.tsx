@@ -1,12 +1,14 @@
 import type { RedactedPlayerView, RedactedView } from '@pescuit/engine';
-import { FanIcon, HookIcon, Mark, markForSeat, PowerPips } from '../art/marks.js';
+import { HookIcon, Mark, markForSeat, PowerPips } from '../art/marks.js';
 import { Seal } from '../art/seals.js';
-import { HandFan, Totem } from '../art/table.js';
+import { Totem } from '../art/table.js';
 import { SpriteArt } from '../art/sprites.js';
 import { leadOf, leadTier } from '../game/choreography.js';
 import { seatFacts, shortName } from '../game/seatFacts.js';
 import { useT } from '../i18n/useT.js';
 import { LaidRow } from './LaidSets.js';
+import { OppFan } from './OppFan.js';
+import { TurnClock } from './TurnClock.js';
 
 interface SeatProps {
   view: RedactedView;
@@ -18,6 +20,8 @@ interface SeatProps {
   target: boolean;
   /** the table has SHOWN this seat's turn (the totem has landed): the ochre border follows the totem, not the view */
   hot?: boolean;
+  /** the turn clock, on the seat whose ask it is */
+  clock?: RedactedView['turnClock'];
   onPick?: () => void;
   onHover?: (over: boolean) => void;
 }
@@ -66,7 +70,7 @@ function Shell({ width, height, className }: { width: number; height: number; cl
 
 /** §5.2 - the 60×76 opponent chip. Stunned is branded, not tinted; protected wears the shell and the
  *  rank's seal; disconnected is dashed with the hook; the current turn is ochre with the totem. */
-export function Chip({ view, player: p, current, hot, askable, target, onPick, onHover }: SeatProps) {
+export function Chip({ view, player: p, current, hot, askable, target, clock, onPick, onHover }: SeatProps) {
   const facts = seatFacts(view, p.id);
   const label = useSeatLabel(view, p, current);
   const prot = p.protectedRanks[0];
@@ -105,7 +109,7 @@ export function Chip({ view, player: p, current, hot, askable, target, onPick, o
       </div>
       <div className="chip__row chip__row--foot">
         <span className="chip__hand num">
-          <FanIcon />
+          <OppFan count={p.handSize} variant="mini" thinking={!!(hot ?? current)} />
           {p.handSize}
         </span>
         <span className="chip__status">
@@ -114,12 +118,14 @@ export function Chip({ view, player: p, current, hot, askable, target, onPick, o
           {!p.connected && <HookIcon />}
         </span>
       </div>
+      {clock && <TurnClock key={clock.deadlineAt} clock={clock} variant="seat" />}
     </div>
   );
 }
 
 /** §5.2 - the 150 px desktop post, standing on the arc. Same states as the chip, room for the fan. */
-export function Post({ view, player: p, current, hot, askable, target, lift, onPick, onHover }: SeatProps & { lift: number }) {
+export function Post({ view, player: p, current, hot, askable, target, clock, lift, onPick, onHover }: SeatProps & { lift: number }) {
+  const { t } = useT();
   const facts = seatFacts(view, p.id);
   const label = useSeatLabel(view, p, current);
   const prot = p.protectedRanks[0];
@@ -162,7 +168,7 @@ export function Post({ view, player: p, current, hot, askable, target, lift, onP
       </div>
       <div className="post-d__row post-d__row--foot">
         <span className="post-d__fan">
-          <HandFan count={p.handSize} />
+          <OppFan count={p.handSize} variant="post" thinking={!!(hot ?? current)} label={`${p.handSize} ${t('dock.cards')}`} />
         </span>
         <span className="chip__status">
           {prot && <Seal rank={prot} size={13} color="#9fd3bf" />}
@@ -170,6 +176,7 @@ export function Post({ view, player: p, current, hot, askable, target, lift, onP
         </span>
       </div>
       <LaidRow view={view} owner={p.id} className="laid--dk" />
+      {clock && <TurnClock key={clock.deadlineAt} clock={clock} variant="seat" />}
     </div>
   );
 }

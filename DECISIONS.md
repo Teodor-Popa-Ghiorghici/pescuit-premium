@@ -373,10 +373,40 @@ byte-identical streams (`presentation-leak.test.ts`, test 1).
   / "Pescuiește!"). This is the existing 12 s timeout, unchanged in length and applied to
   connected and absent players alike; STATE_MACHINE.md's "the room simply waits" is
   therefore true only of an absent player's own *turn*.
-- **On their own turn** the room still waits (no forced pass, no turn timer). Round 4 of the
-  plan review flags this as a hole in a phone game (a dropped player freezes the table);
-  the decision between a turn timer with an auto-pass and a visible "the table waits" is
-  still open and is a client-plaque matter for now.
+- **On their own turn** a player now has a turn clock (`HAND_AND_TURN_PLAN.md` #4, below): when it runs out
+  the room makes their ask for them, so a dropped player no longer freezes the table. This closes the hole
+  round 4 of the plan review flagged.
+
+## The turn clock, the rope and the hand (HAND_AND_TURN_PLAN.md)
+
+- **The turn clock is a driver rule, not an engine rule.** The engine still has no clock. The room gives every ask
+  `TURN_TIMEOUT_MS` (45 s; `PESCUIT_TURN_MS` overrides it), counted only while the current player is awaiting their ask
+  with no window open: a window pauses it (the window keeps its own 12 s) and it resumes with what was left. A new ask -
+  a new turn, or a bonus ask after a success - gets a full allowance; laying a set does not restart it. When it runs
+  out the room submits an ordinary `REQUEST` for the player: one of their askable ranks, of one legal target, chosen
+  with the OS CSPRNG (`Room.autoAsk`). That is the only move the rules always offer (there is no "pass" in Go Fish), it
+  is exactly what a bot does, and it reaches the table as an ordinary `REQUEST_MADE`. Hearthstone ends the turn
+  instead; here the ask is the turn.
+- **Public.** `view.turnClock = { deadlineAt, totalMs, ropeMs }` is the same for every viewer (a function of the turn
+  and the windows, which everyone sees) and null while no clock runs. It is drawn on the seat whose ask it is: a drain
+  bar, and for the last `ROPE_MS` (15 s; `PESCUIT_ROPE_MS`) a burning rope.
+- **The rope's sound** is four Clock-bus cues heard by everyone (`clock.rope`, `.burn`, `.urgent`, `.out`), made of rope
+  and paper only - not the splintering fibres, which stay the three frame-breakers' (the palette test enforces it).
+  `WindowClock` became generic over its tick plan so the rope rides the same server-bound lookahead as the answer clock.
+  The two never overlap: a window pauses the turn clock.
+- **The table speed's default is now 0.75x ("calm")**, by request: slower, more deliberate motion. It scales the
+  whole timeline, cues included, so audio and pixels stay locked; the backlog thresholds (1.2 s fast, 2.5 s flush) are
+  in table time and scale with it, and so does the 800 ms cap on hiding a card that is flying into your hand (1067 ms
+  at 0.75x, so the card never appears before its flight lands). The 1x numbers in "Performance" are unchanged:
+  `perf:check` pins 1x. At the calm default answer -> rest is a third longer by design.
+- **The hand fans** (pure, `fanOf`/`layoutHand`, tested): tilt up to 7° on the desktop and 4° on the phone, about each
+  group's centre, with the arc lifted so the lowest corner sits on the row's baseline; when the corner room would make
+  the dock scroll, the hand lies flat, so "eight groups at 360 px" still holds. The layout check samples a group's real
+  corner index (its bounding box's corner is empty table once tilted).
+- **Hover and the inspector** are desktop (`hover: hover`) and long-press (touch). The inspector's long strings live in
+  the client (`i18n/inspectStrings.ts`) and its component is a lazy chunk, like the Codex, so the lobby does not carry them.
+- **Opponents' hands** are fans of card backs (the real baked back on a post, a plain 10 x 15 back on a phone chip, to
+  keep the strip light), driven by the public hand size only. Card flights to and from a seat land on its fan.
 
 ## Localization
 

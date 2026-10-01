@@ -145,6 +145,13 @@ export class Stage {
     }
   }
 
+  /** an opponent's fan of backs (HAND_AND_TURN_PLAN #7): where their cards come from and go to */
+  fanBox(id: string): Box | null {
+    if (id === this.me) return null;
+    const b = box(q(`[data-player-id="${CSS.escape(id)}"] [data-fan]`));
+    return b && b.w > 0 ? { cx: b.cx, cy: b.cy, w: 30, h: 45 } : null;
+  }
+
   playerBox(id: string): Box | null {
     return id === this.me ? box(q('[data-me]')) : box(q(`[data-player-id="${CSS.escape(id)}"]`));
   }
@@ -195,7 +202,8 @@ export class Stage {
     const frames: Keyframe[] = [];
     const at = (t: number, x: number, y: number, te: number, extra: Partial<Keyframe> = {}): void => {
       const rot = lerp(tilt0, tilt1, te) + flutter * Math.sin(Math.PI * te);
-      const s = lerp(s0, s1, te);
+      // the flier rises toward the eye at the top of its arc and comes back down onto the table
+      const s = lerp(s0, s1, te) * (1 + (o.straight ? 0 : 0.08) * Math.sin(Math.PI * te));
       frames.push({ offset: t, transform: `translate(${x - o.base.w / 2}px, ${y - o.base.h / 2}px) rotate(${rot.toFixed(2)}deg) scale(${s.toFixed(3)})`, opacity: 1, ...extra });
     };
     if (o.corner !== undefined) {
@@ -383,6 +391,20 @@ export class Stage {
     if (!basin || this.reduced) return;
     basin.classList.add('is-draining');
     setTimeout(() => basin.classList.remove('is-draining'), 960);
+  }
+
+  /** a card that has just landed in your hand is pressed in: it drops the last few px of its flight, squashes and settles */
+  pressIn(id: string): void {
+    const el = q(`[data-hand-card-id="${CSS.escape(id)}"]`);
+    if (!el || this.reduced || typeof el.animate !== 'function') return;
+    el.animate(
+      [
+        { transform: 'translateY(-34px) rotate(-6deg) scale(1.06)', filter: 'brightness(1.25)' },
+        { transform: 'translateY(3px) rotate(1deg) scale(0.97)', filter: 'brightness(1.05)', offset: 0.55 },
+        { transform: 'none', filter: 'none' },
+      ],
+      { duration: 520, easing: 'cubic-bezier(0.34,1.32,0.64,1)' },
+    );
   }
 
   maskCard(id: string, on: boolean): void {

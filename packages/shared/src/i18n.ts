@@ -281,6 +281,10 @@ const ro: Dict = {
   'dock.layHint': 'Un set e gata: atinge „Pune jos".',
   'hand.layDown': 'Pune jos',
   'hand.groupAria': '{count} × {rank}',
+  'turn.timeLeft': '{s} secunde rămase',
+  'turn.timedOut': 'Timpul s-a scurs: masa a cerut în locul tău.',
+  'turn.ropeLit': 'Funia arde',
+  'settings.speedCalm': 'Tihnit',
 
   'ask.title': 'Cere {rank} de la…',
   'ask.close': 'Renunță',
@@ -568,6 +572,10 @@ const en: Dict = {
   'dock.layHint': 'A set is ready: tap "Lay down".',
   'hand.layDown': 'Lay down',
   'hand.groupAria': '{count} × {rank}',
+  'turn.timeLeft': '{s} seconds left',
+  'turn.timedOut': 'Time ran out: the table asked for you.',
+  'turn.ropeLit': 'The rope is burning',
+  'settings.speedCalm': 'Calm',
 
   'ask.title': 'Ask for {rank} from…',
   'ask.close': 'Cancel',

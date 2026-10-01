@@ -141,8 +141,14 @@ function measure() {
   if (!plank && !drawerOpen)
     visible('.hgroup').forEach((el, i) => {
       const b = el.getBoundingClientRect();
-      if (handBox && (b.left < handBox.left || b.left + 6 > handBox.right)) return;
-      if (!lands(el, b.left + 6, b.top + 30)) covered.push(`hand group ${i + 1}'s index corner`);
+      // the group's first corner index, where it really is: a fanned group is tilted, and its bounding box's corner is
+      // empty table (HAND_AND_TURN_PLAN #2)
+      const idx = el.querySelector('.hcard__index');
+      const ib = idx ? idx.getBoundingClientRect() : null;
+      const x = ib ? ib.left + ib.width / 2 : b.left + 6;
+      const y = ib ? ib.top + Math.min(ib.height / 2, 12) : b.top + 30;
+      if (handBox && (x < handBox.left || x > handBox.right)) return;
+      if (!lands(el, x, y)) covered.push(`hand group ${i + 1}'s index corner`);
     });
   const pond = document.querySelector('.ph-pond');
   return {
@@ -511,7 +517,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await run('phone presentation settles: no flier, no mask left when the table is quiet', ph, true, '?table=bots&n=4&seed=7&seat=0&speed=2&bots=memory&auto=1&panel=0', async (page) => {
     await page.waitForTimeout(5000);
     await page.evaluate(() => window.__driver.pause());
-    await page.waitForTimeout(2600);
+    // the backlog a table may hold before it flushes is in table time: 2.5 s at 1x, a third longer at the calm default
+    await page.waitForTimeout(3500);
     const left = await page.evaluate(() => ({
       masked: [...document.querySelectorAll('[data-masked]')].map((e) => `${e.className}:${e.getAttribute('data-masked')}`),
       fliers: [...document.querySelectorAll('[data-fliers] > *')].filter((e) => !e.classList.contains('is-held')).length,

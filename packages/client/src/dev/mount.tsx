@@ -58,11 +58,13 @@ export function mountDev(params: URLSearchParams): void {
     return;
   }
 
+  // the human's turn clock: `turn=` ms per ask, `rope=` ms of rope (the room's 45 s and 15 s by default)
+  const clock = { turnMs: params.get('turn') ? num(params.get('turn'), 45_000) : undefined, ropeMs: params.get('rope') ? num(params.get('rope'), 15_000) : undefined };
   let driver: LocalDriver;
   if (fixtureId !== null) {
     const spec = FIXTURES.find((f) => f.id === fixtureId)!;
     const b = spec.build(n, seed, seat);
-    driver = new LocalDriver({ ...b, humanId: `p${b.seat}`, bots: 'memory', speed: num(params.get('speed'), 0), seed, openAsSnapshot: true });
+    driver = new LocalDriver({ ...b, humanId: `p${b.seat}`, bots: 'memory', speed: num(params.get('speed'), 0), seed, openAsSnapshot: true, ...clock });
     const act = b.act;
     // a showcase: one action away from its moment; `__fxGo()` performs it (tools/fx-capture.cjs films it)
     if (act) (window as unknown as { __fxGo: () => void }).__fxGo = () => driver.act(act(driver.state));
@@ -79,6 +81,7 @@ export function mountDev(params: URLSearchParams): void {
       auto: params.get('auto') === '1',
       seed,
       openAsSnapshot: !!params.get('until'),
+      ...clock,
     });
     const pred = untilPredicate(params.get('until'), `p${seat}`);
     if (pred) {

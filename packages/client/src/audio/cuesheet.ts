@@ -146,6 +146,14 @@ export const CUES: readonly CueDef[] = [
   row({ id: 'clock.tick.urgent', bus: 'Clock', heard: 'all', plays: null, levelDb: -1.2, prio: 5, cooldownMs: 400, variation: 3, maxLenMs: 60, short: 'same' }),
   row({ id: 'clock.close', bus: 'Clock', heard: 'all', plays: [74, 94], levelDb: -2, prio: 5, variation: 3, maxLenMs: 60, short: 'same' }),
 
+  // the turn's rope (HAND_AND_TURN_PLAN #5): the last 15 s of an ask burn as a rope, for everyone at the table. Rope and paper
+  // only - the fuse is lit (the rope takes the load, a match scratches the paper), it smoulders once a second, strains twice
+  // a second in the last five, and parts when it burns through. Per turn, not per game: no play band.
+  row({ id: 'clock.rope', bus: 'Clock', heard: 'all', plays: null, levelDb: -2, prio: 4, cooldownMs: 1000, variation: 3, maxLenMs: 420, short: 'same' }),
+  row({ id: 'clock.rope.burn', bus: 'Clock', heard: 'all', plays: null, levelDb: -7, prio: 3, cooldownMs: 700, variation: 3, maxLenMs: 160, short: 'same' }),
+  row({ id: 'clock.rope.urgent', bus: 'Clock', heard: 'all', plays: null, levelDb: -4, prio: 4, cooldownMs: 350, variation: 3, maxLenMs: 200, short: 'same' }),
+  row({ id: 'clock.rope.out', bus: 'Clock', heard: 'all', plays: null, levelDb: -1, prio: 5, cooldownMs: 1000, variation: 3, maxLenMs: 450, short: 'same' }),
+
   // powers. A power was granted: the same cue for every rank in both modes.
   row({ id: 'power.granted', bus: 'Power', heard: 'all', plays: [5, 8], levelDb: -2, prio: 4, variation: 3, maxLenMs: 320, short: '250 ms', env: 'src', feel: 'spread' }),
   // the power gathers itself: a swell that ends exactly on the strike (the three frame-breakers only)

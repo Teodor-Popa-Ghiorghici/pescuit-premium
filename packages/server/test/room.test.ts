@@ -116,10 +116,81 @@ describe('the window clock and timeouts (§3.10, §4.4)', () => {
     vi.advanceTimersByTime(5_000);
     room.applyAction(target.id, { type: 'SKIP_WINDOW' });
     const after = room.seq;
-    vi.advanceTimersByTime(60_000);
+    // (less than the next player's turn clock, which would make their ask for them)
+    vi.advanceTimersByTime(room.turnTimeoutMs - 1_000);
     // no window is open now (a fail passes the turn), so nothing was skipped on anybody's behalf
     expect(room.seq).toBe(after);
     expect(lastState(sockets[0]).view.pendingWindow).toBeNull();
+    room.dispose();
+  });
+});
+
+describe('the turn clock and the rope (HAND_AND_TURN_PLAN #4-#5)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** a started room whose current player is awaiting their ask with no window open */
+  function atRest() {
+    vi.setSystemTime(2_000_000);
+    const made = makeRoom(3, { now: () => Date.now() });
+    made.room.start();
+    // an opening TURN_START window (an active power in hand) is passed first
+    while (made.room.state!.pendingWindow) made.room.applyAction(made.room.state!.pendingWindow.eligiblePlayerIds[0], { type: 'SKIP_WINDOW' });
+    return made;
+  }
+
+  it('every viewer gets the same public clock while the player is awaiting their ask', () => {
+    const { room, sockets } = atRest();
+    const clocks = sockets.map((ws) => lastState(ws).view.turnClock);
+    expect(clocks[0]).toMatchObject({ totalMs: room.turnTimeoutMs, ropeMs: room.ropeMs });
+    expect(clocks[0]!.deadlineAt).toBe(room.turnDeadlineAt);
+    for (const c of clocks) expect(c).toEqual(clocks[0]);
+    room.dispose();
+  });
+
+  it('when the clock runs out the room makes a legal ask for the player (an absent player, too)', () => {
+    const { room, sockets } = atRest();
+    const s = room.state!;
+    const asker = s.players[s.currentPlayerIndex];
+    room.disconnect(asker.id);
+    vi.advanceTimersByTime(room.turnTimeoutMs - 1);
+    expect(room.state!.resume.kind).toBe('AWAIT_REQUEST');
+    vi.advanceTimersByTime(2);
+    const seen = sockets.flatMap((ws) => ws.messages.filter((m): m is GameStateMsg => m.type === 'game_state'));
+    const made = seen.flatMap((m) => m.events).find((e) => e.type === 'REQUEST_MADE');
+    expect(made).toMatchObject({ type: 'REQUEST_MADE', askerId: asker.id });
+    room.dispose();
+  });
+
+  it('a window pauses the clock and it resumes with what was left; laying a set does not restart it', () => {
+    const { room } = atRest();
+    const first = room.turnDeadlineAt!;
+    vi.advanceTimersByTime(10_000);
+    // a lay that changes nothing about the ask keeps the same deadline: re-publish the same state
+    (room as unknown as { publish(e: unknown[]): void }).publish([]);
+    expect(room.turnDeadlineAt).toBe(first);
+    // a window opens: the clock is off the view, and comes back with the 35 s that were left
+    const s = room.state!;
+    (s as { pendingWindow: unknown }).pendingWindow = { type: 'SET_COMPLETED', eligiblePlayerIds: [s.players[0].id], context: {} };
+    (room as unknown as { publish(e: unknown[]): void }).publish([]);
+    expect(room.turnDeadlineAt).toBeNull();
+    vi.advanceTimersByTime(8_000);
+    (s as { pendingWindow: unknown }).pendingWindow = null;
+    (room as unknown as { publish(e: unknown[]): void }).publish([]);
+    expect(room.turnDeadlineAt).toBe(Date.now() + room.turnTimeoutMs - 10_000);
+    room.dispose();
+  });
+
+  it('a new ask (a bonus turn, or the next player) gets a full allowance', () => {
+    const { room } = atRest();
+    vi.advanceTimersByTime(20_000);
+    const s = room.state!;
+    const asker = s.players[s.currentPlayerIndex];
+    const target = s.players.find((p) => p.id !== asker.id)!;
+    room.applyAction(asker.id, { type: 'REQUEST', targetId: target.id, rank: asker.hand.find((c) => c.rank !== 'eggs')!.rank });
+    expect(room.turnDeadlineAt).toBeNull(); // the answer window has the floor
+    while (room.state!.pendingWindow) room.applyAction(room.state!.pendingWindow.eligiblePlayerIds[0], { type: 'SKIP_WINDOW' });
+    if (room.state!.status === 'IN_PROGRESS' && room.state!.resume.kind === 'AWAIT_REQUEST') expect(room.turnDeadlineAt).toBe(Date.now() + room.turnTimeoutMs);
     room.dispose();
   });
 });

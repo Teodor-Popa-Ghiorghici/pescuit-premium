@@ -1,16 +1,19 @@
-/* Per-device presentation settings (§4.1): the table speed, 1x or 1.5x, which scales every
- * table-lane duration. Kept in localStorage behind try/catch; the page renders without it. */
+/* Per-device presentation settings (§4.1): the table speed, 0.75x ("calm", the default since HAND_AND_TURN_PLAN #6),
+ * 1x or 1.5x, which scales every table-lane duration (cues included, so sound and pixels stay locked). Kept in
+ * localStorage behind try/catch; the page renders without it. */
 const KEY = 'pescuit:tableSpeed';
-export type TableSpeed = 1 | 1.5;
+export type TableSpeed = 0.75 | 1 | 1.5;
+export const TABLE_SPEEDS: readonly TableSpeed[] = [0.75, 1, 1.5];
+export const DEFAULT_TABLE_SPEED: TableSpeed = 0.75;
 let speed: TableSpeed | null = null;
 const listeners = new Set<() => void>();
 
 export function getTableSpeed(): TableSpeed {
   if (speed === null) {
-    speed = 1;
+    speed = DEFAULT_TABLE_SPEED;
     try {
-      const raw = localStorage.getItem(KEY);
-      if (raw === '1.5') speed = 1.5;
+      const raw = Number(localStorage.getItem(KEY));
+      if ((TABLE_SPEEDS as readonly number[]).includes(raw)) speed = raw as TableSpeed;
     } catch {
       /* private mode: the default */
     }
