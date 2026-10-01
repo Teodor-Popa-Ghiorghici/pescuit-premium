@@ -16,18 +16,30 @@ export const SCORE_STATES: readonly ScoreState[] = ['lobby', 'call', 'dusk', 'ev
 
 export type HumPartial = readonly [partial: number, db: number];
 
-/** the hum per state and profile: the speaker arrangement keeps every in-play partial at or above 290 Hz (partial 5) */
+/**
+ * The hum per state and profile. Every state's hum carries the same total power (the conductor normalises it), so these are
+ * the balance between the chord's notes, not its level: the harness measured the plan's first voicings (upper partials at
+ * -6 to -12 dB) sitting 10 dB under the pond in their own bands (#18, as round 2 predicted), so they are flatter here.
+ * The speaker arrangement keeps every in-play partial at or above 290 Hz (partial 5).
+ */
 export const HUM: Record<ScoreState, Record<Profile, readonly HumPartial[]>> = {
-  lobby: { headphones: [[2, -8], [4, 0], [6, -4], [8, -9]], speaker: [[4, -3], [6, 0], [8, -6]] },
+  lobby: { headphones: [[2, -6], [4, 0], [6, -2], [8, -4]], speaker: [[4, -2], [6, 0], [8, -3]] },
   call: { headphones: [], speaker: [] },
-  dusk: { headphones: [[6, 0], [9, -6], [12, -12]], speaker: [[6, 0], [9, -6], [12, -12]] },
-  evening: { headphones: [[5, -2], [6, 0], [10, -8]], speaker: [[5, -2], [6, 0], [10, -8]] },
-  night: { headphones: [[5, -3], [7, 0], [9, -6]], speaker: [[5, -3], [7, 0], [9, -6]] },
+  dusk: { headphones: [[6, 0], [9, -2], [12, -1]], speaker: [[6, 0], [9, -2], [12, -1]] },
+  evening: { headphones: [[5, -1], [6, 0], [10, -1]], speaker: [[5, -1], [6, 0], [10, -1]] },
+  night: { headphones: [[5, -2], [7, 0], [9, -2]], speaker: [[5, -2], [7, 0], [9, -2]] },
   gate: { headphones: [[9, 0], [10, -1]], speaker: [[9, 0], [10, -1]] },
-  last: { headphones: [[6, -3]], speaker: [[6, -3]] },
+  last: { headphones: [[6, 0]], speaker: [[6, 0]] },
   finale: { headphones: [], speaker: [] },
-  post: { headphones: [[2, -8], [4, 0], [6, -4], [8, -9]], speaker: [[4, -3], [6, 0], [8, -6]] },
+  post: { headphones: [[2, -6], [4, 0], [6, -2], [8, -4]], speaker: [[4, -2], [6, 0], [8, -3]] },
 };
+
+/** the linear gains of a state's hum, normalised to unit total power */
+export function humGains(state: ScoreState, profile: Profile): Array<[number, number]> {
+  const lin = HUM[state][profile].map(([p, d]) => [p, 10 ** (d / 20)] as [number, number]);
+  const power = lin.reduce((a, [, g]) => a + g * g, 0);
+  return power > 0 ? lin.map(([p, g]) => [p, g / Math.sqrt(power)] as [number, number]) : [];
+}
 
 /** the stage whose phrase bag a state draws from; null where no horn calls */
 export const BAG: Record<ScoreState, ScoreStage | null> = {

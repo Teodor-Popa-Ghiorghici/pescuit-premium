@@ -1,6 +1,9 @@
 # Background music plan — Pescuiește Extins
 
-**Status: plan v2, for review. Nothing here is built.** It adds a background score to the game without breaking
+**Status: plan v2; its engineering milestones are built (Appendix D).** The human-gated work — the composer's library,
+the consultant, the week-1 listening tests, the call rig and the music playtest — is not done, so the score ships
+**lobby-only by default** (D2) until the playtest decides. Appendix D lists every place the build departs from the text
+below and why. It adds a background score to the game without breaking
 any of the laws the rest of the sound was built on. It amends `DESIGN.md` §7.1 ("no music bed during play") and
 eleven smaller rules, each listed in §1.2 with its reason. v1 was scored 5.8 / 10 by the critic
 (`docs/music-plan-reviews/round-1.md`); Appendix C says what changed.
@@ -771,3 +774,90 @@ night answers — is written in M-S1.
     register change), the Discord-on-the-same-phone case is in the rig, the settings add a switch instead of a slider,
     the 232 Hz payoff is tested on phone speakers, the harness renders in chunks, the imperfections that could not be
     heard are gone.
+
+## Appendix D — Execution record
+
+*Built on `claude/pensive-faraday-9gmzud`. Every number below was measured by `npm run audio:check` (the full
+harness, `packages/client/tools/out/metrics.md`) or by the unit tests; nothing has been heard by a listener yet.*
+
+### D.1 What was built, by milestone
+
+| Milestone | Built | Where |
+|---|---|---|
+| M-S0 spike | the hum (per-partial resonators driven by generated noise, ±3 dB value-noise wander over absolute server time) and the legato horn voice, one self-contained `createScoreSynth` closure shipped to an AudioWorklet as source text; a Score bench in `?lab=audio` | `audio/score/synth.ts`, `worklet.ts`, `audio/scoreLab.tsx` |
+| M-S1 composition | **an in-house draft** of the whole library (D7's alternative): 40 calls and 16 answers, every one passing `phraseRules`, the notation parser and its writer. The composer and the consultant replace it | `audio/score/phrases.ts` |
+| M-S2 engine | `SCORE_FIELDS` and `scoreInputOf`; the pure per-slot plan on server time; the conductor (cuts on named cues, swells, the 2 s lock, deferral, the ceremony hold, rejoin); the `Score` class loaded as a lazy chunk; the seventh bus with its duck and darkening gain; the switch (On / Lobby only / Off) under the Music slider in RO and EN; `?metrics=1` counts it | `audio/score/*`, `engine.ts`, `mixer.ts`, `presenter.ts`, `Sheets.tsx` |
+| M-S3 protocol | `startedAt` in the view; `serverNow` and `createdAt` on `room_update`; a room test that they are identical for every member | `engine/src/redact.ts`, `server/src/room.ts`, `shared/src/protocol.ts` |
+| M-S4 same key | `world.dark.01` is a Table knock; its bare horn note is `mus.home` on Music; the Clock bus +2 dB on headphones; the home rules as a test | `cuesheet.ts`, `recipes.ts`, `cues.ts` |
+| M-S5 harness and tests | checks #14–#23 in `tools/score-harness.ts`; `scorefields`, `score`, `score-games` and the source guards (48 new tests) | `packages/client/test`, `tools` |
+| M-S6 lab | the Score bench (state, profile, phrase box with live rule checking, the library). **Not built:** the slot timeline and `?table=bots&clients=6` — the agreement test drives six conductors directly instead | `audio/scoreLab.tsx`, `test/score-games.test.ts` |
+| M-S7–M-S9 | **not done**: the call rig, the listening-effort and ESTOI tests, the blindfold rerun, the phone-speaker payoff test, the music playtest and the mix pass need people | — |
+
+### D.2 Where the build departs from the text, and why
+
+Each departure answers a round-2 finding or a measurement; none loosens a gate.
+
+1. **Slurs jump, they do not glide or crossfade** (§3.6). A natural horn cannot sweep between partials (round 2). A
+   30 ms crossfade was tried: two harmonic series 58 Hz apart beat inside it and #15 measured dips of 8.5 dB. The
+   voice now keeps one running phase and moves the pitch at once, under a 1.5 dB dip and a breath lift.
+2. **The onset swell is 200 ms**, not "≥ 80 ms": a 120 ms raised cosine reaches −6 dB at 60 ms and fails #15's own rule.
+3. **The hum's grain is per client** (round 2): copies of one noise from several phones comb on the call. Its wander
+   (the slow level of each partial) stays public and identical. The resonator bandwidth is 3 Hz, the widest of the
+   spike's range.
+4. **No gust coupling**: the gusts come from a per-client generator and the dry state, an undeclared input (round 2).
+5. **Repetition is bounded for real**: one fixed walk of each stage's bag per game (`perm(seed, stage)[i mod 10]`), so
+   no phrase recurs within ten slots; a returning phrase takes the next take. The speaker subset is
+   `hash(seed, i) < ½` only.
+6. **The slot hash has a real finaliser**: `util.mix` alone biased the activity rates (0.45 measured for 3/8).
+7. **More cut points** (§4.2): over 24 bot games the stall gate also shut on a Tortoise's block and opened on a Shark, a
+   Whale or a Lanternfish — steps with none of the plan's named cues. The powers' strikes are now cut points, the
+   non-ducking ones first. Cuts land 5 ms into the cue, where the recipes strike their transient (#20).
+8. **A 2 → 0 jump** fires the last set's knock but not `mus.home`: the podium is the cadence. A stall ending cuts to the
+   finale on the miss that ends it.
+9. **`mus.home` has no score duck** (round 2: #20 forbids a duck at a cut, and the duck would halve the payoff).
+10. **A backlogged table** (round 2): a slot whose chord this client has not cut yet waits up to 3 s for the cut, then
+    is dropped (D-g, tested).
+11. **Levels, as measured** (§6.1): the pond gives up **3 dB** (not 2) and the hum fills it; each state's hum has the
+    same total power; the voicings are flatter than §4.1 (dusk 6/9/12 at 0/−2/−1 dB, evening 5/6/10 at −1/0/−1, night
+    5/7/9 at −2/0/−2, the last set's lone dominant at 0); calls sit **≥ 14 LU** under the anchor (15.0–15.5 measured),
+    not 12, so a call over the world stays inside rule 3's spirit. Constants: `audio/score/levels.ts`.
+12. **A13 — the Score stem follows the pond** (new amendment): its wetness factor (the public pool count; a measured 0.57
+    once dry) and the table-activity envelope. Round 2 showed the world stem drifts by +0.55 dB as the pool drains and
+    +1.5 dB in active play otherwise. The envelope's one per-client cue, `table.turn.you`, replaces `table.turn` at the
+    same moment, so the envelope moves on every client together.
+13. **#17 compares integrated loudness** for "unchanged from today" (short-term max still sets the 12–20 LU window),
+    and #17/#18 measure the voicing at the centre of its wander: a 40 s render sees two or three knots, so the wander,
+    not the design, would decide the number. Dry states render 180 s, as the bed check does.
+14. **The Law 1 window test is restated** (round 2): the score is a pure function of public values and their broadcast
+    times; a structural window's extra broadcast carries nothing new and, at matching timestamps, changes no slot.
+
+### D.3 Measured
+
+- `audio:check`: the original 13 checks pass with the score under the scene; of the score's ten, **eight pass**.
+  - #14: worst held note 7.7 ¢, worst hum partial 1.0 ¢.
+  - #15: slowest onset ≥ 105 ms, deepest slur dip 2.7 dB, hum envelope autocorrelation ≤ 0.15.
+  - #16: 32.4–33.3 LU of speech room. #19: the clock 11.9–14.1 LU over the world and 13.9–15.9 LU over any call.
+  - #20: a 21 ms ramp starting 1.2 ms before the knock's measured onset, click ratio 0.53. #21: a rejoin plays the
+    same slots, 0.0 dB.
+  - #22: the waiting room's world 8.4–9.1 LU under the anchor, its calls 15 LU. #23: about 210× real time (0.47 % of a
+    core).
+- **Two fail, both in the dry pool, both the wind–hum clash round 2 named:**
+  - #17: the last set with a dry pool on speakers sits 20.5 LU under the anchor, 0.5 LU outside the window. Today's
+    wind alone there is 19.8, and a steady hum that replaces part of a gusty wind lowers its short-term peaks while
+    holding its integrated loudness.
+  - #18: at dusk with a dry pool, partial 12 (696 Hz) is 0.6 dB under the wind's drifting 640 Hz resonance.
+  - Both need the mix pass's ears: either the score learns the dry state (a voicing that steps out of the wind's band),
+    or the wind gives up its resonance rather than its level.
+- Agreement (§10.2): six clients with 0–300 ms of jitter agree on ≥ 99 % of slots on both profiles over 12 six-player
+  games; a client 3 s late differs only on slots the lock and the deferral predict.
+- Budgets: the main bundle +1.4 KB gzip. The score's lazy chunk is **9.4 KB gzip** against the plan's 6 KB estimate:
+  D4's line moves further than the plan said.
+
+### D.4 What remains, in the plan's order
+
+1. Week 1's two listening tests (realism, ordering) and the private-panel dropout run on a mid-range Android (§10.3).
+2. The composer's library and the consultant's review (M-S1, §3.7). Any library must pass `phraseRules`.
+3. The call rig and its listening-effort, ESTOI, blindfold and phone-speaker tests (§10.4, M-S7).
+4. The music playtest (§10.5). Until it passes, `SCORE_DEFAULT_MODE` stays `'lobby'`.
+5. The mix pass (M-S9), starting with the two dry-pool residuals above.
+6. The slot-timeline lab panel and `?table=bots&clients=6` (M-S6), if the rig needs them.

@@ -313,7 +313,7 @@ the schedule; ±5 % pitch only). Sits on its own Clock bus at −8 dB.
 | **Squid, in any form** | **nothing. No event exists, no cue exists.** | — | — |
 | `sets.possible` crosses **12** downward | `world.dark.12` + ambience step 1 | after the lay's notch beat | V6 |
 | `sets.possible` crosses **6** | `world.dark.06` + ambience step 2 | same | V6 |
-| `sets.possible` reaches **1** ("the last set") | `world.dark.01` + bare tulnic note (≤ 1.2 s) + ambience step 3 | same | V6 |
+| `sets.possible` reaches **1** ("the last set") | `world.dark.01` (a Table knock) + `mus.home`, the bare tulnic note on Music (≤ 1.2 s; not when the game ends in the same step), + ambience step 3 | same | V6 |
 | `endPressure.misses` reaches N/2, then resets | `amb.gate` shut / open | 300 / 200 | V7 |
 | turn totem change | `table.turn*` (row above) | — | — |
 | `WINDOW_OPENED` / `WINDOW_CLOSED`, structural (`TURN_START`, `REQUEST_DECLARED`, `TRANSFER_PENDING`, `SET_COMPLETED`, `TURN_END`) — open, close **or timeout** | **silent, for every client, eligible or not** | — | none (deliberately unread) |

@@ -243,10 +243,13 @@ export function cutCuesFor(from: ScoreState, to: ScoreState): string[] {
  * Where, in one presentation step, the score's change from `from` to `to` lands: the named cue's time (ms from the step's
  * presentation), `named` false when the step carries none of them and the change falls back to the step's first cue (or 0).
  */
+/** the table's recipes strike their transient a few ms into the cue (`t + 0.005`): the chord changes on the strike */
+export const CUT_LAG_MS = 5;
+
 export function cutOf(from: ScoreState, to: ScoreState, cues: ReadonlyArray<{ id: string; at: number }>): { at: number; cue: string | null; named: boolean } {
   for (const id of cutCuesFor(from, to)) {
     const c = cues.find((x) => x.id === id);
-    if (c) return { at: c.at, cue: id, named: true };
+    if (c) return { at: c.at + CUT_LAG_MS, cue: id, named: true };
   }
   const first = [...cues].sort((a, b) => a.at - b.at)[0];
   return { at: first ? first.at : 0, cue: first ? first.id : null, named: false };

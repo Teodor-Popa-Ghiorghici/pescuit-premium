@@ -123,7 +123,10 @@ export interface StemGraph {
   /** the darkening step: a low-pass and a level on the ambience stem */
   ambStepLp: BiquadFilterNode;
   ambStepGain: GainNode;
-  /** the score's per-cue duck and its darkening step (the level column only: the low-pass does nothing under 700 Hz) */
+  /** the score follows the table's activity and the pond's wetness exactly as the pond does, so the two keep their balance;
+   *  then its own per-cue duck and its darkening step (the level column only: the low-pass does nothing under 700 Hz) */
+  scoreActivity: GainNode;
+  scoreWet: GainNode;
   scoreDuck: GainNode;
   scoreStepGain: GainNode;
   setProfile(p: Profile): void;
@@ -158,10 +161,14 @@ export function buildStemGraph(ctx: BaseAudioContext, profile: Profile): StemGra
   ambStepLp.frequency.value = DARK_STEPS.hz[0];
   const ambStepGain = ctx.createGain();
   buses.Ambience.connect(ambActivity).connect(ambCeremony).connect(ambStepLp).connect(ambStepGain).connect(amb.input);
-  // the score does NOT follow the ambience's activity envelope: that envelope also reacts to cues heard by one client only
+  // the score eases under the table's activity with the pond (A13): the envelope is bumped by every 'src' cue, and the one
+  // 'src' cue heard by a single client (`table.turn.you`) stands in for `table.turn` at the same moment - so it moves on
+  // every client together, on public events
+  const scoreActivity = ctx.createGain();
+  const scoreWet = ctx.createGain();
   const scoreDuck = ctx.createGain();
   const scoreStepGain = ctx.createGain();
-  buses.Score.connect(scoreDuck).connect(scoreStepGain).connect(score.input);
+  buses.Score.connect(scoreActivity).connect(scoreWet).connect(scoreDuck).connect(scoreStepGain).connect(score.input);
   const setDarkStep = (step: number, when = ctx.currentTime, immediate = false) => {
     const k = Math.max(0, Math.min(3, Math.round(step)));
     const hz = DARK_STEPS.hz[k];
@@ -185,7 +192,7 @@ export function buildStemGraph(ctx: BaseAudioContext, profile: Profile): StemGra
     }
   };
   setProfile(profile);
-  return { buses, outputs: { main: main.output, clock: clock.output, ambience: amb.output, score: score.output }, ambActivity, ambCeremony, ambStepLp, ambStepGain, scoreDuck, scoreStepGain, setProfile, setDarkStep };
+  return { buses, outputs: { main: main.output, clock: clock.output, ambience: amb.output, score: score.output }, ambActivity, ambCeremony, ambStepLp, ambStepGain, scoreActivity, scoreWet, scoreDuck, scoreStepGain, setProfile, setDarkStep };
 }
 
 /* -------------------------------------------------------- per-voice mastering */
@@ -257,11 +264,22 @@ export class Mixer {
   /** A source cue was heard: the ambience eases under the table's activity - up to -4 dB, in over
    * 1.5 s, back out over 6 s. It never ducks per cue. */
   bumpActivity(when: number): void {
-    const g = this.graph.ambActivity.gain;
     const t = Math.max(when, this.ctx.currentTime);
+    for (const g of [this.graph.ambActivity.gain, this.graph.scoreActivity.gain]) {
+      g.cancelScheduledValues(t);
+      g.setTargetAtTime(fromDb(-4), t, 1.5 / 3);
+      g.setTargetAtTime(1, t + 4, 6 / 3);
+    }
+  }
+
+  /** the score's stem follows the pond's wetness factor (ambience.ts `pondWetFactor`): at once, or over the 400 ms of the
+   *  pond turning to wind */
+  setScoreWet(factor: number, when?: number, immediate = false): void {
+    const g = this.graph.scoreWet.gain;
+    const t = Math.max(when ?? this.ctx.currentTime, this.ctx.currentTime);
     g.cancelScheduledValues(t);
-    g.setTargetAtTime(fromDb(-4), t, 1.5 / 3);
-    g.setTargetAtTime(1, t + 4, 6 / 3);
+    if (immediate) g.setValueAtTime(factor, t);
+    else g.setTargetAtTime(factor, t, 0.4 / 3);
   }
 
   /** the ambience steps to darkening step `step` (0-3) at context time `when`, or at once */

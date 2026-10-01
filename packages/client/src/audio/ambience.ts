@@ -17,7 +17,7 @@
 import { rng } from './util.js';
 import { type Ctx, filt, sharedNoise } from './live/common.js';
 import { drip } from './live/water.js';
-import { LOBBY_POND, POND_WITH_SCORE_DB } from './score/levels.js';
+import { LOBBY_POND, POND_WITH_SCORE_DB, SCORE_DRY_FACTOR } from './score/levels.js';
 
 export interface AmbienceInputs {
   /** cards left in the pool, and how many there were at the start (how wet the pond still is) */
@@ -33,6 +33,22 @@ export interface AmbienceInputs {
 }
 
 export const BED_DB = 0; // the bed's level within the ambience bus
+
+/**
+ * How wet the pond sounds, as a level factor (1 = a full pond): the water thins as the pool drains, the wind is quieter
+ * still. PUBLIC (the pool count). The background score's stem follows the same factor (MUSIC_PLAN A13), so the pond and
+ * the hum keep their balance whatever is left in the pool; the waiting room's pond is always full.
+ */
+export function pondWetFactor(i: Pick<AmbienceInputs, 'poolCount' | 'poolStart' | 'scene'>, dry: boolean): number {
+  if (i.scene === 'lobby') return 1;
+  const wet = i.poolStart > 0 ? Math.min(1, i.poolCount / i.poolStart) : 1;
+  return dry ? 0.7 : 0.8 + 0.2 * wet;
+}
+
+/** the score's stem against the world: the pond's factor while there is water, the wind's measured level once dry */
+export function scoreWetFactor(i: Pick<AmbienceInputs, 'poolCount' | 'poolStart' | 'scene'>, dry: boolean): number {
+  return dry && i.scene !== 'lobby' ? SCORE_DRY_FACTOR : pondWetFactor(i, dry);
+}
 /** the switch from pond to wind, seconds */
 export const CROSSFADE_S = 0.4;
 /** the wind's two resonances: centre Hz and Q */
@@ -164,11 +180,10 @@ export class Ambience {
     if (!this.started) return;
     const { poolCount, poolStart, scene, scoreOn } = this.inputs;
     const t = this.ctx.currentTime;
-    const wet = poolStart > 0 ? Math.min(1, poolCount / poolStart) : 1;
     // the water thins slowly as the pool drains; the wind does not (there is nothing left to drain)
-    // with the score under it the pond gives up 2 dB in play, and the waiting room's pond steps down from 2.2 to 1.6
+    // with the score under it the pond gives up a little in play, and the waiting room's pond steps down
     const room = scene === 'lobby' ? (scoreOn ? LOBBY_POND.withScore : LOBBY_POND.alone) : scoreOn ? 10 ** (POND_WITH_SCORE_DB / 20) : 1;
-    const level = room * (this.dry ? 0.7 : 0.8 + 0.2 * wet);
+    const level = room * (scene === 'lobby' ? 0.8 + 0.2 * Math.min(1, poolStart > 0 ? poolCount / poolStart : 1) : pondWetFactor({ poolCount, poolStart, scene }, this.dry));
     const to = (p: AudioParam, v: number, tc: number) => (immediate ? (p.value = v) : p.setTargetAtTime(v, t, tc));
     to(this.level.gain, level * 10 ** (BED_DB / 20), 1.5);
   }

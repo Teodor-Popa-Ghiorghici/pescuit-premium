@@ -3,7 +3,7 @@ import { CALL, LAST, PODIUM } from '../src/audio/render/horn.js';
 import { ScoreConductor, type TimedMessage } from '../src/audio/score/conductor.js';
 import type { ScoreInput } from '../src/audio/score/input.js';
 import { bagOf, formatPhrase, lengthOf, parsePhrase, PHRASES, phraseById, phraseRules, pulseViolations, type ScoreStage } from '../src/audio/score/phrases.js';
-import { ceremoniesOf, cutOf, planSlots, slotOf, slotTimes, stateAt, stateOf, type ScoreHistory, type Snapshot } from '../src/audio/score/plan.js';
+import { ceremoniesOf, CUT_LAG_MS, cutOf, planSlots, slotOf, slotTimes, stateAt, stateOf, type ScoreHistory, type Snapshot } from '../src/audio/score/plan.js';
 import { createScoreSynth, renderScoreOffline, type SynthMessage } from '../src/audio/score/synth.js';
 import { HUM, SCORE_STATES, type ScoreState } from '../src/audio/score/voicing.js';
 import { scoreWorkletSource, SCORE_PROCESSOR } from '../src/audio/score/worklet.js';
@@ -163,12 +163,16 @@ describe('the plan (§4, §5.2)', () => {
     expect(new Set(a.filter((s) => s.active).map((s) => s.state))).toEqual(new Set(['dusk', 'evening', 'night']));
   });
 
-  it('cuts land on the named cue, never on the quiet gate creak', () => {
+  it('cuts land on the named cue\'s transient (5 ms into it), never on the quiet gate creak', () => {
+    expect(CUT_LAG_MS).toBe(5);
     const cues = [{ id: 'table.lay', at: 0 }, { id: 'world.notch', at: 300 }, { id: 'world.dark.12', at: 380 }];
-    expect(cutOf('dusk', 'evening', cues)).toEqual({ at: 380, cue: 'world.dark.12', named: true });
-    expect(cutOf('night', 'gate', [{ id: 'amb.gate', at: 300 }, { id: 'table.gofish.dry', at: 340 }])).toMatchObject({ at: 340, cue: 'table.gofish.dry', named: true });
-    expect(cutOf('gate', 'night', [{ id: 'table.flight', at: 100 }, { id: 'table.give', at: 490 }])).toMatchObject({ at: 490, named: true });
-    expect(cutOf('last', 'finale', [{ id: 'table.lay.hidden', at: 5 }, { id: 'mus.podium', at: 900 }])).toMatchObject({ at: 5, named: true });
+    expect(cutOf('dusk', 'evening', cues)).toEqual({ at: 385, cue: 'world.dark.12', named: true });
+    expect(cutOf('night', 'gate', [{ id: 'amb.gate', at: 300 }, { id: 'table.gofish.dry', at: 340 }])).toMatchObject({ at: 345, cue: 'table.gofish.dry', named: true });
+    expect(cutOf('gate', 'night', [{ id: 'table.flight', at: 100 }, { id: 'table.give', at: 490 }])).toMatchObject({ at: 495, named: true });
+    expect(cutOf('last', 'finale', [{ id: 'table.lay.hidden', at: 5 }, { id: 'mus.podium', at: 900 }])).toMatchObject({ at: 10, named: true });
+    // a power's strike shuts or opens the gate too (a Tortoise's block is a miss; a Whale's capture resets the count)
+    expect(cutOf('night', 'gate', [{ id: 'power.tortoise', at: 450 }])).toMatchObject({ cue: 'power.tortoise', named: true });
+    expect(cutOf('gate', 'evening', [{ id: 'power.windup', at: 200 }, { id: 'power.whale', at: 450 }, { id: 'table.impact', at: 450 }])).toMatchObject({ cue: 'table.impact', named: true });
     expect(cutOf('night', 'finale', [{ id: 'table.gofish.dry', at: 300 }])).toMatchObject({ named: true }); // a stall ending
     expect(cutOf('dusk', 'evening', [{ id: 'table.turn', at: 760 }])).toEqual({ at: 760, cue: 'table.turn', named: false });
   });
@@ -190,9 +194,9 @@ describe('the conductor (§4.2, §5.2)', () => {
     expect(humOf(dusk)[0].atMs).toBe(ZERO + 8_300);
     expect((humOf(dusk)[0].msg as Extract<SynthMessage, { type: 'hum' }>).rampS).toBe(6);
     const eve = c.update(game(ZERO + 200_000, 12), { nowMs: ZERO + 200_050, live: true, cues: [{ id: 'table.lay', at: 0 }, { id: 'world.dark.12', at: 380 }] });
-    expect(humOf(eve)[0].atMs).toBe(ZERO + 200_050 + 380);
+    expect(humOf(eve)[0].atMs).toBe(ZERO + 200_050 + 380 + CUT_LAG_MS);
     expect((humOf(eve)[0].msg as Extract<SynthMessage, { type: 'hum' }>).rampS).toBe(0.025);
-    expect(eve.some((m) => m.msg.type === 'cut' && m.atMs === ZERO + 200_430)).toBe(true);
+    expect(eve.some((m) => m.msg.type === 'cut' && m.atMs === ZERO + 200_435)).toBe(true);
   });
 
   it('a rejoin swells into the current state over 1.5 s, with no cut', () => {
@@ -237,7 +241,7 @@ describe('the conductor (§4.2, §5.2)', () => {
       return out.filter((m) => m.msg.type === 'phrase');
     };
     expect(run(500)[0].atMs).toBe(slot.t); // the cut landed first: on time
-    expect(run(4_000)[0].atMs).toBe(slot.t - 2_400 + 4_000 + 300); // a backlogged table: after the cut
+    expect(run(4_000)[0].atMs).toBe(slot.t - 2_400 + 4_000 + CUT_LAG_MS + 300); // a backlogged table: after the cut
     expect(run(6_000)).toEqual([]); // too late: the slot goes
   });
 

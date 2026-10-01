@@ -6,9 +6,10 @@
  *              the chord's notes as a drone breathes, the same on every client and after a rejoin. The grain itself is
  *              seeded per client (`salt`): copies picked up by several phones on one call must not add coherently.
  *   a horn     a legato natural-horn voice for the far calls: ONE lip onset per phrase (a scoop from below and a slow
- *              swell), then every note is a slur - the lip jumps to the next resonance: a 30 ms crossfade between the two
- *              partials with a 2 dB dip and a lift of breath noise, never a frequency glide (a natural horn cannot sweep
- *              between its partials). Harmonics <= 8 and under 2 kHz, through a low-pass that opens with the dynamics and
+ *              swell), then every note is a slur - the lip jumps to the next resonance: the pitch moves at once on one
+ *              running phase (no click), under a 1.5 dB dip and a lift of breath noise over 30-40 ms, never a frequency glide
+ *              (a natural horn cannot sweep between its partials). (A crossfade between the two partials was tried: two
+ *              harmonic series 58 Hz apart beat inside it, and the harness measured dips of up to 8.5 dB.) Harmonics <= 8 and under 2 kHz, through a low-pass that opens with the dynamics and
  *              is capped by distance (900 Hz a call, 650 Hz an answer). The lip wanders on a slow random walk; notes sag;
  *              the breath runs out. A far answer in headphones gets the valley's two discrete repeats.
  *
@@ -65,9 +66,11 @@ export interface ScoreSynthOptions {
   hornDb: number;
   /** the hum's resonator bandwidth, Hz (MUSIC_PLAN tries 1-3 Hz by ear) */
   bandwidthHz: number;
+  /** how far each partial's level wanders either way, dB (the harness measures the voicing at its centre with 0) */
+  wanderDb: number;
 }
 
-export const SYNTH_DEFAULTS: ScoreSynthOptions = { humDb: 0, hornDb: 0, bandwidthHz: 3 };
+export const SYNTH_DEFAULTS: ScoreSynthOptions = { humDb: 0, hornDb: 0, bandwidthHz: 3, wanderDb: 3 };
 
 export interface ScoreSynth {
   /** the internal rate, Hz */
@@ -80,7 +83,7 @@ export interface ScoreSynth {
 }
 
 export function createScoreSynth(sampleRate: number, options?: Partial<ScoreSynthOptions>): ScoreSynth {
-  const o = { humDb: 0, hornDb: 0, bandwidthHz: 3, ...options };
+  const o = { humDb: 0, hornDb: 0, bandwidthHz: 3, wanderDb: 3, ...options };
   const F0 = 58;
   const D = Math.max(1, Math.round(sampleRate / 16000));
   const isr = sampleRate / D;
@@ -160,7 +163,7 @@ export function createScoreSynth(sampleRate: number, options?: Partial<ScoreSynt
     return 8000 + 17000 * mix(seed, p, k, 0x6b6e);
   }
   function knotValue(p: number, k: number): number {
-    return -3 + 6 * mix(seed, p, k, 0x7661);
+    return o.wanderDb * (2 * mix(seed, p, k, 0x7661) - 1);
   }
   function resetWander(part: Part, t: number): void {
     // walk the knots from the zero: the same knots on every client, whenever it joined
@@ -223,9 +226,6 @@ export function createScoreSynth(sampleRate: number, options?: Partial<ScoreSynt
     n: number; // internal samples rendered
     note: number;
     phaseA: number;
-    phaseB: number;
-    fB: number;
-    xfade: number; // internal samples left in the current slur's crossfade
     slurAt: number;
     gain: number;
     noteGain: number[];
@@ -252,6 +252,7 @@ export function createScoreSynth(sampleRate: number, options?: Partial<ScoreSynt
     harm: number;
   }
   const voices: Voice[] = [];
+  /** a slur's break: the dip and the breath's lift last this long */
   const XFADE_S = 0.03;
   const BREATH_LIFT_S = 0.04;
   // a raised-cosine swell of 200 ms reaches -6 dB at 100 ms: no rise faster than 80 ms to within 6 dB of the peak (#15)
@@ -282,7 +283,7 @@ export function createScoreSynth(sampleRate: number, options?: Partial<ScoreSynt
     const lpCap = Math.min(m.lpHz, 1100);
     const v: Voice = {
       tag: m.tag, start: startInternal, notes: m.notes, starts, ends, releaseEnd, total, n: 0, note: 0,
-      phaseA: 0, phaseB: 0, fB: 0, xfade: 0, slurAt: 0, gain: m.gain * hornGain,
+      phaseA: 0, slurAt: 0, gain: m.gain * hornGain,
       noteGain: m.notes.map(() => dbToLin((rnd() * 2 - 1) * 0.8)),
       lpCap, panL: Math.cos(ang), panR: Math.sin(ang), lipGain: dbToLin(m.lipDb), wobble: m.wobble, walk: 0,
       scoop: m.scoopCents, sagScale: m.sagScale, trimCut, rnd,
@@ -303,12 +304,10 @@ export function createScoreSynth(sampleRate: number, options?: Partial<ScoreSynt
     if (i < v.releaseEnd) {
       // which note, and the slur into it
       while (v.note + 1 < v.notes.length && i >= v.starts[v.note + 1]) {
+        // the lip jumps to the next resonance: the phase runs on (no click, no glide), the pitch moves at once
         v.note++;
-        v.phaseB = v.phaseA;
-        v.fB = v.inc;
-        v.phaseA = 0;
-        v.xfade = Math.round(XFADE_S * isr);
         v.slurAt = i;
+        v.inc = (TWO_PI * F0 * v.notes[v.note].p * Math.pow(2, v.walk / 1200)) / isr;
       }
       const nt = v.notes[v.note];
       const noteStart = v.starts[v.note];
@@ -326,23 +325,16 @@ export function createScoreSynth(sampleRate: number, options?: Partial<ScoreSynt
       const t = i / isr;
       let env = t < ONSET_S ? 0.5 - 0.5 * Math.cos((Math.PI * t) / ONSET_S) : 1;
       const sinceSlur = (i - v.slurAt) / isr;
-      // a 2 dB dip by design: with the crossfade and the body filter re-tuning, the measured break stays inside #15's 3 dB
-      if (v.note > 0 && sinceSlur < XFADE_S) env *= 1 - 0.2057 * Math.sin((Math.PI * sinceSlur) / XFADE_S);
+      // a 1.5 dB dip by design: with the body filter re-tuning to the new pitch the measured break stays inside #15's 3 dB
+      if (v.note > 0 && sinceSlur < XFADE_S) env *= 1 - 0.1591 * Math.sin((Math.PI * sinceSlur) / XFADE_S);
       if (i >= v.ends) env *= Math.max(0, 1 - (i - v.ends) / (RELEASE_S * isr));
       if (v.trimCut > 0 && i >= v.trimCut) env *= Math.max(0, 1 - (i - v.trimCut) / (0.006 * isr));
       env *= v.noteGain[v.note];
       if (i % 16 === 0) setLp(v.body, Math.min(v.lpCap, 500 + 600 * env), 0.8);
-      // the partial now sounding, and the one it slurs from, crossfaded at equal power
+      // one phase for the whole phrase: a slur changes its speed, never its place
       v.phaseA += v.inc;
       if (v.phaseA > TWO_PI) v.phaseA -= TWO_PI;
-      let s = harmonics(v.phaseA, v.harm);
-      if (v.xfade > 0) {
-        v.phaseB += v.fB;
-        if (v.phaseB > TWO_PI) v.phaseB -= TWO_PI;
-        const x = 1 - v.xfade / (XFADE_S * isr);
-        s = s * Math.sin((x * Math.PI) / 2) + harmonics(v.phaseB, v.harm) * Math.cos((x * Math.PI) / 2);
-        v.xfade--;
-      }
+      const s = harmonics(v.phaseA, v.harm);
       let y = tick(v.body, s) + 0.3 * tick(v.bell, s);
       const w = v.rnd() * 2 - 1;
       // the breath: -24 dB while held, rising toward -12 dB as each note's breath runs out; +6 dB for 40 ms at a slur

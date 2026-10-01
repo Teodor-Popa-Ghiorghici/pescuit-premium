@@ -644,6 +644,10 @@ The sound of carved wood and cold water. Romanian sources again:
 - **A low frame drum** for weight on heavy events.
 
 No music bed during play. One short motif at game start and at game end only.
+
+> **Amended by `MUSIC_PLAN.md` (A1, D1):** a tuned bed and distant tulnic calls may play during play — no loop, no
+> pulse, no transient, at the ambience's level, identical on every client — behind the "Background music" switch. It
+> ships lobby-only by default until the music playtest (§10.5) decides. Appendix D there records what was built.
 This game is played over voice chat; a continuous music loop is a liability.
 
 ### 7.2 Implementation tiers

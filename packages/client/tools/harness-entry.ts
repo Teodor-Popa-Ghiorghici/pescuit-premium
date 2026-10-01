@@ -24,6 +24,11 @@ import { DARK_STEPS, DEFAULT_SETTINGS, buildStemGraph, busGain } from '../src/au
 import { RECIPES, type CueParams } from '../src/audio/recipes.js';
 import { db, fromDb, rng } from '../src/audio/util.js';
 import { VoicePool } from '../src/audio/voices.js';
+import { runScoreChecks, type ScoreHarnessDeps } from './score-harness.js';
+import { renderScoreOffline } from '../src/audio/score/synth.js';
+import { SCORE_SYNTH } from '../src/audio/score/levels.js';
+import { humGains } from '../src/audio/score/voicing.js';
+import { PHRASES, TAKES } from '../src/audio/score/phrases.js';
 
 const SR = 48000;
 const log = (m: string) => console.log(`[harness] ${m}`);
@@ -114,9 +119,9 @@ function calibrate(id: string, x: Float32Array, profile: Profile): Calibrated {
 type Stems = Float32Array[];
 
 async function renderStems(profile: Profile, seconds: number, fill: (ctx: OfflineAudioContext, graph: ReturnType<typeof buildStemGraph>) => void): Promise<Stems> {
-  const ctx = new OfflineAudioContext(3, Math.ceil(seconds * SR), SR);
+  const ctx = new OfflineAudioContext(4, Math.ceil(seconds * SR), SR);
   ctx.destination.channelInterpretation = 'discrete';
-  const merger = ctx.createChannelMerger(3);
+  const merger = ctx.createChannelMerger(4);
   merger.connect(ctx.destination);
   const graph = buildStemGraph(ctx, profile);
   const s = { ...DEFAULT_SETTINGS, profile };
@@ -124,9 +129,10 @@ async function renderStems(profile: Profile, seconds: number, fill: (ctx: Offlin
   graph.outputs.main.connect(merger, 0, 0);
   graph.outputs.clock.connect(merger, 0, 1);
   graph.outputs.ambience.connect(merger, 0, 2);
+  graph.outputs.score.connect(merger, 0, 3);
   fill(ctx, graph);
   const buf = await ctx.startRendering();
-  return [0, 1, 2].map((c) => buf.getChannelData(c).slice());
+  return [0, 1, 2, 3].map((c) => buf.getChannelData(c).slice());
 }
 
 /** stems -> program gain -> sum -> the product's limiter and clip, exactly as the AudioWorklet runs them */
@@ -238,6 +244,8 @@ const ECHO = -12;
 interface Options {
   /** use the freshly computed calibration for the checks even where the committed file disagrees */
   useFresh: boolean;
+  /** only the score's checks (#14-#23), on the committed calibration: for tuning the score's levels */
+  scoreOnly?: boolean;
   /** also return listening files: every cue through each profile's chain, and the scene's busiest 12 s */
   wav?: boolean;
 }
@@ -259,10 +267,27 @@ function wav(x: Float32Array, sr: number): string {
   return btoa(s);
 }
 
+function scoreDeps(clockLufs: ScoreHarnessDeps['clockLufs']): ScoreHarnessDeps {
+  return {
+    sr: SR, programDb: PROGRAM_DB, renderStems, chain, clockLufs, log,
+    place: (ctx, g, profile, id, at, params) => void place(ctx, g, profile, undefined, { id, at, params: params ?? paramsOf(id) }, true),
+  };
+}
+
+async function clockAlone(): Promise<ScoreHarnessDeps['clockLufs']> {
+  const out: ScoreHarnessDeps['clockLufs'] = { speaker: {}, headphones: {} };
+  for (const p of ['speaker', 'headphones'] as Profile[]) for (const c of CUES.filter((x) => x.bus === 'Clock')) out[p][c.id] = measure(chain(await renderAlone(p, c.id), PROGRAM_DB[p]).out, SR).activeLufs;
+  return out;
+}
+
 export async function run(options: Options) {
   await loadRendered();
   const pre = await preloadRendered('speaker');
   await preloadRendered('headphones');
+  if (options.scoreOnly) {
+    const score = await runScoreChecks(scoreDeps(await clockAlone()));
+    return { scoreOnly: true, score, wavs: {} };
+  }
   log(`rendered families: ${pre.keys} keys, ${pre.ms.toFixed(0)} ms of CPU (speaker profile, this machine)`);
   const committed = JSON.parse(JSON.stringify({ CAL, PROGRAM_DB })) as { CAL: Record<Profile, Record<string, CueCal>>; PROGRAM_DB: Record<Profile, number> };
 
@@ -378,9 +403,25 @@ export async function run(options: Options) {
     const stems = await renderStems(profile, SCENE, (ctx, g) => {
       const amb = new Ambience(ctx, g.buses.Ambience, 5);
       amb.start(0);
-      amb.update({ poolCount: 12, poolStart: 20, dry: false, scene: 'game' }, true);
+      amb.update({ poolCount: 12, poolStart: 20, dry: false, scene: 'game', scoreOn: true }, true);
       amb.schedule(SCENE);
       for (const p of plan) if (!place(ctx, g, profile, pool, p, true)) drops.push(`${profile} ${p.id}@${p.at.toFixed(1)}`);
+      // the score under it (MUSIC_PLAN §10.1: the existing checks pass with the score on): the evening's hum from the end of
+      // the call, and three far calls
+      const eve = PHRASES.filter((x) => x.stage === 'evening' && x.kind === 'call');
+      const msgs = [
+        { type: 'seed' as const, seed: 77, zero: 0, salt: 3 }, { type: 'clock' as const, frame: 0, serverMs: 0 },
+        { type: 'hum' as const, frame: Math.round(8.8 * SR), partials: humGains('evening', profile), rampS: 6 },
+        ...[50, 95, 140].map((t, k) => ({ type: 'phrase' as const, frame: Math.round(t * SR), notes: eve[k].notes, ...TAKES[k % 3], gain: 1, lpHz: 900, pan: 0, lipDb: -26, wobble: 0.6, repeats: [], seed: k, tag: k })),
+      ];
+      const [l, r] = renderScoreOffline(SR, SCENE, msgs, SCORE_SYNTH);
+      const b = ctx.createBuffer(2, l.length, SR);
+      b.getChannelData(0).set(l);
+      b.getChannelData(1).set(r);
+      const src = ctx.createBufferSource();
+      src.buffer = b;
+      src.connect(g.buses.Score);
+      src.start(0);
     });
     const full = chain(stems, PROGRAM_DB[profile]);
     if (options.wav) {
@@ -389,7 +430,7 @@ export async function run(options: Options) {
       for (const p of plan) if (Math.max(0, p.at - 0.5) + 12 <= SCENE && busy(Math.max(0, p.at - 0.5)) > busy(from)) from = Math.max(0, p.at - 0.5);
       wavs[`scene-${profile}-12s`] = wav(full.out.subarray(Math.round(from * SR), Math.round((from + 12) * SR)), SR);
     }
-    const cues = chain([stems[0], stems[1], null], PROGRAM_DB[profile]);
+    const cues = chain([stems[0], stems[1], null, null], PROGRAM_DB[profile]);
     const burst = chain(await renderStems(profile, 2, (ctx, g) => BURST.forEach((id, i) => void place(ctx, g, profile, undefined, { id, at: 0.1 + i * 0.01 }, false))), PROGRAM_DB[profile]);
     // the bed alone, in every state of the pond: the loudest is what must sit 12-20 LU under the anchor
     const beds: Record<string, number> = {};
@@ -568,8 +609,14 @@ export async function run(options: Options) {
   }
   log('darkening steps measured');
 
+  // the score's checks (#14-#23), on the same calibration
+  const clockLufs: ScoreHarnessDeps['clockLufs'] = { speaker: {}, headphones: {} };
+  for (const p of ['speaker', 'headphones'] as Profile[]) for (const id of clockIds) clockLufs[p][id] = alone[p][id].activeLufs;
+  const score = await runScoreChecks(scoreDeps(clockLufs));
+
   void lufsOf; void kWeight; void meanSquare;
   return {
+    score,
     breaks, steps, valley, dryBrightness,
     wavs, sr: SR, ids, plan: plan.length, cuesPerMinute, drops,
     fresh, committed, stale, useFresh: options.useFresh,

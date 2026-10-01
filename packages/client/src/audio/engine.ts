@@ -7,7 +7,7 @@
  * cue level -> (seat pan) -> bus. The live engine and the offline harness both call it.
  */
 
-import { Ambience, type AmbienceInputs } from './ambience.js';
+import { Ambience, scoreWetFactor, type AmbienceInputs } from './ambience.js';
 import { CAL } from './calibration.js';
 import { ServerClock, WindowClock } from './clock.js';
 import { audioStatus, getContext, installLifecycle, onGesture, panningAvailable, unlock, visualDelayMs } from './context.js';
@@ -346,6 +346,7 @@ export class AudioEngine {
       if (q.patch.dry !== undefined) {
         this.dry = q.patch.dry;
         this.ambience?.setDry(q.patch.dry, when);
+        this.syncScoreWet(when, false);
       }
       if (q.patch.step !== undefined) this.applyStep(q.patch.step, when, false);
     }
@@ -377,6 +378,14 @@ export class AudioEngine {
       this.ambience = null;
     }
     m.setDarkStep(this.step, undefined, true);
+    this.syncScoreWet(undefined, false);
+  }
+
+  /** the score's stem keeps its balance with the pond as the pool drains (public: the pool count) */
+  private syncScoreWet(when: number | undefined, immediate: boolean): void {
+    const w = this.world;
+    if (!this.mixer || !w || w.poolCount === undefined || w.poolStart === undefined || !w.scene) return;
+    this.mixer.setScoreWet(scoreWetFactor({ poolCount: w.poolCount, poolStart: w.poolStart, scene: w.scene }, this.dry), when, immediate);
   }
 
   /* ------------------------------------------------------ the background score */

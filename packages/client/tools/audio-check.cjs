@@ -9,6 +9,7 @@
 //   node tools/audio-check.cjs --write-calibration # also rewrite src/audio/calibration.ts
 //   node tools/audio-check.cjs --fresh             # check on the fresh calibration, ignoring the committed file
 //   node tools/audio-check.cjs --wav               # also write listening files to OUT_DIR/wav (every cue through each chain)
+//   node tools/audio-check.cjs --score-only        # only the background score's checks (#14-#23), for tuning its levels
 //
 // OUT_DIR (default tools/out) receives metrics.md and results.json. CHROMIUM_PATH optionally
 // points at a local Chromium.
@@ -58,8 +59,15 @@ const table = (head, rows) => [row(head), row(head.map(() => '---')), ...rows.ma
   });
   await page.goto('about:blank');
   await page.addScriptTag({ content: code });
-  const res = await page.evaluate((o) => window.Harness.run(o), { useFresh: args.has('--fresh') || args.has('--write-calibration'), wav: args.has('--wav') });
+  const res = await page.evaluate((o) => window.Harness.run(o), { useFresh: args.has('--fresh') || args.has('--write-calibration'), wav: args.has('--wav'), scoreOnly: args.has('--score-only') });
   await browser.close();
+  const scoreLines = (res.score?.checks ?? []).map((c) => `- ${c.fail.length ? 'FAIL' : 'PASS'} — #${c.n} ${c.title}${c.fail.length ? ` (${c.fail.slice(0, 8).join('; ')}${c.fail.length > 8 ? `; … ${c.fail.length - 8} more` : ''})` : ''}.`);
+  if (res.scoreOnly) {
+    fs.mkdirSync(OUT, { recursive: true });
+    fs.writeFileSync(path.join(OUT, 'score-results.json'), JSON.stringify(res.score.numbers));
+    console.log(['## The score (#14-#23)', res.score.report, '', ...scoreLines].join('\n'));
+    process.exit(scoreLines.every((l) => l.startsWith('- PASS')) ? 0 : 1);
+  }
 
   fs.mkdirSync(OUT, { recursive: true });
   if (args.has('--wav')) {
@@ -183,7 +191,7 @@ ${fmt('headphones')}
   const most = names.slice().sort((a, b) => res.nodes[b] - res.nodes[a]).slice(0, 5);
   info.push(`Nodes: the heaviest cues are ${most.map((n) => `\`${n}\` ${res.nodes[n]}`).join(', ')} (the plan's budget is per hit: ≤ 10 nodes plus the mastering shaper).`);
 
-  const ok = checks.every((l) => l.startsWith('- PASS')) && (res.stale.length === 0 || args.has('--write-calibration') || args.has('--fresh'));
+  const ok = checks.every((l) => l.startsWith('- PASS')) && scoreLines.every((l) => l.startsWith('- PASS')) && (res.stale.length === 0 || args.has('--write-calibration') || args.has('--fresh'));
   const md = [
     '## Recipes, and each cue mastered per profile (before the chain)',
     recipes,
@@ -203,13 +211,16 @@ ${fmt('headphones')}
     clock,
     '## Confusability',
     confus,
+    '## The background score (MUSIC_PLAN.md §10.1, #14-#23)',
+    res.score.report,
     '## Checks',
     checks.join('\n'),
+    scoreLines.join('\n'),
     stale.join('\n'),
     info.length ? '\n' + info.join('\n\n') : '',
   ].join('\n\n');
   fs.writeFileSync(path.join(OUT, 'metrics.md'), md + '\n');
-  console.log(['## Checks', ...checks, ...stale, '', ...info].join('\n'));
+  console.log(['## Checks', ...checks, ...scoreLines, ...stale, '', ...info].join('\n'));
   console.log(`\nfull report: ${path.join(OUT, 'metrics.md')}`);
   process.exit(ok ? 0 : 1);
 })().catch((e) => {

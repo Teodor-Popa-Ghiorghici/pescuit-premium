@@ -15,7 +15,7 @@ import type { ScoreInput } from './input.js';
 import { lengthOf, phraseById, TAKES } from './phrases.js';
 import { cutOf, endedAtOf, pansOf, planSlots, snapshotOf, stateOf, type ScoreHistory, type Slot, type Snapshot } from './plan.js';
 import type { ScoreNote, SynthMessage } from './synth.js';
-import { ANSWER_DB, ANSWER_LP_HZ, ANSWER_REPEATS, CALL_LP_HZ, CALL_MS, CUT_S, DEFER_MS, FADE_S, HUM, POST_AFTER_MS, SWELL_S, type ScoreState } from './voicing.js';
+import { ANSWER_DB, ANSWER_LP_HZ, ANSWER_REPEATS, CALL_LP_HZ, CALL_MS, CUT_S, DEFER_MS, FADE_S, humGains, POST_AFTER_MS, SWELL_S, type ScoreState } from './voicing.js';
 
 export type { ScoreMode } from './levels.js';
 import type { ScoreMode } from './levels.js';
@@ -70,7 +70,7 @@ export class ScoreConductor {
   }
 
   private humMessage(state: ScoreState | null, atMs: number, rampS: number): TimedMessage {
-    const partials: Array<[number, number]> = state && this.allowed(state) ? HUM[state][this.o.profile].map(([p, d]) => [p, dbToLin(d)] as [number, number]) : [];
+    const partials: Array<[number, number]> = state && this.allowed(state) ? humGains(state, this.o.profile) : [];
     return { atMs, aligned: false, msg: { type: 'hum', frame: 0, partials, rampS } };
   }
 

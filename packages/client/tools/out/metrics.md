@@ -31,10 +31,11 @@
 | `table.tally` | Table | T | 10 | 48 (90) | 48 | -8.3 | -24.3 | -33.5 | — | 0.5 | 16.0 / 16.0 / 12.1 | -120.0 / -11.4 |
 | `world.dark.12` | Table | T | 18 | 204 (180) | 204 | -7.6 | -24.1 | -27.0 | — | 0.0 | 16.5 / 14.9 / 12.1 | -21.9 / -12.5 |
 | `world.dark.06` | Table | T | 18 | 204 (180) | 204 | -7.7 | -23.7 | -26.6 | — | 0.0 | 16.0 / 16.0 / 12.1 | -120.0 / -13.5 |
-| `world.dark.01` | Music | S | 22 | 1267 (1320) | 1267 | -7.5 | -16.4 | -14.0 | 14.9 | 0.0 | 6.5 / 6.5 / 6.5 | -120.0 / -120.0 |
+| `world.dark.01` | Table | T | 18 | 204 (180) | 204 | -8.6 | -25.2 | -28.1 | — | 0.1 | 16.5 / 15.0 / 12.1 | -21.8 / -11.6 |
 | `world.notch` | Table | T | 5 | 11 (50) | 11 | -9.6 | -21.2 | -36.8 | — | 0.2 | 11.6 / 11.6 / 11.6 | -120.0 / -120.0 |
 | `mus.start` | Music | S | 19 | 7961 (8300) | 7961 | -7.0 | -18.4 | -12.1 | 13.3 | 0.0 | 5.1 / 5.1 / 5.1 | -120.0 / -120.0 |
 | `mus.podium` | Music | S | 4 | 2386 (2600) | 2386 | -6.2 | -14.9 | -12.6 | 9.9 | 0.0 | 6.5 / 6.5 / 6.5 | -120.0 / -120.0 |
+| `mus.home` | Music | S | 4 | 1121 (1320) | 1121 | -7.5 | -15.9 | -14.0 | 8.3 | 0.0 | 6.5 / 6.5 / 6.5 | -120.0 / -120.0 |
 | `clock.tick` | Clock | T | 8 | 17 (60) | 17 | -13.9 | -28.3 | -42.0 | — | 0.6 | 14.4 / 14.4 / 12.2 | -120.0 / -6.0 |
 | `clock.tick.urgent` | Clock | T | 16 | 64 (60) | 64 | -13.9 | -31.1 | -39.1 | — | 1.2 | 17.2 / 16.1 / 12.1 | -14.7 / -7.0 |
 | `clock.close` | Clock | T | 10 | 56 (60) | 56 | -6.2 | -21.0 | -29.6 | — | 0.3 | 14.9 / 14.9 / 12.1 | -120.0 / -13.3 |
@@ -91,13 +92,14 @@ Level shift is the chain's effect on the cue's loudness against the same cue wit
 | `table.tally` | 0.0 | — | -120.0 | -7.9 / -7.9 | 0.0 | -10.0 / -10.0 |
 | `world.dark.12` | 0.0 | — | -120.0 | -2.7 / -2.7 | 0.0 | -3.9 / -3.9 |
 | `world.dark.06` | 0.0 | — | -120.0 | -6.4 / -6.4 | 0.0 | -2.8 / -2.8 |
-| `world.dark.01` | 0.0 | 21.6 | -120.0 | -11.7 / -11.7 | 0.0 | -16.3 / -16.3 |
+| `world.dark.01` | 0.0 | — | -120.0 | -5.6 / -5.6 | 0.0 | -3.0 / -3.0 |
 | `world.notch` | 0.0 | — | -120.0 | -16.4 / -16.3 | 0.0 | -20.6 / -20.6 |
 | `mus.start` | 0.0 | 13.0 | -120.0 | -13.6 / -13.6 | 0.0 | -18.5 / -18.5 |
 | `mus.podium` | 0.0 | 10.1 | -120.0 | -11.5 / -11.5 | 0.0 | -16.9 / -16.9 |
-| `clock.tick` | 0.0 | — | -120.0 | -6.7 / -6.6 | 0.0 | -13.7 / -13.7 |
-| `clock.tick.urgent` | 0.0 | — | -120.0 | -6.2 / -5.5 | 0.0 | -12.1 / -12.1 |
-| `clock.close` | 0.0 | — | -120.0 | -7.2 / -7.2 | 0.0 | -12.1 / -12.1 |
+| `mus.home` | 0.0 | 8.1 | -120.0 | -11.7 / -11.7 | 0.0 | -16.9 / -16.9 |
+| `clock.tick` | 0.0 | — | -120.0 | -6.7 / -6.6 | 0.0 | -11.7 / -11.7 |
+| `clock.tick.urgent` | 0.0 | — | -120.0 | -6.2 / -5.5 | 0.0 | -10.1 / -10.1 |
+| `clock.close` | 0.0 | — | -120.0 | -7.2 / -7.2 | 0.0 | -10.1 / -10.1 |
 | `power.granted` | 0.0 | — | -120.0 | -1.6 / -1.5 | 0.0 | -3.6 / -3.6 |
 | `power.windup` | 0.0 | — | -120.0 | -5.8 / -5.8 | 0.0 | -9.7 / -9.5 |
 | `power.reveal` | 0.0 | — | -120.0 | -1.6 / -1.6 | -0.4 | -1.5 / -1.5 |
@@ -122,8 +124,8 @@ Program gain is calibrated on one thing only: the anchor cue, `table.turn`, soun
 
 | Profile | Anchor LUFS | Program gain dB | Cue stream LUFS | Whole mix LUFS | Short-term max | True peak dBTP | Six-cue burst dBTP | Limiter max GR dB | Limiter over 1 dB | Soft-clip samples | Bed short-term max (loudest state) | Bed under the anchor (range over pond states) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| speaker | -21 | 4.0 | -23.1 | -29.5 | -22.6 | -1.3 | -1.4 | 2.5 | 0.08 % | 0 | -35.1 | 14.1 to 19.8 LU |
-| headphones | -25 | 1.1 | -25.3 | -32.2 | -24.3 | -1.5 | -1.5 | 2.5 | 0.00 % | 0 | -38.3 | 13.3 to 19.1 LU |
+| speaker | -21 | 4.0 | -23.1 | -29.2 | -22.6 | -1.3 | -1.4 | 2.5 | 0.08 % | 0 | -35.1 | 14.1 to 19.8 LU |
+| headphones | -25 | 1.1 | -25.5 | -31.9 | -24.2 | -1.5 | -1.5 | 2.5 | 0.01 % | 0 | -38.3 | 13.3 to 19.1 LU |
 
 | Pond state | Speaker bed, short-term max LUFS | Headphones bed, short-term max LUFS |
 | --- | --- | --- |
@@ -155,9 +157,9 @@ The scripted scene (three minutes, five players, human pace, heard from seat 0) 
 
 | Clock cue | Speaker: over the bed, LU | Headphones: over the bed, LU |
 | --- | --- | --- |
-| `clock.tick` | 14.5 | 10.2 |
-| `clock.tick.urgent` | 14.5 | 10.2 |
-| `clock.close` | 13.7 | 10.3 |
+| `clock.tick` | 14.5 | 12.2 |
+| `clock.tick.urgent` | 14.5 | 12.2 |
+| `clock.close` | 13.7 | 12.3 |
 
 ## Confusability
 
@@ -198,6 +200,7 @@ Rhythm is the onsets in the first 300 ms; timbre is the log-mel pattern of the f
 | `world.notch` | 0 ms |
 | `mus.start` | no attack (a swell) |
 | `mus.podium` | 0 · 25 · 50 ms |
+| `mus.home` | no attack (a swell) |
 | `clock.tick` | 0 ms |
 | `clock.tick.urgent` | 0 · 40 ms |
 | `clock.close` | 0 · 25 ms |
@@ -223,14 +226,133 @@ Rhythm is the onsets in the first 300 ms; timbre is the log-mel pattern of the f
 | --- | --- |
 | ui.target / seat A1 (speaker) | 20.0 |
 | ui.target / seat A1 (headphones) | 20.0 |
-| table.turn / seat A2 (speaker) | 20.2 |
 | table.turn / seat A2 (headphones) | 20.2 |
-| meta.join / seat A2 (headphones) | 20.3 |
+| table.turn / seat A2 (speaker) | 20.2 |
 | meta.join / seat A2 (speaker) | 20.3 |
-| table.draw / table.flight (speaker) | 20.3 |
+| meta.join / seat A2 (headphones) | 20.3 |
 | table.draw / table.flight (headphones) | 20.3 |
-| table.bonus / seat A2 (headphones) | 20.4 |
+| table.draw / table.flight (speaker) | 20.3 |
 | table.bonus / seat A2 (speaker) | 20.4 |
+| table.bonus / seat A2 (headphones) | 20.4 |
+
+## The background score (MUSIC_PLAN.md §10.1, #14-#23)
+
+### The world stem with the score (#17), short-term max LUFS
+
+| Profile | State | Pond | Pond alone, today | Pond + hum | Under the anchor LU | Hum alone | Integrated: today / with the score, difference dB |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| speaker | dusk | wet | -35.2 | -34.7 | 13.7 | -37.3 | -35.2 / -35.2, 0.04 |
+| speaker | dusk | half | -36.1 | -35.6 | 14.6 | -38.3 | -36.2 / -36.1, 0.04 |
+| speaker | dusk | nearly empty | -37.1 | -36.5 | 15.5 | -39.2 | -37.1 / -37.0, 0.04 |
+| speaker | dusk | dry | -35.9 | -37.2 | 16.2 | -41.7 | -40.0 / -40.1, -0.08 |
+| speaker | evening | wet | -36.7 | -36.1 | 15.1 | -38.6 | -36.8 / -36.6, 0.15 |
+| speaker | evening | half | -37.7 | -37.0 | 16.0 | -39.5 | -37.7 / -37.5, 0.16 |
+| speaker | evening | nearly empty | -38.6 | -37.9 | 16.9 | -40.4 | -38.6 / -38.4, 0.16 |
+| speaker | evening | dry | -37.5 | -39.0 | 18.0 | -43.4 | -41.5 / -41.5, 0.02 |
+| speaker | night | wet | -38.3 | -37.5 | 16.5 | -40.1 | -38.3 / -38.2, 0.10 |
+| speaker | night | half | -39.2 | -38.4 | 17.4 | -41.0 | -39.2 / -39.1, 0.10 |
+| speaker | night | nearly empty | -40.1 | -39.3 | 18.3 | -41.9 | -40.1 / -40.0, 0.10 |
+| speaker | night | dry | -39.0 | -40.6 | 19.6 | -44.6 | -43.1 / -43.1, 0.03 |
+| speaker | gate | wet | -38.3 | -37.9 | 16.9 | -40.5 | -38.3 / -38.4, -0.12 |
+| speaker | gate | half | -39.2 | -38.8 | 17.8 | -41.5 | -39.2 / -39.3, -0.12 |
+| speaker | gate | nearly empty | -40.1 | -39.7 | 18.7 | -42.4 | -40.1 / -40.2, -0.12 |
+| speaker | gate | dry | -39.0 | -40.6 | 19.6 | -44.9 | -43.1 / -43.2, -0.10 |
+| speaker | last | wet | -39.9 | -38.8 | 17.8 | -41.2 | -39.9 / -39.6, 0.27 |
+| speaker | last | half | -40.8 | -39.7 | 18.7 | -42.2 | -40.8 / -40.5, 0.27 |
+| speaker | last | nearly empty | -41.7 | -40.6 | 19.6 | -43.1 | -41.7 / -41.5, 0.27 |
+| speaker | last | dry | -40.8 | -41.5 | 20.5 | -45.2 | -44.8 / -44.6, 0.13 |
+| headphones | dusk | wet | -38.4 | -38.0 | 13.0 | -40.7 | -38.5 / -38.5, -0.05 |
+| headphones | dusk | half | -39.4 | -38.9 | 13.9 | -41.6 | -39.4 / -39.4, -0.05 |
+| headphones | dusk | nearly empty | -40.3 | -39.8 | 14.8 | -42.6 | -40.3 / -40.3, -0.05 |
+| headphones | dusk | dry | -39.2 | -40.6 | 15.6 | -45.2 | -43.4 / -43.5, -0.07 |
+| headphones | evening | wet | -40.0 | -39.5 | 14.5 | -42.2 | -40.0 / -40.0, -0.07 |
+| headphones | evening | half | -40.9 | -40.4 | 15.4 | -43.1 | -40.9 / -40.9, -0.07 |
+| headphones | evening | nearly empty | -41.8 | -41.4 | 16.4 | -44.0 | -41.8 / -41.9, -0.07 |
+| headphones | evening | dry | -40.8 | -42.4 | 17.4 | -47.1 | -44.9 / -45.0, -0.10 |
+| headphones | night | wet | -41.5 | -40.9 | 15.9 | -43.7 | -41.5 / -41.6, -0.08 |
+| headphones | night | half | -42.4 | -41.8 | 16.8 | -44.6 | -42.4 / -42.5, -0.08 |
+| headphones | night | nearly empty | -43.3 | -42.7 | 17.7 | -45.5 | -43.3 / -43.4, -0.08 |
+| headphones | night | dry | -42.4 | -44.0 | 19.0 | -48.1 | -46.5 / -46.6, -0.05 |
+| headphones | gate | wet | -41.5 | -41.1 | 16.1 | -43.8 | -41.5 / -41.6, -0.13 |
+| headphones | gate | half | -42.4 | -42.0 | 17.0 | -44.7 | -42.4 / -42.5, -0.13 |
+| headphones | gate | nearly empty | -43.3 | -43.0 | 18.0 | -45.6 | -43.3 / -43.5, -0.13 |
+| headphones | gate | dry | -42.4 | -43.9 | 18.9 | -48.1 | -46.5 / -46.5, -0.01 |
+| headphones | last | wet | -43.1 | -42.3 | 17.3 | -44.9 | -43.1 / -43.1, 0.02 |
+| headphones | last | half | -44.0 | -43.2 | 18.2 | -45.8 | -44.0 / -44.0, 0.02 |
+| headphones | last | nearly empty | -44.9 | -44.1 | 19.1 | -46.8 | -44.9 / -44.9, 0.02 |
+| headphones | last | dry | -44.1 | -45.0 | 20.0 | -48.9 | -48.2 / -48.2, -0.01 |
+
+### Presence (#18): each hum partial over the pond or the wind in its third-octave band, worst pond state, dB
+
+| Profile, state, partial | SNR dB |
+| --- | --- |
+| speaker dusk partial 6 | 2.8 |
+| speaker dusk partial 9 | 1.7 |
+| speaker dusk partial 12 | -0.6 |
+| speaker evening partial 5 | 1.5 |
+| speaker evening partial 6 | 2.6 |
+| speaker evening partial 10 | 1.3 |
+| speaker night partial 5 | 1.1 |
+| speaker night partial 7 | 2.9 |
+| speaker night partial 9 | 2.0 |
+| speaker gate partial 9 | 7.1 |
+| speaker gate partial 10 | 6.3 |
+| speaker last partial 6 | 6.7 |
+| headphones dusk partial 6 | 2.8 |
+| headphones dusk partial 9 | 1.7 |
+| headphones dusk partial 12 | -0.6 |
+| headphones evening partial 5 | 1.5 |
+| headphones evening partial 6 | 2.6 |
+| headphones evening partial 10 | 1.3 |
+| headphones night partial 5 | 1.0 |
+| headphones night partial 7 | 2.9 |
+| headphones night partial 9 | 2.0 |
+| headphones gate partial 9 | 7.2 |
+| headphones gate partial 10 | 6.3 |
+| headphones last partial 6 | 6.7 |
+
+### The waiting room (#22)
+
+| Profile | Pond alone today LUFS | LU under | Pond + hum LUFS | LU under | Loudest lobby call, momentary max | LU under |
+| --- | --- | --- | --- | --- | --- | --- |
+| speaker | -28.4 | 7.4 | -30.1 | 9.1 | -36.5 | 15.5 |
+| headphones | -31.6 | 6.6 | -33.4 | 8.4 | -40.1 | 15.1 |
+
+### The key and the shape (#14, #15)
+
+Worst held note: 7.7 cents off its partial. Worst hum partial centroid: 1.0 cents. Slowest onset: at least 105 ms to come within 6 dB of its peak. Deepest slur dip: 2.7 dB. Largest hum envelope autocorrelation at 0.3-3 s: 0.15.
+
+### Distance and the clock (#19)
+
+Loudest in-play phrase, momentary max: speaker -36.5 LUFS (`D3`, 15.5 LU under the anchor); headphones -40.0 LUFS (`N3`, 15.0 LU under).
+
+| Clock cue | Profile | Alone LUFS | Over the loudest world LU | Over the loudest call LU |
+| --- | --- | --- | --- | --- |
+| clock.tick | speaker | -20.6 | 14.0 | 15.8 |
+| clock.tick.urgent | speaker | -20.6 | 14.1 | 15.9 |
+| clock.close | speaker | -21.4 | 13.2 | 15.1 |
+| clock.tick | headphones | -26.1 | 11.9 | 13.9 |
+| clock.tick.urgent | headphones | -26.1 | 11.9 | 13.9 |
+| clock.close | headphones | -26.0 | 12.0 | 14.1 |
+
+### Speech room (#16): a busy night minute (hum, six calls, their answers)
+
+| Profile | Score short-term max LUFS | 1-4 kHz short-term max LUFS | LU under the anchor |
+| --- | --- | --- | --- |
+| speaker | -37.3 | -54.3 | 33.3 |
+| headphones | -40.8 | -57.4 | 32.4 |
+
+### Cuts (#20): evening to night on `world.dark.06`, speaker
+
+Ramp 21 ms (10-90 % of partial 10's gain); it starts -1.2 ms from the knock's onset; click ratio across the change 0.53.
+
+### Rejoin (#21)
+
+A client entering at 137 s plays 5 phrases after its swell, the same slots, phrases and takes as one that stayed; its level after the 1.5 s swell is 0.0 dB from the staying client's (integrated, 139-200 s).
+
+### Cost (#23)
+
+60 s of the worst moment rendered in 284 ms: 211x real time, 0.47 % of one core on this machine.
 
 ## Checks
 
@@ -246,6 +368,17 @@ Rhythm is the onsets in the first 300 ms; timbre is the log-mel pattern of the f
 - PASS — duration: every cue lasts at most 1400 ms as rendered, but the tulnic's call and the podium.
 - PASS — the tulnic's valley: three repeats, each begins within 80 ms of its design time, is within 3 dB of its designed level, and is darker than the one before.
 - PASS — darkening: each ambience step lands within 0.7 dB of its designed level and low-pass at 300 Hz and 3 kHz, in a 10-35 ms ramp, with no click (jump at most 1.5x a steady stretch).
+
+- PASS — #14 the key: every held note of every phrase within 15 cents of its partial; every hum partial's centroid within 5 cents.
+- PASS — #15 no pulse, no transient, no loop: every onset swells over at least 80 ms to within 6 dB of its peak (a seat signature's attack is under 10 ms, so no phrase can be heard as a knock), every slur dips at most 3 dB, the written durations pass the no-pulse rule (phrases.test.ts), the hum's envelope autocorrelation is at most 0.3 at 0.3-3 s.
+- PASS — #16 speech room: the score's 1-4 kHz short-term max at least 30 LU (speaker) / 28 LU (headphones) under the anchor.
+- FAIL — #17 the world window: pond or wind + hum sits 12-20 LU under the anchor (short-term max) in every state, and its integrated loudness is within 0.3 dB of today's pond alone, the hum at the centre of its wander (speaker last/dry 20.5 LU under).
+- FAIL — #18 presence: every hum partial, at the centre of its wander, at least 0 dB over the pond or the wind in its own third-octave band (speaker dusk/dry partial 12 -0.6 dB; headphones dusk/dry partial 12 -0.6 dB).
+- PASS — #19 distance and the clock: every in-play call's momentary max at least 14 LU under the anchor; every Clock cue at least 10 LU over the world stem and over the loudest call, on both profiles.
+- PASS — #20 cuts land on knocks: a voicing change ramps 10-35 ms (10-90 %), starts within 5 ms of its cue's onset, click ratio at most 1.5; the stages' first-choice cut cues never duck the score.
+- PASS — #21 rejoin equals staying: a client entering at 137 s has the same slots, phrases, takes and voicing, and after its 1.5 s swell its level is within 1 dB.
+- PASS — #22 the waiting room: the world stem at least 7 LU under the anchor, its calls at least 6.
+- PASS — #23 cost: the worst moment (hum, a call and its answer with the valley's repeats) renders 60 s at least 70x faster than real time in headless Chromium.
 
 - PASS — the committed calibration matches the fresh one.
 

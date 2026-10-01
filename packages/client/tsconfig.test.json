@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "types": ["node"] },
-  "include": ["src", "test", "tools/harness-entry.ts", "vitest.config.ts"]
+  "include": ["src", "test", "tools/harness-entry.ts", "tools/score-harness.ts", "vitest.config.ts"]
 }

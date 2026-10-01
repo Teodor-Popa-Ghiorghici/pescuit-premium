@@ -7,7 +7,8 @@
  *   - an event -> cue trace: scripted public records through `cuesFor`, and the engine's own trace;
  *   - short-term loudness at the chain's output, against the anchor;
  *   - an ABX player for the closest pairs of the confusability check;
- *   - the profile switch.
+ *   - the profile switch;
+ *   - the Score bench (MUSIC_PLAN §9): every state's hum, and phrases typed in the plan's notation.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -21,6 +22,7 @@ import { drip } from './live/water.js';
 import { wood, type Plank } from './live/wood.js';
 import type { CueParams } from './recipes.js';
 import { db, rng } from './util.js';
+import { ScoreBench } from './scoreLab.js';
 
 const css = `
 .lab{font:13px/1.4 system-ui,sans-serif;background:#0b222c;color:#efe2c8;min-height:100vh;padding:14px;box-sizing:border-box}
@@ -238,6 +240,8 @@ function Lab(): React.ReactElement {
             <button onClick={() => { const m = engine.mixerNode; if (m && m.ctx.state === 'running') drip(m.ctx, m.graph.buses.Ambience, m.ctx.currentTime + 0.05, rng(seed), 3, 1, true); }}>drip: rises (for comparison)</button>
           </div>
         </section>
+
+        <ScoreBench />
 
         <section>
           <h2>ABX — the closest pairs</h2>

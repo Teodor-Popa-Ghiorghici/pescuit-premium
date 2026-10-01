@@ -65,8 +65,8 @@ describe('the score reads only SCORE_FIELDS (Law 1)', () => {
   });
 
   it('the seed is public: the room code and the zero, the same for every viewer, and different in another game', () => {
-    const a = scoreInputOf({ roomCode: 'ABCDE', view: { ...fullView(), viewerId: 'a' } });
-    const c = scoreInputOf({ roomCode: 'ABCDE', view: { ...fullView(), viewerId: 'c', hand: [] } });
+    const a = scoreInputOf({ roomCode: 'ABCDE', view: { ...fullView(), viewerId: 'a' } as ReturnType<typeof fullView> });
+    const c = scoreInputOf({ roomCode: 'ABCDE', view: { ...fullView(), viewerId: 'c', hand: [] } as ReturnType<typeof fullView> });
     expect(a.seed).toBe(c.seed);
     expect(scoreInputOf({ roomCode: 'ABCDE', view: { ...fullView(), startedAt: 1_700_000_900_000 } }).seed).not.toBe(a.seed);
     expect(scoreInputOf({ roomCode: 'QWERT', view: fullView() }).seed).not.toBe(a.seed);
